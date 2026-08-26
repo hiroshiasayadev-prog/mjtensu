@@ -197,17 +197,20 @@ Subsequent reviewed detector-crop negative work produced persistent 35-class cla
 ```text
 .local/recognition/tile_classifier_datasets/gray35_jp500_seed42.sqlite
 .local/recognition/tile_classifier_datasets/gray35_jp500_seed42_v2.sqlite
+.local/recognition/tile_classifier_datasets/gray35_jp500_seed42_v3_jp189.sqlite
 ```
 
-and the selected 35-class run artifact:
+The v3 dataset extends v2 with 189 reviewed Japanese detector crops from the training partition, including 180 `invalid` examples and 9 valid tile examples. The selected production 35-class run artifact is therefore:
 
 ```text
 .local/recognition/tile_classifier_runs/
-  gray64_c8_rot22p5_bs512_gray35_v2_seed42/best.pt
+  gray64_c8_rot22p5_bs512_gray35_v3_jp189_seed42/best.pt
 ```
 
+The selected checkpoint is epoch 45. Its production preprocessing normalization is `mean = 0.6815832403977466` and `std = 0.2725553681973969`; `c8-tile-35-v1` is bound to those values in the runtime-spec implementation. The exported deployment artifact is `tile-c8-gray35-v3-jp189.onnx` with SHA-256 `b8a8fa3ff6c6d1e944a7593fa0afc947e0cd2513fb79ca46e5f8fcd6e19c97d0`.
+
 `tools/recognition/tile_shape_classifier.py` supports checkpoint-selected class counts without changing the C8 backbone responsibility, and `tools/recognition/export_c8_classifiers_onnx.py` reconstructs the tile-shape output count/class labels from checkpoint metadata for deployment export.
-The recorded 35-class export parity check produced zero prediction mismatches between the source C8 model and ONNX Runtime, with numerical differences on the order of `1e-5` or below.
+The selected v3 export parity check produced zero prediction mismatches between the source C8 model and ONNX Runtime; ONNX Runtime parity was `allclose=true` with maximum absolute error `1.1920928955078125e-05`.
 
 PRODUCT-INV-RECOGNITION-006 continues to support RGB as the red-five specialist representation and found no meaningful deployment-size or single-sample forward advantage from replacing RGB with the tested Cr/Y+Cr projections.
 

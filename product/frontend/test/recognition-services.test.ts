@@ -57,7 +57,7 @@ describe('production recognition one-frame composition', () => {
     expect(base.runCalls).toHaveLength(3);
     expect(redFive.runCalls).toHaveLength(1);
     expect(firstTensorValue(base.runCalls[0])).toBeCloseTo(
-      (128 / 255 - 0.68306223733377514) / 0.27237886485683077,
+      (128 / 255 - 0.6815832403977466) / 0.2725553681973969,
     );
     expect(firstTensorValue(redFive.runCalls[0])).toBeCloseTo(
       (128 / 255 - 0.66025093606229934) / 0.30491469480493394,

@@ -5,6 +5,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
+  publicDir: fileURLToPath(new URL('../../vendor/recognition-models', import.meta.url)),
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -25,6 +26,12 @@ export default defineConfig(({ mode }) => ({
             app: fileURLToPath(new URL('./index.html', import.meta.url)),
             fakeFlow: fileURLToPath(
               new URL('./test/e2e/fake-flow.html', import.meta.url),
+            ),
+            recognitionProductionArtifacts: fileURLToPath(
+              new URL(
+                './test/e2e/recognition-production-artifacts.html',
+                import.meta.url,
+              ),
             ),
           },
         },

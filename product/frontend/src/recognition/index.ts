@@ -55,6 +55,7 @@ export type {
 } from './semantics/types';
 export { createBrowserRecognitionModelAssets } from './model-runtime/assets';
 export { validateRecognitionModelSetManifest } from './model-runtime/manifest';
+export { PRODUCTION_RECOGNITION_MODEL_SET } from './model-runtime/production-model-set';
 export type {
   ExecutionProvider,
   RecognitionModelArtifactManifest,

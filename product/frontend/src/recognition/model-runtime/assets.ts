@@ -60,7 +60,8 @@ export function createBrowserRecognitionModelAssets(
   options: BrowserRecognitionModelAssetsOptions = {},
 ): RecognitionModelAssetResolver {
   const cacheStorage = options.cacheStorage ?? globalThis.caches;
-  const fetchImplementation = options.fetchImplementation ?? globalThis.fetch;
+  const fetchImplementation =
+    options.fetchImplementation ?? globalThis.fetch.bind(globalThis);
   const cryptoImplementation = options.cryptoImplementation ?? globalThis.crypto;
 
   return createRecognitionModelAssets({

@@ -1,0 +1,35 @@
+import {
+  DEFAULT_EXECUTION_PROVIDER_PREFERENCE,
+  type RecognitionModelSetManifest,
+} from './types';
+
+const publicModelUrl = (artifact: string): string =>
+  `${import.meta.env.BASE_URL}${artifact}`;
+
+export const PRODUCTION_RECOGNITION_MODEL_SET = {
+  schemaVersion: 1,
+  modelSetVersion: 'recognition-v1-2026-08-27',
+  models: {
+    detector: {
+      role: 'detector',
+      url: publicModelUrl('nanodet-plus-m-320-composite-augmented.onnx'),
+      sha256: '4768daa5cb44e7bee37fbb69c36063800164d9e9e8c852e5b3c77bc88ce9ac76',
+      runtimeSpec: 'nanodet-plus-m-320-v1',
+      providerPreference: DEFAULT_EXECUTION_PROVIDER_PREFERENCE,
+    },
+    'tile-classifier': {
+      role: 'tile-classifier',
+      url: publicModelUrl('tile-c8-gray35-v3-jp189.onnx'),
+      sha256: 'b8a8fa3ff6c6d1e944a7593fa0afc947e0cd2513fb79ca46e5f8fcd6e19c97d0',
+      runtimeSpec: 'c8-tile-35-v1',
+      providerPreference: DEFAULT_EXECUTION_PROVIDER_PREFERENCE,
+    },
+    'red-five-classifier': {
+      role: 'red-five-classifier',
+      url: publicModelUrl('red-five-c8-rgb-warmaug.onnx'),
+      sha256: 'c2b780f682d84bf186db90290050f8b05016c3e8058de559eea679a28eeb80c6',
+      runtimeSpec: 'c8-red-five-v1',
+      providerPreference: DEFAULT_EXECUTION_PROVIDER_PREFERENCE,
+    },
+  },
+} as const satisfies RecognitionModelSetManifest;

@@ -189,3 +189,17 @@ The fixed `320 x 320` layout preserves the capture ratios exactly:
 - `306 / 72 = 17 / 4` for the completed hand.
 - `306 / 72 = 17 / 4` for dora indicators.
 - `172 / 172 = 1` for melds.
+
+### Production detector artifact pin: 2026-08-27
+
+The production implementation of this ADR is pinned to the composite-format detector already used by the deployment capture tooling:
+
+```text
+.local/recognition/nanodet_runs/
+  E1_plus_m_320_composite_augmented_amp40_seed42/
+    model_best/nanodet-plus-m-320-composite-augmented.onnx
+```
+
+Its recorded artifact identity is SHA-256 `4768daa5cb44e7bee37fbb69c36063800164d9e9e8c852e5b3c77bc88ce9ac76`, 5,597,449 bytes, with input shape `[1, 3, 320, 320]` and output shape `[1, 2125, 33]`. The production runtime contract remains `nanodet-plus-m-320-v1`.
+
+A later real-capture fine-tune remains evaluation evidence rather than the production artifact: it reduced false positives in the recorded comparisons but did not uniformly improve AP, and no accepted decision superseded the composite-augmented model. Production therefore does not silently switch detector identity during the R06 acceptance gate.

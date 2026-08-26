@@ -9,6 +9,7 @@ import {
   type RecognitionModelArtifactStore,
 } from '@/recognition/model-runtime/assets';
 import { validateRecognitionModelSetManifest } from '@/recognition/model-runtime/manifest';
+import { getRecognitionClassifierNormalization } from '@/recognition/model-runtime/runtime-specs';
 import {
   createRecognitionModelRuntime,
   type RecognitionInferenceSession,
@@ -32,6 +33,17 @@ const manifest = makeManifest();
 describe('recognition model manifest validation', () => {
   it('accepts the three known role/runtime-spec contracts', () => {
     expect(validateRecognitionModelSetManifest(manifest)).toEqual(manifest);
+  });
+
+  it('binds classifier normalization to the selected production checkpoints', () => {
+    expect(getRecognitionClassifierNormalization('c8-tile-35-v1')).toEqual({
+      mean: [0.6815832403977466],
+      std: [0.2725553681973969],
+    });
+    expect(getRecognitionClassifierNormalization('c8-red-five-v1')).toEqual({
+      mean: [0.66025093606229934, 0.69172744263865471, 0.6489080530422624],
+      std: [0.30491469480493394, 0.24924454491506576, 0.27107025824445752],
+    });
   });
 
   it('normalizes unsupported schema, role/spec, provider, and integrity declarations', () => {

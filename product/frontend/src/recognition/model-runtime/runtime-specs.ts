@@ -24,8 +24,8 @@ const RUNTIME_SPEC_DESCRIPTORS = {
     runtimeSpec: 'c8-tile-35-v1',
     role: 'tile-classifier',
     classifierNormalization: {
-      mean: [0.68306223733377514],
-      std: [0.27237886485683077],
+      mean: [0.6815832403977466],
+      std: [0.2725553681973969],
     },
   },
   'c8-red-five-v1': {
