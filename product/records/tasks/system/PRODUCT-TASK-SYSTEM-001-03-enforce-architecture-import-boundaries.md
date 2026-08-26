@@ -1,6 +1,6 @@
 # PRODUCT-TASK-SYSTEM-001-03: Enforce architecture import boundaries
 
-- **status**: not_started
+- **status**: done
 - **date**: 2026-08-26
 - **work_item**: PRODUCT-WORK-SYSTEM-001
 - **task_type**: implementation
@@ -47,4 +47,12 @@ The production static gate deterministically enforces the accepted architecture 
 
 - `spec:product.system.architecture` fixes the dependency and concrete-library isolation rules.
 - `spec:product.system.contracts.testing_strategy` requires those rules to be mechanically testable.
-- Execution results are recorded here when the Task is performed.
+- A deterministic import-specifier gate is implemented in `product/frontend/scripts/check-architecture-imports.ts`; it uses the TypeScript 7 lexical scanner (`typescript/unstable/ast`) to scan production `.ts`/`.tsx` static imports, re-exports, dynamic/import-type references, and CommonJS `require()` references without relying on the removed legacy compiler-API package-root export.
+- The gate enforces public-entry-only cross-module imports, Recognition -> UI prohibition, UI/Application -> `onnxruntime-web` prohibition, and UI/Application -> concrete Agari WASM prohibition.
+- `product/frontend/package.json` exposes the gate as the ordinary `npm run lint` static verification command.
+- `product/frontend/test/architecture-boundaries.test.ts` covers legal public/same-module imports and representative forbidden deep, ONNX Runtime, Agari WASM, and Recognition -> UI imports.
+- `product/frontend/fixtures/architecture-invalid/src/ui/deep-import.ts` is a bounded production-shaped negative fixture; the test invokes the real CLI against it and requires exit code `1`.
+- Verification on 2026-08-26 passed: `npm run lint` reported `Architecture import boundaries: OK (9 source files checked)` with no violations.
+- `npm run typecheck` completed successfully with no TypeScript errors.
+- `npm test` completed 4 test files / 13 tests with 13 passed, including all 9 architecture-boundary tests and the bounded failing fixture.
+- `npm run build` completed successfully with Vite 8.2.2 after the production TypeScript check, confirming the ordinary production build remains green.
