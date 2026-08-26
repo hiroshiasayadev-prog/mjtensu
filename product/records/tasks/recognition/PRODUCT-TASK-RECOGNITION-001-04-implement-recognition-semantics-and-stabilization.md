@@ -1,6 +1,6 @@
 # PRODUCT-TASK-RECOGNITION-001-04: Implement recognition semantics and stabilization
 
-- **status**: not_started
+- **status**: completed
 - **date**: 2026-08-26
 - **work_item**: PRODUCT-WORK-RECOGNITION-001
 - **task_type**: implementation
@@ -55,4 +55,8 @@ Per-frame semantic reconstruction and temporal stabilization match the Recogniti
 - `spec:product.recognition.runtime_recognition` defines ordering, meld grouping, eligibility, and stabilization semantics.
 - `spec:product.recognition.pipeline` defines live-observation versus recognized-structure separation and downstream scoring-validity boundary.
 - The production testing strategy requires these semantics at the deterministic unit layer.
-- Execution results are recorded here when the Task is performed.
+- Production implementation authored in `product/frontend/src/recognition/semantics/` for frame observations/order, meld grouping/reconstruction, capture eligibility, semantic equality, and three-result stabilization.
+- Focused deterministic coverage authored in `product/frontend/test/recognition-semantics.test.ts` and `product/frontend/test/recognition-stabilization.test.ts`.
+- 2026-08-26 focused verification: `npm test -- recognition-semantics.test.ts recognition-stabilization.test.ts` PASS (2 files, 15 tests).
+- 2026-08-26 architecture verification: `npm run lint` PASS (`Architecture import boundaries: OK (47 source files checked)`).
+- 2026-08-26 strict typecheck: `npm run typecheck` PASS after the unrelated scoring-test mock typing issue was corrected in another session.
