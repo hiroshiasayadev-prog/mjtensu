@@ -76,6 +76,7 @@ Examples:
 
 - a malformed meld group receives an error outline around that meld group;
 - an inconsistent completed-hand count receives an error outline around the completed-hand region;
+- a completed-hand tile rejected by scoring structure validation receives repair feedback on the completed-hand region;
 - a whole-structure winning-shape failure is shown against the hand/meld structure rather than against unrelated dora or condition controls.
 
 The UI accompanies the visual error state with a short repair-oriented message.

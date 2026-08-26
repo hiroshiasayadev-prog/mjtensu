@@ -313,6 +313,29 @@ describe('TileCorrectionEditor', () => {
     expect(screen.getByRole('button', { name: '修正を確定' })).toBeDisabled();
   });
 
+  it('shows completed-hand tile validity feedback from scoring validation', () => {
+    const service = createCorrectionEditorService(
+      scoringService(readyPreview, {
+        validateWinningStructure: () => ({
+          kind: 'invalid-structure',
+          issues: [{ kind: 'completed-hand-tile', tileIndex: 4 }],
+        }),
+      }),
+    );
+
+    render(
+      <TileCorrectionEditor
+        initialStructure={structure(closedWinningHand)}
+        onCommit={vi.fn()}
+        service={service}
+      />,
+    );
+
+    expect(screen.getByLabelText('手牌修正')).toHaveAttribute('data-invalid', 'true');
+    expect(screen.getByText('手牌に不正な牌があります。')).toBeVisible();
+    expect(screen.getByRole('button', { name: '修正を確定' })).toBeDisabled();
+  });
+
   it('shows whole-structure winning-shape feedback without blaming dora or conditions', () => {
     const service = createCorrectionEditorService(
       scoringService(readyPreview, {

@@ -367,7 +367,11 @@ describe('correction draft service', () => {
       fakeScoringService(
         (): WinningStructureValidation => ({
           kind: 'invalid-structure',
-          issues: [{ kind: 'completed-hand-count' }, { kind: 'meld-group', meldIndex: 0 }],
+          issues: [
+            { kind: 'completed-hand-count' },
+            { kind: 'completed-hand-tile', tileIndex: 4 },
+            { kind: 'meld-group', meldIndex: 0 },
+          ],
         }),
       ),
       idGenerator(),
@@ -385,6 +389,10 @@ describe('correction draft service', () => {
       issues: [
         {
           kind: 'completed-hand-count',
+          target: { kind: 'completed-hand' },
+        },
+        {
+          kind: 'invalid-completed-hand-tile',
           target: { kind: 'completed-hand' },
         },
         {

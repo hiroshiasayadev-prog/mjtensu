@@ -165,6 +165,10 @@ export type CorrectionIssue =
       readonly target: { readonly kind: 'completed-hand' };
     }
   | {
+      readonly kind: 'invalid-completed-hand-tile';
+      readonly target: { readonly kind: 'completed-hand' };
+    }
+  | {
       readonly kind: 'invalid-meld';
       readonly target: {
         readonly kind: 'meld';
@@ -180,6 +184,8 @@ export type CorrectionIssue =
 Issue targets are product-semantic locations used by the UI to place repair feedback. The editor UI maps issue kinds to visible copy; domain/application code does not return Japanese presentation strings.
 
 Validation first checks editor-owned structure such as meld composition and completed-hand count, then delegates whole winning-shape determination to `ScoringService.validateWinningStructure()`.
+
+Scoring validation issues are normalized into this public correction vocabulary. In particular, `WinningStructureIssue.kind === 'completed-hand-tile'` maps to `CorrectionIssue.kind === 'invalid-completed-hand-tile'` targeted at the completed-hand region. The correction contract does not expose concrete Agari/WASM error types, codes, or strings.
 
 Dora indicators do not participate in winning-shape validity. Lack of yaku and missing non-image Conditions do not create `CorrectionIssue` values.
 
