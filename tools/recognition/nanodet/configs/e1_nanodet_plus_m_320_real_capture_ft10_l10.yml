@@ -1,0 +1,125 @@
+# E1 real-capture fine-tune after layouts 1-10 are annotated.
+# Build the dataset first with:
+#   python tools/recognition/build_nanodet_capture_finetune_dataset.py --layout-count 10
+#
+# Starts from the current composite-augmented mahjong detector weights, but resets
+# optimizer/scheduler state. The held-out validation partition is split by layout,
+# so the four lighting/shadow variants of one arrangement never cross partitions.
+
+save_dir: /srv/bugrat/data-lv/mjtensu/.local/recognition/nanodet_runs/E1_plus_m_320_real_capture_ft10_l10_seed42
+model:
+  weight_averager:
+    name: ExpMovingAverager
+    decay: 0.9998
+  arch:
+    name: NanoDetPlus
+    detach_epoch: 5
+    backbone:
+      name: ShuffleNetV2
+      model_size: 1.0x
+      pretrain: false
+      out_stages: [2, 3, 4]
+      activation: LeakyReLU
+    fpn:
+      name: GhostPAN
+      in_channels: [116, 232, 464]
+      out_channels: 96
+      kernel_size: 5
+      num_extra_level: 1
+      use_depthwise: true
+      activation: LeakyReLU
+    head:
+      name: NanoDetPlusHead
+      num_classes: 1
+      input_channel: 96
+      feat_channels: 96
+      stacked_convs: 2
+      kernel_size: 5
+      strides: [8, 16, 32, 64]
+      activation: LeakyReLU
+      reg_max: 7
+      norm_cfg:
+        type: BN
+      loss:
+        loss_qfl:
+          name: QualityFocalLoss
+          use_sigmoid: true
+          beta: 2.0
+          loss_weight: 1.0
+        loss_dfl:
+          name: DistributionFocalLoss
+          loss_weight: 0.25
+        loss_bbox:
+          name: GIoULoss
+          loss_weight: 2.0
+    aux_head:
+      name: SimpleConvHead
+      num_classes: 1
+      input_channel: 192
+      feat_channels: 192
+      stacked_convs: 4
+      strides: [8, 16, 32, 64]
+      activation: LeakyReLU
+      reg_max: 7
+
+data:
+  train:
+    name: CocoDataset
+    img_path: /srv/bugrat/data-lv/mjtensu
+    ann_path: /srv/bugrat/data-lv/mjtensu/.local/recognition/nanodet_capture_finetune_dataset/annotations/instances_train.json
+    input_size: [320, 320]
+    keep_ratio: false
+    pipeline:
+      perspective: 0.0
+      scale: [0.8, 1.2]
+      stretch: [[0.9, 1.1], [0.9, 1.1]]
+      rotation: 0
+      shear: 0
+      translate: 0.08
+      flip: 0.5
+      brightness: 0.1
+      contrast: [0.8, 1.2]
+      saturation: [0.8, 1.1]
+      normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
+  val:
+    name: CocoDataset
+    img_path: /srv/bugrat/data-lv/mjtensu
+    ann_path: /srv/bugrat/data-lv/mjtensu/.local/recognition/nanodet_capture_finetune_dataset/annotations/instances_real_val.json
+    input_size: [320, 320]
+    keep_ratio: false
+    pipeline:
+      normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
+
+device:
+  gpu_ids: [0]
+  workers_per_gpu: 10
+  batchsize_per_gpu: 64
+  precision: 16
+
+schedule:
+  load_model: /srv/bugrat/data-lv/mjtensu/.local/recognition/nanodet_runs/E1_plus_m_320_composite_augmented_amp40_seed42/model_best/nanodet_model_best.pth
+  optimizer:
+    name: AdamW
+    lr: 0.0001
+    weight_decay: 0.05
+  warmup:
+    name: linear
+    steps: 100
+    ratio: 0.1
+  total_epochs: 15
+  lr_schedule:
+    name: CosineAnnealingLR
+    T_max: 15
+    eta_min: 0.00001
+  val_intervals: 1
+
+grad_clip: 35
+
+evaluator:
+  name: CocoDetectionEvaluator
+  save_key: mAP
+
+log:
+  interval: 10
+
+class_names: [mahjong_tile]

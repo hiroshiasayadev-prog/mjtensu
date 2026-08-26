@@ -1,0 +1,37 @@
+.local/
+models/
+checkpoints/
+runs/
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+node_modules/
+/data/
+/errors.html
+
+# External source repositories (managed as independent Git repositories)
+/external/agari/
+
+# NanoDet browser probe generated artifacts
+tools/recognition/pwa_detector_probe/node_modules/
+tools/recognition/pwa_detector_probe/dist/
+tools/recognition/pwa_detector_probe/public/ort/
+tools/recognition/pwa_detector_probe/public/app-icon-192.png
+tools/recognition/pwa_detector_probe/public/app-icon-512.png
+tools/recognition/pwa_detector_probe/public/models/*.onnx
+tools/recognition/pwa_detector_probe/public/models/*.metadata.json
+
+# Capture dataset PWA generated artifacts
+tools/recognition/pwa_capture_dataset/node_modules/
+tools/recognition/pwa_capture_dataset/dist/
+tools/recognition/pwa_capture_dataset/public/app-icon-192.png
+tools/recognition/pwa_capture_dataset/public/app-icon-512.png
+tools/recognition/pwa_capture_dataset/public/capture_layout.v1.json
+tools/recognition/pwa_capture_dataset/public/models/
+
+# Production frontend generated artifacts
+product/frontend/dist/
+product/frontend/.vite/
+product/frontend/playwright-report/
+product/frontend/test-results/

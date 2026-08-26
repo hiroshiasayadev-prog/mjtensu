@@ -1,0 +1,25 @@
+{
+  "id": "PRODUCT-ADR-RECOGNITION-002-v1",
+  "composite": {
+    "width": 320,
+    "height": 320,
+    "paddingRgb": [0, 0, 0]
+  },
+  "regions": {
+    "completed_hand": {
+      "label": "Completed hand",
+      "sourceAspect": [17, 4],
+      "destination": { "x": 7, "y": 0, "width": 306, "height": 72 }
+    },
+    "dora_indicators": {
+      "label": "Dora indicators",
+      "sourceAspect": [17, 4],
+      "destination": { "x": 7, "y": 74, "width": 306, "height": 72 }
+    },
+    "melds": {
+      "label": "Melds",
+      "sourceAspect": [1, 1],
+      "destination": { "x": 74, "y": 148, "width": 172, "height": 172 }
+    }
+  }
+}

@@ -1,0 +1,3 @@
+# Install this into the existing Linux CUDA/PyTorch training environment.
+# Do not replace the server's working CUDA-specific torch wheel with a generic one.
+escnn==1.0.11

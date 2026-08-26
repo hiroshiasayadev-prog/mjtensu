@@ -1,0 +1,25 @@
+{
+  "id": "TILE-CATALOG-CAPTURE-v2",
+  "composite": {
+    "width": 320,
+    "height": 320,
+    "paddingRgb": [0, 0, 0]
+  },
+  "regions": {
+    "completed_hand": {
+      "label": "Unused",
+      "sourceAspect": [1, 1],
+      "destination": { "x": 0, "y": 0, "width": 0, "height": 0 }
+    },
+    "dora_indicators": {
+      "label": "Unused",
+      "sourceAspect": [1, 1],
+      "destination": { "x": 0, "y": 0, "width": 0, "height": 0 }
+    },
+    "melds": {
+      "label": "Full raw catalog frame",
+      "sourceAspect": [16, 9],
+      "destination": { "x": 0, "y": 70, "width": 320, "height": 180 }
+    }
+  }
+}

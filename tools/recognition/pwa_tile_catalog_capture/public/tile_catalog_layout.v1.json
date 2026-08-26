@@ -1,0 +1,25 @@
+{
+  "id": "TILE-CATALOG-CAPTURE-v1",
+  "composite": {
+    "width": 320,
+    "height": 320,
+    "paddingRgb": [0, 0, 0]
+  },
+  "regions": {
+    "completed_hand": {
+      "label": "Manzu catalog row",
+      "sourceAspect": [7.6, 1],
+      "destination": { "x": 0, "y": 52, "width": 320, "height": 44 }
+    },
+    "dora_indicators": {
+      "label": "Pinzu and souzu catalog rows",
+      "sourceAspect": [7.6, 2.1],
+      "destination": { "x": 0, "y": 102, "width": 320, "height": 94 }
+    },
+    "melds": {
+      "label": "Honor catalog row",
+      "sourceAspect": [7.6, 1],
+      "destination": { "x": 0, "y": 202, "width": 320, "height": 44 }
+    }
+  }
+}
