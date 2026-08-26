@@ -16,3 +16,14 @@ export type {
   TensorOutput,
 } from './detector/types';
 export type { TileClassification } from './classifier/labels';
+export { createBrowserRecognitionModelAssets } from './model-runtime/assets';
+export { validateRecognitionModelSetManifest } from './model-runtime/manifest';
+export type {
+  ExecutionProvider,
+  RecognitionModelArtifactManifest,
+  RecognitionModelAssets,
+  RecognitionModelRole,
+  RecognitionModelRuntimeSpec,
+  RecognitionModelSetManifest,
+  RecognitionRuntimeError,
+} from './model-runtime/types';
