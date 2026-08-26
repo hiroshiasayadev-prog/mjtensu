@@ -1,6 +1,6 @@
 # PRODUCT-TASK-RECOGNITION-001-02: Implement NanoDet detection and postprocess
 
-- **status**: not_started
+- **status**: completed
 - **date**: 2026-08-26
 - **work_item**: PRODUCT-WORK-RECOGNITION-001
 - **task_type**: implementation
@@ -50,4 +50,11 @@ The production detector path produces deterministic region-assigned, duplicate-s
 - PRODUCT-ADR-RECOGNITION-002 defines the fixed composite geometry.
 - PRODUCT-ADR-RECOGNITION-004 and `spec:product.recognition.pipeline` define the detector/postprocess placement.
 - The production testing strategy requires deterministic duplicate/geometry tests below full-model integration.
-- Execution results are recorded here when the Task is performed.
+- Production implementation:
+  - `product/frontend/src/recognition/detector/fixed-composite.ts`
+  - `product/frontend/src/recognition/detector/nanodet.ts`
+  - `product/frontend/src/recognition/detector/duplicate-suppression.ts`
+  - `product/frontend/src/recognition/detector/detection-postprocessor.ts`
+- Focused verification on 2026-08-26: 4 Vitest files, 28 tests passed for fixed geometry/composition, preprocessing/decode/NMS, semantic-region boundaries, duplicate suppression, and integrated postprocess.
+- Full frontend verification on 2026-08-26: 10 Vitest files / 83 tests passed; strict app/test typecheck passed; architecture lint passed; production Vite build passed.
+- Actual production ONNX artifact inference remains intentionally deferred to PRODUCT-TASK-RECOGNITION-001-06.
