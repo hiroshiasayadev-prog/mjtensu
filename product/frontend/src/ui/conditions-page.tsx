@@ -201,7 +201,7 @@ const optionLabelStyle: CSSProperties = {
 
 const checkedOptionLabelStyle: CSSProperties = {
   ...optionLabelStyle,
-  borderColor: '#1c7ed6',
+  border: '1px solid #1c7ed6',
   background: '#e7f5ff',
   fontWeight: 700,
 };

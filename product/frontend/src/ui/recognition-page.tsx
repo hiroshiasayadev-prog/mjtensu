@@ -20,8 +20,20 @@ import {
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import type { CameraService, CameraSession } from '@/camera';
 import type { RecognizedStructure, TileIdentity } from '@/domain';
-import type { RecognitionRuntimeError } from '@/recognition';
+import type {
+  FrameObservationId,
+  FrameRecognitionSnapshot,
+  MeldGroupObservation,
+  NormalizedRect,
+  RecognitionFrameSource,
+  RecognitionRegion,
+  RecognitionRun,
+  RecognitionRuntime,
+  RealtimeRecognizer,
+  TileObservation,
+} from '@/recognition';
 import { DEFAULT_RULE_PROFILE } from '@/scoring';
 
 import { useApplicationStore } from './application-state';
@@ -30,128 +42,10 @@ import {
   navigateToTop,
 } from './navigation';
 
-export type RecognitionRegion =
-  | 'completed-hand'
-  | 'dora-indicators'
-  | 'melds';
-
-export interface NormalizedRect {
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
-}
-
-export interface RecognitionPageSize {
-  readonly width: number;
-  readonly height: number;
-}
-
-export interface RecognitionPageCameraFrame {
-  readonly image: CanvasImageSource;
-  readonly size: RecognitionPageSize;
-  readonly capturedAtMs: number;
-}
-
-export type RecognitionPageCameraError =
-  | { readonly kind: 'permission-denied' }
-  | { readonly kind: 'device-not-found' }
-  | { readonly kind: 'device-unavailable' }
-  | { readonly kind: 'unsupported' }
-  | { readonly kind: 'runtime-failure'; readonly cause: unknown };
-
-export interface RecognitionPageCameraPreview {
-  attach(video: HTMLVideoElement): void;
-  detach(): void;
-}
-
-export interface RecognitionPageCameraSession {
-  readonly preview: RecognitionPageCameraPreview;
-  captureLatest(): RecognitionPageCameraFrame | null;
-  stop(): Promise<void>;
-}
-
-export interface RecognitionPageCameraService {
-  open(request: {
-    readonly facingMode: 'environment';
-  }): Promise<RecognitionPageCameraSession>;
-}
-
-export interface RecognitionPageRuntime {
-  initialize(): Promise<void>;
-}
-
-export interface RecognitionPageFrame {
-  readonly source: CanvasImageSource;
-  readonly sourceSize: RecognitionPageSize;
-  readonly regions: Readonly<Record<RecognitionRegion, NormalizedRect>>;
-  readonly capturedAtMs: number;
-}
-
-export interface RecognitionPageFrameSource {
-  captureLatest(): RecognitionPageFrame | null;
-}
-
-export interface RecognitionObservation {
-  readonly id: string;
-  readonly region: RecognitionRegion;
-  readonly box: NormalizedRect;
-  readonly tile: TileIdentity | null;
-}
-
-export type RecognitionMeldInterpretation =
-  | 'chi'
-  | 'pon'
-  | 'open-kan'
-  | 'concealed-kan'
-  | 'unresolved';
-
-export interface RecognitionMeldObservationGroup {
-  readonly id: string;
-  readonly memberObservationIds: readonly string[];
-  readonly interpretation: RecognitionMeldInterpretation | null;
-}
-
-export interface RecognitionFrameSnapshot {
-  readonly observations: readonly RecognitionObservation[];
-  readonly meldGroups: readonly RecognitionMeldObservationGroup[];
-}
-
-export type RecognitionPageRealtimeUpdate =
-  | {
-      readonly kind: 'scanning';
-      readonly snapshot: RecognitionFrameSnapshot;
-    }
-  | {
-      readonly kind: 'stabilizing';
-      readonly snapshot: RecognitionFrameSnapshot;
-    }
-  | {
-      readonly kind: 'confirmed';
-      readonly result: RecognizedStructure;
-    };
-
-export interface RecognitionPageRealtimeListener {
-  onUpdate(update: RecognitionPageRealtimeUpdate): void;
-  onError(error: RecognitionRuntimeError): void;
-}
-
-export interface RecognitionPageRun {
-  stop(): void;
-}
-
-export interface RecognitionPageRealtimeRecognizer {
-  start(
-    source: RecognitionPageFrameSource,
-    listener: RecognitionPageRealtimeListener,
-  ): RecognitionPageRun;
-  reset(): void;
-}
-
 export interface RecognitionPageServices {
-  readonly camera: RecognitionPageCameraService;
-  readonly runtime: RecognitionPageRuntime;
-  readonly recognizer: RecognitionPageRealtimeRecognizer;
+  readonly camera: CameraService;
+  readonly runtime: RecognitionRuntime;
+  readonly recognizer: RealtimeRecognizer;
 }
 
 export interface RecognitionPageServicesProviderProps {
@@ -195,9 +89,9 @@ export const RECOGNITION_CAPTURE_REGIONS = {
 } as const satisfies Readonly<Record<RecognitionRegion, NormalizedRect>>;
 
 export interface RecognitionPageViewProps {
-  readonly camera: RecognitionPageCameraService;
-  readonly runtime: RecognitionPageRuntime;
-  readonly recognizer: RecognitionPageRealtimeRecognizer;
+  readonly camera: CameraService;
+  readonly runtime: RecognitionRuntime;
+  readonly recognizer: RealtimeRecognizer;
   readonly onAbandon: () => void;
   readonly onConfirmed: (result: RecognizedStructure) => void;
 }
@@ -217,9 +111,8 @@ export function RecognitionPageView({
     useState<PreparationStatus>('preparing');
   const [cameraError, setCameraError] = useState<unknown>(null);
   const [runtimeError, setRuntimeError] = useState<unknown>(null);
-  const [cameraSession, setCameraSession] =
-    useState<RecognitionPageCameraSession | null>(null);
-  const [snapshot, setSnapshot] = useState<RecognitionFrameSnapshot | null>(null);
+  const [cameraSession, setCameraSession] = useState<CameraSession | null>(null);
+  const [snapshot, setSnapshot] = useState<FrameRecognitionSnapshot | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mountedRef = useRef(false);
   const cameraAttemptRef = useRef(0);
@@ -322,7 +215,7 @@ export function RecognitionPageView({
     }
 
     let active = true;
-    let run: RecognitionPageRun | null = null;
+    let run: RecognitionRun | null = null;
     let stopRequested = false;
     let runStopped = false;
     const stopRun = () => {
@@ -543,11 +436,13 @@ export function RecognitionPage() {
 function CaptureRegionOverlay({
   snapshot,
 }: {
-  readonly snapshot: RecognitionFrameSnapshot | null;
+  readonly snapshot: FrameRecognitionSnapshot | null;
 }) {
   const maskId = useId().replaceAll(':', '');
   const observationsById = useMemo(
-    () => new Map(snapshot?.observations.map((item) => [item.id, item]) ?? []),
+    () => new Map<FrameObservationId, TileObservation>(
+      snapshot?.observations.map((item) => [item.id, item] as const) ?? [],
+    ),
     [snapshot],
   );
 
@@ -643,19 +538,20 @@ function CaptureFrame({
 function ObservationBox({
   observation,
 }: {
-  readonly observation: RecognitionObservation;
+  readonly observation: TileObservation;
 }) {
-  const label = observation.tile === null
-    ? '未解決'
-    : tileLabel(observation.tile);
+  const tile = observation.classification.kind === 'tile'
+    ? observation.classification.tile
+    : null;
+  const label = tile === null ? '未解決' : tileLabel(tile);
 
   return (
     <Box
       aria-label={`認識候補 ${label}`}
       data-testid="recognition-observation-box"
       style={{
-        ...rectStyle(observation.box),
-        border: observation.tile === null
+        ...rectStyle(observation.bbox),
+        border: tile === null
           ? '2px dashed rgba(255,255,255,0.95)'
           : '2px solid rgba(255,255,255,0.95)',
         boxSizing: 'border-box',
@@ -678,7 +574,7 @@ function ObservationBox({
           textAlign: 'center',
         }}
       >
-        {observation.tile === null ? '?' : tileLabel(observation.tile)}
+        {tile === null ? '?' : tileLabel(tile)}
       </Box>
     </Box>
   );
@@ -688,8 +584,8 @@ function MeldGroupOverlay({
   groups,
   observationsById,
 }: {
-  readonly groups: readonly RecognitionMeldObservationGroup[];
-  readonly observationsById: ReadonlyMap<string, RecognitionObservation>;
+  readonly groups: readonly MeldGroupObservation[];
+  readonly observationsById: ReadonlyMap<FrameObservationId, TileObservation>;
 }) {
   return (
     <>
@@ -702,17 +598,17 @@ function MeldGroupOverlay({
         {groups.flatMap((group) => {
           const members = group.memberObservationIds
             .map((id) => observationsById.get(id))
-            .filter((item): item is RecognitionObservation => item !== undefined);
+            .filter((item): item is TileObservation => item !== undefined);
 
           return members.slice(1).map((member, index) => {
             const previous = members[index];
             return (
               <line
-                key={`${group.id}-${previous.id}-${member.id}`}
-                x1={centerX(previous.box)}
-                y1={centerY(previous.box)}
-                x2={centerX(member.box)}
-                y2={centerY(member.box)}
+                key={`${group.memberObservationIds.join('-')}-${previous.id}-${member.id}`}
+                x1={centerX(previous.bbox)}
+                y1={centerY(previous.bbox)}
+                x2={centerX(member.bbox)}
+                y2={centerY(member.bbox)}
                 stroke="white"
                 strokeWidth="0.007"
                 strokeDasharray="0.012 0.009"
@@ -724,7 +620,7 @@ function MeldGroupOverlay({
 
       {groups.map((group) => (
         <MeldPreview
-          key={group.id}
+          key={group.memberObservationIds.join('|')}
           group={group}
           observationsById={observationsById}
         />
@@ -737,27 +633,29 @@ function MeldPreview({
   group,
   observationsById,
 }: {
-  readonly group: RecognitionMeldObservationGroup;
-  readonly observationsById: ReadonlyMap<string, RecognitionObservation>;
+  readonly group: MeldGroupObservation;
+  readonly observationsById: ReadonlyMap<FrameObservationId, TileObservation>;
 }) {
   const members = group.memberObservationIds
     .map((id) => observationsById.get(id))
-    .filter((item): item is RecognitionObservation => item !== undefined);
+    .filter((item): item is TileObservation => item !== undefined);
 
   if (members.length === 0) {
     return null;
   }
 
   const recognizedLabels = members.map((member) =>
-    member.tile === null ? '?' : tileLabel(member.tile),
+    member.classification.kind === 'tile'
+      ? tileLabel(member.classification.tile)
+      : '?',
   );
-  const logicalPreview = group.interpretation === 'concealed-kan'
+  const logicalPreview = group.interpretation.kind === 'concealed-kan'
     ? ['裏', ...recognizedLabels, '裏']
     : recognizedLabels;
-  const minY = Math.min(...members.map((member) => member.box.y));
-  const center = members.reduce((sum, member) => sum + centerX(member.box), 0) /
+  const minY = Math.min(...members.map((member) => member.bbox.y));
+  const center = members.reduce((sum, member) => sum + centerX(member.bbox), 0) /
     members.length;
-  const interpretation = meldInterpretationLabel(group.interpretation);
+  const interpretation = meldInterpretationLabel(group.interpretation.kind);
 
   return (
     <Paper
@@ -840,8 +738,8 @@ function OwnedRecoveryPanel({
 }
 
 function createRecognitionFrameSource(
-  camera: RecognitionPageCameraSession,
-): RecognitionPageFrameSource {
+  camera: CameraSession,
+): RecognitionFrameSource {
   return {
     captureLatest() {
       const frame = camera.captureLatest();
@@ -970,7 +868,7 @@ function tileLabel(tile: TileIdentity): string {
 }
 
 function meldInterpretationLabel(
-  interpretation: RecognitionMeldInterpretation | null,
+  interpretation: MeldGroupObservation['interpretation']['kind'],
 ): string {
   switch (interpretation) {
     case 'chi':
@@ -982,7 +880,6 @@ function meldInterpretationLabel(
     case 'concealed-kan':
       return '暗槓';
     case 'unresolved':
-    case null:
       return '副露';
   }
 }

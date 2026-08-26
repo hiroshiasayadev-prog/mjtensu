@@ -3,23 +3,40 @@ import type { ReactNode } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 
 import type { ApplicationStore } from '@/application';
-import { ApplicationStateProvider } from '@/ui';
+import {
+  ApplicationStateProvider,
+  ScoringFlowServicesProvider,
+  type ScoringFlowServices,
+} from '@/ui';
 
 import { AppRoutes } from './routes';
 
 export interface AppProps {
   readonly applicationStore?: ApplicationStore;
   readonly router?: ReactNode;
+  readonly scoringFlowServices?: ScoringFlowServices;
 }
 
-export function App({ applicationStore, router }: AppProps = {}) {
+export function App({
+  applicationStore,
+  router,
+  scoringFlowServices,
+}: AppProps = {}) {
+  const routes = router ?? (
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
+  );
+
   return (
     <MantineProvider>
       <ApplicationStateProvider store={applicationStore}>
-        {router ?? (
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
+        {scoringFlowServices === undefined ? (
+          routes
+        ) : (
+          <ScoringFlowServicesProvider services={scoringFlowServices}>
+            {routes}
+          </ScoringFlowServicesProvider>
         )}
       </ApplicationStateProvider>
     </MantineProvider>

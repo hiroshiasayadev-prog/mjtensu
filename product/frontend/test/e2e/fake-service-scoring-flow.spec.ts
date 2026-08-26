@@ -118,12 +118,39 @@ test.describe('fake-service scoring flow acceptance', () => {
 
     await page.getByRole('button', { name: '条件を修正' }).click();
     await expect(page).toHaveURL('/conditions');
+    await expect(page.getByRole('heading', { name: '牌姿修正' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'キャンセル' })).toBeVisible();
     await page.getByRole('radio', { name: '南', exact: true }).last().check();
     await page.getByRole('button', { name: '計算する' }).click();
 
     await expect(page).toHaveURL('/result');
     await expect(page.getByText('4,000点', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: '親子を修正' })).toHaveText('子');
+  });
+
+  test('Result-origin condition correction cancel preserves the unchanged Result', async ({ page }) => {
+    await reachResult(page);
+    await page.getByRole('button', { name: '条件を修正' }).click();
+    await page.getByRole('radio', { name: '南', exact: true }).last().check();
+
+    await page.getByRole('button', { name: 'キャンセル' }).click();
+    await expect(page).toHaveURL('/result');
+    await expect(page.getByText('6,000点', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '親子を修正' })).toHaveText('親');
+
+    await page.getByRole('button', { name: '条件を修正' }).click();
+    await expect(
+      page.getByRole('radio', { name: '東', exact: true }).last(),
+    ).toBeChecked();
+  });
+
+  test('dealer/child shortcut focuses the seat-wind control', async ({ page }) => {
+    await reachResult(page);
+    await page.getByRole('button', { name: '親子を修正' }).click();
+
+    const seatWind = page.getByRole('group', { name: '自風' });
+    await expect(seatWind).toBeFocused();
+    await expect(seatWind).toHaveAttribute('data-edit-focus', 'true');
   });
 
   test('pre-confirm recognition correction cancel preserves old Result', async ({ page }) => {
@@ -156,6 +183,7 @@ test.describe('fake-service scoring flow acceptance', () => {
     await page.getByRole('button', { name: '修正を確定' }).click();
     await expect(page).toHaveURL('/conditions');
     await expect(page.getByText('役なし')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'キャンセル' })).toHaveCount(0);
 
     await page.goBack();
     await expect(page).toHaveURL('/result');

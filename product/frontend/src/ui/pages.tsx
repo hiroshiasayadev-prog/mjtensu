@@ -13,11 +13,13 @@ import {
   Link as RouterLink,
   Navigate,
   Outlet,
+  useLocation,
   useNavigate,
 } from 'react-router-dom';
 
 import {
   selectHasActiveScoringSession,
+  type ScoringSessionCalculation,
   type ScoringSessionService,
 } from '@/application';
 
@@ -26,6 +28,7 @@ import { ConditionsPageView } from './conditions-page';
 import {
   appRoutePaths,
   navigateAfterCalculation,
+  navigateAfterConditionCorrectionCancelled,
   navigateAfterRecognitionCorrectionCancelled,
   navigateAfterRecognitionCorrectionNeedsConditions,
   navigateAfterRecognitionCorrectionScored,
@@ -34,6 +37,8 @@ import {
   navigateToNewRecognition,
   navigateToRecognitionCorrection,
   navigateToTop,
+  navigateToUnscoredConditions,
+  readConditionsNavigationState,
 } from './navigation';
 import { RecognitionCorrectionPageView } from './recognition-correction-page';
 import { ResultPresentation } from './result-presentation';
@@ -155,7 +160,14 @@ export function ConditionsPage() {
   const activeScoringSession = useApplicationStore(
     (state) => state.activeScoringSession,
   );
+  const location = useLocation();
   const navigate = useNavigate();
+  const navigationState = readConditionsNavigationState(location.state);
+  const mode = navigationState.fromResultConditionCorrection
+    ? 'result-correction'
+    : navigationState.fromConfirmedRecognitionCorrection
+      ? 'recognition-repair'
+      : 'initial';
 
   if (activeScoringSession === null) {
     return null;
@@ -165,19 +177,54 @@ export function ConditionsPage() {
     return <ScoringFlowUnavailableState title="条件入力" />;
   }
 
+  const initialScoringSession = activeScoringSession;
+
+  function commitResultConditionCorrection(
+    calculation: ScoringSessionCalculation,
+  ) {
+    scoringSession.update(initialScoringSession, {
+      kind: 'select-winning-tile',
+      tileId: calculation.state.winningTileId,
+    });
+    scoringSession.update(initialScoringSession, {
+      kind: 'replace-conditions',
+      conditions: calculation.state.conditions,
+    });
+    scoringSession.calculate(initialScoringSession);
+    navigateAfterCalculation(navigate);
+  }
+
   return (
     <ConditionsPageView
+      initialFocus={navigationState.focus}
       initialSession={activeScoringSession}
-      onCalculationComplete={() => navigateAfterCalculation(navigate)}
-      renderCorrectionEditor={({ session, commitStructure }) => (
-        <TileCorrectionEditor
-          initialStructure={session.structure}
-          onCommit={commitStructure}
-          primaryActionLabel="牌姿を反映"
-          service={scoringFlowServices.correctionEditor}
-        />
-      )}
-      sessionService={scoringSession}
+      onCalculationComplete={
+        mode === 'result-correction'
+          ? commitResultConditionCorrection
+          : () => navigateAfterCalculation(navigate)
+      }
+      onCancel={
+        mode === 'result-correction'
+          ? () => navigateAfterConditionCorrectionCancelled(navigate)
+          : undefined
+      }
+      renderCorrectionEditor={
+        mode === 'result-correction'
+          ? undefined
+          : ({ session, commitStructure }) => (
+              <TileCorrectionEditor
+                initialStructure={session.structure}
+                onCommit={commitStructure}
+                primaryActionLabel="牌姿を反映"
+                service={scoringFlowServices.correctionEditor}
+              />
+            )
+      }
+      sessionService={
+        mode === 'result-correction'
+          ? scoringFlowServices.scoringSession
+          : scoringSession
+      }
     />
   );
 }
@@ -259,7 +306,7 @@ export function ResultPage() {
         <Text c="dimmed">計算結果がまだありません。</Text>
         <Button
           variant="light"
-          onClick={() => navigateToConditionCorrection(navigate)}
+          onClick={() => navigateToUnscoredConditions(navigate)}
         >
           条件入力へ戻る
         </Button>

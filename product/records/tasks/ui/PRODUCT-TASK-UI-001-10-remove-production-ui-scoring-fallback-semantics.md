@@ -1,6 +1,6 @@
 # PRODUCT-TASK-UI-001-10: Remove production UI scoring fallback semantics
 
-- **status**: in_progress
+- **status**: done
 - **date**: 2026-08-27
 - **work_item**: PRODUCT-WORK-UI-001
 - **task_type**: correction
@@ -46,8 +46,12 @@ Production UI cannot emit `valid`, `no-yaku`, calculation, or correction-readine
 - `src/ui/pages.tsx` renders an explicit `点数計算サービスを利用できません。` state for Conditions and Recognition-correction routes when scoring-flow composition is absent, before preview, calculation, or correction validation can run.
 - `test/shell-routing.test.tsx` now supplies deterministic scoring/correction services for normal composed route coverage and adds missing-composition checks that assert the unavailable state and absence of `役なし`, calculation, or correction-confirm actions.
 - `test/result-page.test.tsx` now explicitly supplies the scoring-flow services needed by Result-origin navigation into Conditions and Recognition correction.
-- Existing fake scoring behavior remains in `test/e2e/fake-flow-main.tsx`; no fake Scoring semantics remain in production UI source.
+- Existing fake scoring behavior remains in `test/e2e/fake-flow-main.tsx`; its provider now explicitly injects both the correction editor and scoring-session service, and no fake Scoring semantics remain in production UI source.
 - Service references remain owned by React context/composition and were not added to Zustand.
-- Command verification is pending: affected Vitest tests, `npm run typecheck`, and `npm run lint` must pass before this Task is marked `done`.
+- Verification completed on 2026-08-27: focused Vitest suite passed 5/5 files and 61/61 tests (`shell-routing`, `result-page`, `conditions-page`, `tile-correction-ui`, `app.smoke`).
+- `npm run typecheck` passed with no TypeScript errors.
+- `npm run lint` passed: `Architecture import boundaries: OK (52 source files checked).`
+- Focused fake-service Playwright acceptance passed 14/14 tests after production and E2E builds completed successfully.
+- React emitted existing inline-style shorthand/non-shorthand warnings from Conditions rerenders; they were non-failing and unrelated to the scoring fallback dependency semantics corrected by this Task.
 - `spec:product.system.architecture` requires real runtime/service construction in the composition root and UI consumption through service references rather than hidden feature semantics.
 - PRODUCT-WORK-UI-001 requires UI to remain semantically thin over Application/feature services.

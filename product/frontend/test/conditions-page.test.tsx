@@ -84,6 +84,8 @@ function fakeScoringService(
 interface RenderConditionsPageOptions {
   readonly preview?: ScoringPreview;
   readonly completedHand?: readonly TileInstance[];
+  readonly initialFocus?: ComponentProps<typeof ConditionsPageView>['initialFocus'];
+  readonly onCancel?: () => void;
   readonly onCalculationComplete?: (calculation: ScoringSessionCalculation) => void;
   readonly onSessionChange?: (state: ScoringSessionState) => void;
   readonly renderCorrectionEditor?: ComponentProps<
@@ -96,6 +98,8 @@ function renderConditionsPage(options: RenderConditionsPageOptions = {}) {
   const {
     preview = readyPreview,
     completedHand = [tile('left'), tile('first-five'), tile('second-five')],
+    initialFocus,
+    onCancel,
     onCalculationComplete = vi.fn(),
     onSessionChange = vi.fn(),
     renderCorrectionEditor,
@@ -119,7 +123,9 @@ function renderConditionsPage(options: RenderConditionsPageOptions = {}) {
 
   render(
     <ConditionsPageView
+      initialFocus={initialFocus}
       initialSession={initialSession}
+      onCancel={onCancel}
       onCalculationComplete={onCalculationComplete}
       onSessionChange={onSessionChange}
       renderCorrectionEditor={renderCorrectionEditor}
@@ -243,6 +249,18 @@ describe('ConditionsPageView', () => {
     expect(screen.getByRole('button', { name: '計算する' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: '計算する' }));
     expect(onCalculationComplete).not.toHaveBeenCalled();
+  });
+
+  it('focuses and emphasizes seat wind when entered through the Result shortcut', () => {
+    const onCancel = vi.fn();
+    renderConditionsPage({ initialFocus: 'seatWind', onCancel });
+
+    const seatWind = screen.getByRole('group', { name: '自風' });
+    expect(seatWind).toHaveFocus();
+    expect(seatWind).toHaveAttribute('data-edit-focus', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
+    expect(onCancel).toHaveBeenCalledOnce();
   });
 
   it('keeps structure correction entry separate and commits through session replacement', () => {

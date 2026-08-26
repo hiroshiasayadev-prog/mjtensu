@@ -16,10 +16,35 @@ export interface AppNavigationOptions {
   readonly state?: unknown;
 }
 
+export interface ConditionsNavigationState {
+  readonly fromResultConditionCorrection?: true;
+  readonly fromConfirmedRecognitionCorrection?: true;
+  readonly focus?: 'seatWind';
+}
+
 export type AppNavigate = (
   destination: AppRoutePath,
   options?: AppNavigationOptions,
 ) => void;
+
+export function readConditionsNavigationState(
+  state: unknown,
+): ConditionsNavigationState {
+  if (typeof state !== 'object' || state === null) {
+    return {};
+  }
+
+  const candidate = state as Record<string, unknown>;
+  return {
+    ...(candidate.fromResultConditionCorrection === true
+      ? { fromResultConditionCorrection: true }
+      : {}),
+    ...(candidate.fromConfirmedRecognitionCorrection === true
+      ? { fromConfirmedRecognitionCorrection: true }
+      : {}),
+    ...(candidate.focus === 'seatWind' ? { focus: 'seatWind' } : {}),
+  };
+}
 
 export function navigateToTop(navigate: AppNavigate): void {
   navigate(appRoutePaths.top);
@@ -47,10 +72,21 @@ export function navigateToConditionCorrection(
   navigate: AppNavigate,
   focus?: 'seatWind',
 ): void {
-  navigate(
-    appRoutePaths.conditions,
-    focus === undefined ? undefined : { state: { focus } },
-  );
+  const state: ConditionsNavigationState = {
+    fromResultConditionCorrection: true,
+    ...(focus === undefined ? {} : { focus }),
+  };
+  navigate(appRoutePaths.conditions, { state });
+}
+
+export function navigateToUnscoredConditions(navigate: AppNavigate): void {
+  navigate(appRoutePaths.conditions);
+}
+
+export function navigateAfterConditionCorrectionCancelled(
+  navigate: AppNavigate,
+): void {
+  navigate(appRoutePaths.result, { replace: true });
 }
 
 export function navigateToRecognitionCorrection(navigate: AppNavigate): void {

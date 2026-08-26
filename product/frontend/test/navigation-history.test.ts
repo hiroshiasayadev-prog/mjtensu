@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   appRoutePaths,
   navigateAfterCalculation,
+  navigateAfterConditionCorrectionCancelled,
   navigateAfterRecognitionConfirmed,
   navigateAfterRecognitionCorrectionCancelled,
   navigateAfterRecognitionCorrectionNeedsConditions,
@@ -12,6 +13,8 @@ import {
   navigateToNewRecognition,
   navigateToRecognitionCorrection,
   navigateToTop,
+  navigateToUnscoredConditions,
+  readConditionsNavigationState,
   type AppNavigate,
 } from '@/ui';
 
@@ -34,6 +37,7 @@ describe('route history helpers', () => {
     navigateToHelp(navigate);
     navigateToTop(navigate);
     navigateAfterCalculation(navigate);
+    navigateToUnscoredConditions(navigate);
     navigateToConditionCorrection(navigate);
     navigateToConditionCorrection(navigate, 'seatWind');
     navigateToRecognitionCorrection(navigate);
@@ -45,7 +49,13 @@ describe('route history helpers', () => {
       { destination: appRoutePaths.conditions, options: undefined },
       {
         destination: appRoutePaths.conditions,
-        options: { state: { focus: 'seatWind' } },
+        options: { state: { fromResultConditionCorrection: true } },
+      },
+      {
+        destination: appRoutePaths.conditions,
+        options: {
+          state: { fromResultConditionCorrection: true, focus: 'seatWind' },
+        },
       },
       {
         destination: appRoutePaths.recognitionCorrection,
@@ -67,14 +77,16 @@ describe('route history helpers', () => {
     ]);
   });
 
-  it('encodes Result-origin recognition-correction follow-up without stale Result restoration', () => {
+  it('encodes Result-origin correction outcomes without stale Result restoration', () => {
     const { calls, navigate } = navigationRecorder();
 
+    navigateAfterConditionCorrectionCancelled(navigate);
     navigateAfterRecognitionCorrectionCancelled(navigate);
     navigateAfterRecognitionCorrectionScored(navigate);
     navigateAfterRecognitionCorrectionNeedsConditions(navigate);
 
     expect(calls).toEqual([
+      { destination: appRoutePaths.result, options: { replace: true } },
       { destination: appRoutePaths.result, options: { replace: true } },
       { destination: appRoutePaths.result, options: { replace: true } },
       {
@@ -85,6 +97,21 @@ describe('route history helpers', () => {
         },
       },
     ]);
+  });
+
+  it('reads only supported Conditions navigation state fields', () => {
+    expect(
+      readConditionsNavigationState({
+        fromResultConditionCorrection: true,
+        fromConfirmedRecognitionCorrection: false,
+        focus: 'seatWind',
+        ignored: 'value',
+      }),
+    ).toEqual({
+      fromResultConditionCorrection: true,
+      focus: 'seatWind',
+    });
+    expect(readConditionsNavigationState('invalid')).toEqual({});
   });
 
   it('enters a new recognition attempt with an explicit reset intent', () => {

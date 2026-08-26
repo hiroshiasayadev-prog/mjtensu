@@ -20,8 +20,10 @@ const routeScoringService: ScoringService = {
   },
 };
 
+const routeScoringSessionService = createScoringSessionService(routeScoringService);
 const routeScoringFlowServices = {
   correctionEditor: createCorrectionEditorService(routeScoringService),
+  scoringSession: routeScoringSessionService,
 };
 
 function createActiveApplicationStore(tileIdPrefix: string): ApplicationStore {
@@ -30,7 +32,7 @@ function createActiveApplicationStore(tileIdPrefix: string): ApplicationStore {
       activeScoringSession: createScoringSessionFixture({ tileIdPrefix }),
     },
     {
-      scoringSessionService: createScoringSessionService(routeScoringService),
+      scoringSessionService: routeScoringSessionService,
     },
   );
 }
@@ -125,8 +127,12 @@ describe('production shell routing', () => {
         '点数計算サービスを利用できません。',
       );
       expect(screen.queryByText('役なし')).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: '計算する' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: '修正を確定' })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: '計算する' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: '修正を確定' }),
+      ).not.toBeInTheDocument();
     },
   );
 
@@ -144,6 +150,15 @@ describe('production shell routing', () => {
       expect(screen.queryByText('現在の和了牌: url-only')).not.toBeInTheDocument();
     },
   );
+
+  it('routes an unscored Result back to non-cancellable Conditions', () => {
+    renderRoute('/result', createActiveApplicationStore('unscored'));
+
+    fireEvent.click(screen.getByRole('button', { name: '条件入力へ戻る' }));
+
+    expect(screen.getByRole('heading', { name: '条件入力' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'キャンセル' })).not.toBeInTheDocument();
+  });
 
   it('keeps Top Help round-trip navigation from creating a scoring session', () => {
     const applicationStore = createApplicationStore();

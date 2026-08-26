@@ -14,12 +14,21 @@ import {
   createScoringSessionFixture,
   type ApplicationStore,
 } from '@/application';
+import type { CameraService, CameraSession } from '@/camera';
 import type {
   RecognizedStructure,
   TileInstance,
   TileInstanceId,
 } from '@/domain';
-import type { RecognitionRuntimeError } from '@/recognition';
+import type {
+  FrameObservationId,
+  FrameRecognitionSnapshot,
+  RecognitionFrameSource,
+  RecognitionRuntime,
+  RecognitionRuntimeError,
+  RealtimeRecognitionListener,
+  RealtimeRecognizer,
+} from '@/recognition';
 import type { ScoringService } from '@/scoring';
 import {
   ApplicationStateProvider,
@@ -27,14 +36,6 @@ import {
   RecognitionPage,
   RecognitionPageServicesProvider,
   RecognitionPageView,
-  type RecognitionFrameSnapshot,
-  type RecognitionPageCameraService,
-  type RecognitionPageCameraSession,
-  type RecognitionPageFrameSource,
-  type RecognitionPageRealtimeListener,
-  type RecognitionPageRealtimeRecognizer,
-  type RecognitionPageRun,
-  type RecognitionPageRuntime,
   type RecognitionPageServices,
 } from '@/ui';
 
@@ -73,7 +74,7 @@ function createCameraSession() {
     capturedAtMs: 123,
   };
   const captureLatest = vi.fn(() => frame);
-  const session: RecognitionPageCameraSession = {
+  const session: CameraSession = {
     preview: { attach, detach },
     captureLatest,
     stop,
@@ -83,15 +84,15 @@ function createCameraSession() {
 }
 
 function createRecognizerHarness() {
-  let listener: RecognitionPageRealtimeListener | null = null;
-  let source: RecognitionPageFrameSource | null = null;
+  let listener: RealtimeRecognitionListener | null = null;
+  let source: RecognitionFrameSource | null = null;
   const runs: Array<{ stop: ReturnType<typeof vi.fn> }> = [];
   const reset = vi.fn();
   const start = vi.fn(
     (
-      nextSource: RecognitionPageFrameSource,
-      nextListener: RecognitionPageRealtimeListener,
-    ): RecognitionPageRun => {
+      nextSource: RecognitionFrameSource,
+      nextListener: RealtimeRecognitionListener,
+    ) => {
       source = nextSource;
       listener = nextListener;
       const stop = vi.fn();
@@ -99,13 +100,15 @@ function createRecognizerHarness() {
       return { stop };
     },
   );
-  const recognizer: RecognitionPageRealtimeRecognizer = { start, reset };
+  const dispose = vi.fn(async () => undefined);
+  const recognizer: RealtimeRecognizer = { start, reset, dispose };
 
   return {
     recognizer,
     reset,
     start,
     runs,
+    dispose,
     getListener: () => listener,
     getSource: () => source,
   };
@@ -116,9 +119,9 @@ function renderView({
   runtime,
   recognizer,
 }: {
-  readonly camera: RecognitionPageCameraService;
-  readonly runtime: RecognitionPageRuntime;
-  readonly recognizer: RecognitionPageRealtimeRecognizer;
+  readonly camera: CameraService;
+  readonly runtime: RecognitionRuntime;
+  readonly recognizer: RealtimeRecognizer;
 }) {
   const onAbandon = vi.fn();
   const onConfirmed = vi.fn();
@@ -138,6 +141,18 @@ function renderView({
   return { onAbandon, onConfirmed };
 }
 
+function createRuntime(
+  initialize: RecognitionRuntime['initialize'] = async () => undefined,
+): RecognitionRuntime {
+  return {
+    initialize,
+    createPipeline() {
+      throw new Error('Recognition page test does not create pipelines.');
+    },
+    async dispose() {},
+  };
+}
+
 function createScoringSessionPort() {
   const scoring = createFakeService<ScoringService>({
     validateWinningStructure: () => ({ kind: 'valid' }),
@@ -151,13 +166,13 @@ function createScoringSessionPort() {
 
 describe('RecognitionPageView preparation and capture surface', () => {
   it('shows the fixed semantic frames as the visible recognition boundary', () => {
-    const cameraDeferred = createDeferred<RecognitionPageCameraSession>();
+    const cameraDeferred = createDeferred<CameraSession>();
     const runtimeDeferred = createDeferred<void>();
     const recognizer = createRecognizerHarness();
 
     renderView({
       camera: { open: () => cameraDeferred.promise },
-      runtime: { initialize: () => runtimeDeferred.promise },
+      runtime: createRuntime(() => runtimeDeferred.promise),
       recognizer: recognizer.recognizer,
     });
 
@@ -179,7 +194,7 @@ describe('RecognitionPageView preparation and capture surface', () => {
   });
 
   it('opens camera and runtime in parallel, exposes preview first, then starts realtime only when both are ready', async () => {
-    const cameraDeferred = createDeferred<RecognitionPageCameraSession>();
+    const cameraDeferred = createDeferred<CameraSession>();
     const runtimeDeferred = createDeferred<void>();
     const cameraSession = createCameraSession();
     const recognizer = createRecognizerHarness();
@@ -188,7 +203,7 @@ describe('RecognitionPageView preparation and capture surface', () => {
 
     renderView({
       camera: { open },
-      runtime: { initialize },
+      runtime: createRuntime(initialize),
       recognizer: recognizer.recognizer,
     });
 
@@ -227,13 +242,13 @@ describe('RecognitionPageView preparation and capture surface', () => {
   });
 
   it('keeps realtime stopped when runtime is ready before the camera', async () => {
-    const cameraDeferred = createDeferred<RecognitionPageCameraSession>();
+    const cameraDeferred = createDeferred<CameraSession>();
     const cameraSession = createCameraSession();
     const recognizer = createRecognizerHarness();
 
     renderView({
       camera: { open: () => cameraDeferred.promise },
-      runtime: { initialize: async () => undefined },
+      runtime: createRuntime(),
       recognizer: recognizer.recognizer,
     });
 
@@ -261,7 +276,7 @@ describe('RecognitionPageView preparation and capture surface', () => {
 
     renderView({
       camera: { open: async () => cameraSession.session },
-      runtime: { initialize: async () => undefined },
+      runtime: createRuntime(),
       recognizer: recognizer.recognizer,
     });
 
@@ -278,46 +293,63 @@ describe('RecognitionPageView live feedback', () => {
 
     renderView({
       camera: { open: async () => cameraSession.session },
-      runtime: { initialize: async () => undefined },
+      runtime: createRuntime(),
       recognizer: recognizer.recognizer,
     });
 
     await waitFor(() => expect(recognizer.start).toHaveBeenCalledTimes(1));
 
-    const snapshot: RecognitionFrameSnapshot = {
+    const handTile = { kind: '1m', red: false } as const;
+    const meldTile = { kind: '5s', red: false } as const;
+    const concealedKan = {
+      kind: 'concealed-kan',
+      tiles: [meldTile, meldTile, meldTile, meldTile],
+    } as const;
+    const snapshot: FrameRecognitionSnapshot = {
       observations: [
         {
-          id: 'hand-1',
+          id: observationId('hand-1'),
           region: 'completed-hand',
-          box: { x: 0.08, y: 0.72, width: 0.05, height: 0.13 },
-          tile: { kind: '1m', red: false },
+          bbox: { x: 0.08, y: 0.72, width: 0.05, height: 0.13 },
+          classification: { kind: 'tile', tile: handTile },
         },
         {
-          id: 'meld-1',
+          id: observationId('meld-1'),
           region: 'melds',
-          box: { x: 0.75, y: 0.43, width: 0.05, height: 0.12 },
-          tile: { kind: '5s', red: false },
+          bbox: { x: 0.75, y: 0.43, width: 0.05, height: 0.12 },
+          classification: { kind: 'tile', tile: meldTile },
         },
         {
-          id: 'meld-2',
+          id: observationId('meld-2'),
           region: 'melds',
-          box: { x: 0.84, y: 0.43, width: 0.05, height: 0.12 },
-          tile: { kind: '5s', red: false },
+          bbox: { x: 0.84, y: 0.43, width: 0.05, height: 0.12 },
+          classification: { kind: 'tile', tile: meldTile },
         },
         {
-          id: 'dora-unresolved',
+          id: observationId('dora-unresolved'),
           region: 'dora-indicators',
-          box: { x: 0.1, y: 0.12, width: 0.05, height: 0.12 },
-          tile: null,
+          bbox: { x: 0.1, y: 0.12, width: 0.05, height: 0.12 },
+          classification: { kind: 'invalid' },
         },
       ],
       meldGroups: [
         {
-          id: 'kan-1',
-          memberObservationIds: ['meld-1', 'meld-2'],
-          interpretation: 'concealed-kan',
+          memberObservationIds: [
+            observationId('meld-1'),
+            observationId('meld-2'),
+          ],
+          interpretation: concealedKan,
         },
       ],
+      draft: {
+        completedHand: [handTile],
+        doraIndicators: [],
+        meldGroups: [concealedKan],
+      },
+      commitEligibility: {
+        kind: 'ineligible',
+        reason: 'insufficient-visible-tiles',
+      },
     };
 
     act(() => {
@@ -338,14 +370,14 @@ describe('RecognitionPageView owner-specific recovery', () => {
     const cameraSession = createCameraSession();
     const recognizer = createRecognizerHarness();
     const open = vi
-      .fn<RecognitionPageCameraService['open']>()
+      .fn<CameraService['open']>()
       .mockRejectedValueOnce({ kind: 'device-unavailable' })
       .mockResolvedValueOnce(cameraSession.session);
     const initialize = vi.fn(async () => undefined);
 
     renderView({
       camera: { open },
-      runtime: { initialize },
+      runtime: createRuntime(initialize),
       recognizer: recognizer.recognizer,
     });
 
@@ -366,7 +398,7 @@ describe('RecognitionPageView owner-specific recovery', () => {
     const recognizer = createRecognizerHarness();
     const open = vi.fn(async () => cameraSession.session);
     const initialize = vi
-      .fn<RecognitionPageRuntime['initialize']>()
+      .fn<RecognitionRuntime['initialize']>()
       .mockRejectedValueOnce({
         kind: 'model-initialization-failure',
         model: 'detector',
@@ -376,7 +408,7 @@ describe('RecognitionPageView owner-specific recovery', () => {
 
     renderView({
       camera: { open },
-      runtime: { initialize },
+      runtime: createRuntime(initialize),
       recognizer: recognizer.recognizer,
     });
 
@@ -397,11 +429,11 @@ describe('RecognitionPageView owner-specific recovery', () => {
     const cameraSession = createCameraSession();
     const recognizer = createRecognizerHarness();
     const open = vi
-      .fn<RecognitionPageCameraService['open']>()
+      .fn<CameraService['open']>()
       .mockRejectedValueOnce({ kind: 'permission-denied' })
       .mockResolvedValueOnce(cameraSession.session);
     const initialize = vi
-      .fn<RecognitionPageRuntime['initialize']>()
+      .fn<RecognitionRuntime['initialize']>()
       .mockRejectedValueOnce({
         kind: 'model-asset-unavailable',
         model: 'tile-classifier',
@@ -410,7 +442,7 @@ describe('RecognitionPageView owner-specific recovery', () => {
 
     renderView({
       camera: { open },
-      runtime: { initialize },
+      runtime: createRuntime(initialize),
       recognizer: recognizer.recognizer,
     });
 
@@ -435,7 +467,7 @@ describe('RecognitionPageView owner-specific recovery', () => {
 
     renderView({
       camera: { open },
-      runtime: { initialize },
+      runtime: createRuntime(initialize),
       recognizer: recognizer.recognizer,
     });
 
@@ -472,7 +504,7 @@ describe('RecognitionPage confirmed transition', () => {
     const scoringSession = createScoringSessionPort();
     const services: RecognitionPageServices = {
       camera: { open: async () => cameraSession.session },
-      runtime: { initialize: async () => undefined },
+      runtime: createRuntime(),
       recognizer: recognizer.recognizer,
     };
     const store = createApplicationStore(
@@ -567,6 +599,10 @@ function tile(id: string, kind: TileInstance['tile']['kind']): TileInstance {
     id: tileId(id),
     tile: { kind, red: false },
   };
+}
+
+function observationId(value: string): FrameObservationId {
+  return value as FrameObservationId;
 }
 
 function tileId(value: string): TileInstanceId {

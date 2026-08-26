@@ -84,10 +84,6 @@ const resultPageScoringService: ScoringService = {
   },
 };
 
-const resultPageScoringFlowServices = {
-  correctionEditor: createCorrectionEditorService(resultPageScoringService),
-};
-
 const baseCalculation: ScoringCalculation = {
   yaku: [
     { kind: 'regular', id: 'riichi', han: 1 },
@@ -112,10 +108,43 @@ function calculation(
   };
 }
 
+const conditionCorrectionScoringService: ScoringService = {
+  validateWinningStructure: () => ({ kind: 'valid' }),
+  preview: () => ({
+    kind: 'ready',
+    yaku: [{ kind: 'regular', id: 'menzen-tsumo', han: 1 }],
+  }),
+  calculate: (input) => {
+    const dealer = input.conditions.seatWind === 'east';
+    const totalPoints = dealer ? 6000 : 4000;
+    return calculation({
+      yaku: [{ kind: 'regular', id: 'menzen-tsumo', han: 1 }],
+      han: 1,
+      limit: null,
+      winnerRole: dealer ? 'dealer' : 'non-dealer',
+      winMethod: input.conditions.winMethod,
+      payment: dealer
+        ? { kind: 'tsumo-dealer', eachOpponent: 2000 }
+        : {
+            kind: 'tsumo-non-dealer',
+            dealerPays: 2000,
+            nonDealerPays: 1000,
+          },
+      totalPoints,
+    });
+  },
+};
+
 function renderResult(
   latestResult: ScoringCalculation,
   route = '/result',
+  scoringService: ScoringService = resultPageScoringService,
 ): ApplicationStore {
+  const scoringSessionService = createScoringSessionService(scoringService);
+  const scoringFlowServices = {
+    correctionEditor: createCorrectionEditorService(scoringService),
+    scoringSession: scoringSessionService,
+  };
   const applicationStore = createApplicationStore(
     {
       activeScoringSession: {
@@ -127,14 +156,14 @@ function renderResult(
       },
     },
     {
-      scoringSessionService: createScoringSessionService(resultPageScoringService),
+      scoringSessionService,
     },
   );
 
   render(
     <App
       applicationStore={applicationStore}
-      scoringFlowServices={resultPageScoringFlowServices}
+      scoringFlowServices={scoringFlowServices}
       router={
         <MemoryRouter initialEntries={[route]}>
           <AppRoutes />
@@ -307,16 +336,103 @@ describe('result page presentation', () => {
     expect(screen.getAllByText('25符')).toHaveLength(2);
   });
 
-  it('routes correction and restart actions without mutating unrelated session state', () => {
+  it('keeps Result-origin condition edits local and cancel restores the exact prior session', () => {
+    const applicationStore = renderResult(
+      calculation(),
+      '/result',
+      conditionCorrectionScoringService,
+    );
+    const initialSession = applicationStore.getState().activeScoringSession;
+    const initialResult = initialSession?.latestResult;
+
+    fireEvent.click(screen.getByRole('button', { name: '条件を修正' }));
+    expect(screen.getByRole('heading', { name: '条件入力' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: '牌姿修正' })).not.toBeInTheDocument();
+
+    const southSeat = screen.getAllByLabelText('南').at(-1);
+    if (southSeat === undefined) {
+      throw new Error('seat-wind South control was not rendered');
+    }
+    fireEvent.click(southSeat);
+    fireEvent.click(
+      within(screen.getByRole('group', { name: '和了牌選択' })).getByRole(
+        'button',
+        { name: '1m 1' },
+      ),
+    );
+
+    expect(applicationStore.getState().activeScoringSession).toBe(initialSession);
+    expect(applicationStore.getState().activeScoringSession?.latestResult).toBe(
+      initialResult,
+    );
+    expect(applicationStore.getState().activeScoringSession?.winningTileId).toBe(
+      tileId('winning'),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
+
+    expect(screen.getByRole('heading', { name: '結果' })).toBeVisible();
+    expect(applicationStore.getState().activeScoringSession).toBe(initialSession);
+    expect(applicationStore.getState().activeScoringSession?.latestResult).toBe(
+      initialResult,
+    );
+  });
+
+  it('focuses seat wind from the dealer/child shortcut without mutating session state', () => {
     const applicationStore = renderResult(calculation());
     const initialSession = applicationStore.getState().activeScoringSession;
 
     fireEvent.click(screen.getByRole('button', { name: '親子を修正' }));
-    expect(screen.getByRole('heading', { name: '条件入力' })).toBeVisible();
+
+    const seatWind = screen.getByRole('group', { name: '自風' });
+    expect(seatWind).toHaveFocus();
+    expect(seatWind).toHaveAttribute('data-edit-focus', 'true');
     expect(applicationStore.getState().activeScoringSession).toBe(initialSession);
     expect(
       applicationStore.getState().activeScoringSession?.conditions.seatWind,
     ).toBe('east');
+  });
+
+  it('commits Result-origin condition edits only after successful recalculation', () => {
+    const applicationStore = renderResult(
+      calculation({
+        winnerRole: 'dealer',
+        winMethod: 'tsumo',
+        payment: { kind: 'tsumo-dealer', eachOpponent: 2000 },
+        totalPoints: 6000,
+      }),
+      '/result',
+      conditionCorrectionScoringService,
+    );
+    const initialSession = applicationStore.getState().activeScoringSession;
+    const initialResult = initialSession?.latestResult;
+
+    fireEvent.click(screen.getByRole('button', { name: '条件を修正' }));
+    const southSeat = screen.getAllByLabelText('南').at(-1);
+    if (southSeat === undefined) {
+      throw new Error('seat-wind South control was not rendered');
+    }
+    fireEvent.click(southSeat);
+    fireEvent.click(
+      within(screen.getByRole('group', { name: '和了牌選択' })).getByRole(
+        'button',
+        { name: '1m 1' },
+      ),
+    );
+
+    expect(applicationStore.getState().activeScoringSession).toBe(initialSession);
+
+    fireEvent.click(screen.getByRole('button', { name: '計算する' }));
+
+    expect(screen.getByRole('heading', { name: '結果' })).toBeVisible();
+    const committedSession = applicationStore.getState().activeScoringSession;
+    expect(committedSession).not.toBe(initialSession);
+    expect(committedSession?.structure).toBe(initialSession?.structure);
+    expect(committedSession?.winningTileId).toBe(tileId('hand-1'));
+    expect(committedSession?.conditions.seatWind).toBe('south');
+    expect(committedSession?.latestResult).not.toBe(initialResult);
+    expect(committedSession?.latestResult?.winnerRole).toBe('non-dealer');
+    expect(committedSession?.latestResult?.totalPoints).toBe(4000);
   });
 
   it('preserves conditions for recognition correction', () => {

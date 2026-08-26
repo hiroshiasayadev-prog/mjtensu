@@ -10,12 +10,14 @@ import {
   createCorrectionEditorService,
   createScoringSessionService,
 } from '@/application';
+import type { CameraService, CameraSession } from '@/camera';
 import type {
   RecognizedStructure,
   TileInstance,
   TileInstanceId,
   TileKind,
 } from '@/domain';
+import type { RecognitionRuntime, RealtimeRecognizer } from '@/recognition';
 import type {
   ScoringCalculation,
   ScoringDraft,
@@ -28,10 +30,6 @@ import {
   ApplicationStateProvider,
   RecognitionPageServicesProvider,
   ScoringFlowServicesProvider,
-  type RecognitionPageCameraService,
-  type RecognitionPageCameraSession,
-  type RecognitionPageRealtimeRecognizer,
-  type RecognitionPageRuntime,
   type RecognitionPageServices,
 } from '@/ui';
 
@@ -86,7 +84,7 @@ if (rootElement === null) {
 createRoot(rootElement).render(
   <MantineProvider>
     <ApplicationStateProvider store={applicationStore}>
-      <ScoringFlowServicesProvider services={{ correctionEditor }}>
+      <ScoringFlowServicesProvider services={{ correctionEditor, scoringSession }}>
         <RecognitionPageServicesProvider services={recognitionServices}>
           <BrowserRouter>
             <AppRoutes />
@@ -123,8 +121,8 @@ function createRecognitionServices(
   const canvas = document.createElement('canvas');
   let recognitionSequence = 0;
 
-  const camera: RecognitionPageCameraService = {
-    async open() {
+  const camera: CameraService = {
+    async open(_request) {
       state.cameraOpenCalls += 1;
       const attempt = state.cameraOpenCalls;
 
@@ -139,21 +137,25 @@ function createRecognitionServices(
     },
   };
 
-  const runtime: RecognitionPageRuntime = {
+  const runtime: RecognitionRuntime = {
     async initialize() {
       state.runtimeInitializeCalls += 1;
       const attempt = state.runtimeInitializeCalls;
 
       if (selectedScenario === 'runtime-retry' && attempt === 1) {
-        throw { kind: 'model-asset-unavailable', role: 'detector' } as const;
+        throw { kind: 'model-asset-unavailable', model: 'detector' } as const;
       }
       if (selectedScenario === 'runtime-slow' && attempt === 1) {
         await delay(350);
       }
     },
+    createPipeline() {
+      throw new Error('Fake-flow Recognition runtime does not create pipelines.');
+    },
+    async dispose() {},
   };
 
-  const recognizer: RecognitionPageRealtimeRecognizer = {
+  const recognizer: RealtimeRecognizer = {
     reset() {},
     start(_source, listener) {
       state.recognizerStartCalls += 1;
@@ -181,6 +183,7 @@ function createRecognitionServices(
         },
       };
     },
+    async dispose() {},
   };
 
   return {
@@ -193,7 +196,7 @@ function createRecognitionServices(
 function createCameraSession(
   canvas: HTMLCanvasElement,
   state: FakeFlowDiagnostics,
-): RecognitionPageCameraSession {
+): CameraSession {
   let stopped = false;
 
   return {
