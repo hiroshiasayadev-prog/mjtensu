@@ -1,6 +1,6 @@
 # PRODUCT-TASK-SCORING-001-02: Implement Agari rule semantics
 
-- **status**: not_started
+- **status**: done
 - **date**: 2026-08-26
 - **work_item**: PRODUCT-WORK-SCORING-001
 - **task_type**: implementation
@@ -53,4 +53,8 @@ The Agari core fork implements every rule semantic in `spec:product.system.contr
 
 - `spec:product.system.contracts.agari_fork` is the normative semantic delta.
 - PRODUCT-TASK-SCORING-001-01 decided the source/build-management boundary and PRODUCT-TASK-SCORING-001-09 recorded it in canonical ADR/Specification authority; neither changes scoring behavior.
-- Execution results are recorded here when the Task is performed.
+- Implementation is present in the separate Agari working repository under `external/agari/crates/agari-core`: one `RuleConfig` is carried by `GameContext` into yaku/dora/fu/limit evaluation; upstream-compatible defaults preserve behavior when no explicit profile is supplied.
+- Rule branches are implemented for open Tanyao, aka dora, indicator/ura dora, Ippatsu, kiriage mangan, counted-yakuman policy, double-yakuman variants, multiple-yakuman aggregation, and 2/4-fu double-wind pairs.
+- Actual-yakuman identity remains in the detected yaku list while a separate rule-aware `yakuman_units` value controls score aggregation; configured double-variant and multiple-yakuman policies therefore do not require rewriting detected identities or deriving the multiplier from `total_han / 13`.
+- Regression tests were added for rule on/off pairs, policy interactions, invalid double-wind-pair configuration, and fixed chiitoitsu/pinfu/open-no-extra-fu behavior.
+- Verification completed on Windows from `external/agari`: `cargo fmt --all` completed successfully and `cargo test --workspace` passed with 295 `agari` library tests, 31 `agari` binary tests, 27 `agari-wasm` tests, 0 `agari-python` tests, and all doc-tests passing; 0 failures overall.
