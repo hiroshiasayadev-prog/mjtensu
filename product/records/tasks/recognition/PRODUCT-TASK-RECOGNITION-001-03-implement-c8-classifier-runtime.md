@@ -1,6 +1,6 @@
 # PRODUCT-TASK-RECOGNITION-001-03: Implement C8 classifier runtime
 
-- **status**: not_started
+- **status**: completed
 - **date**: 2026-08-26
 - **work_item**: PRODUCT-WORK-RECOGNITION-001
 - **task_type**: implementation
@@ -51,3 +51,12 @@ Both production classifier paths and their preprocessing/result mapping satisfy 
 - `spec:product.recognition.pipeline` fixes red-five specialist placement.
 - The production testing strategy requires preprocessing parity and conditional-specialist tests.
 - Execution results are recorded here when the Task is performed.
+
+## Execution Results
+
+- 2026-08-26: Implemented C8 classifier preprocessing, 35-class base mapping, conditional RGB red-five refinement, and semantic runtime facade in `product/frontend/src/recognition/classifier`.
+- 2026-08-26: Added deterministic crop/tensor fixtures, exhaustive class-map tests, red-five invocation tests, and public Recognition boundary check in `product/frontend/test/recognition-c8-classifier.test.ts`.
+- 2026-08-26: `npm test -- recognition-c8-classifier.test.ts` PASS.
+- 2026-08-26: `npm run typecheck` PASS.
+- 2026-08-26: `npm run lint` PASS.
+- 2026-08-26: `npm test` PASS.

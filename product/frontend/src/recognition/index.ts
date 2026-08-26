@@ -15,3 +15,4 @@ export type {
   SemanticRegion,
   TensorOutput,
 } from './detector/types';
+export type { TileClassification } from './classifier/labels';
