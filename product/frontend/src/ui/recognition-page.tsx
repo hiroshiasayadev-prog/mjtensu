@@ -20,7 +20,6 @@ import {
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import type { ScoringSessionService } from '@/application';
 import type { RecognizedStructure, TileIdentity } from '@/domain';
 import type { RecognitionRuntimeError } from '@/recognition';
 import { DEFAULT_RULE_PROFILE } from '@/scoring';
@@ -153,7 +152,6 @@ export interface RecognitionPageServices {
   readonly camera: RecognitionPageCameraService;
   readonly runtime: RecognitionPageRuntime;
   readonly recognizer: RecognitionPageRealtimeRecognizer;
-  readonly scoringSession: Pick<ScoringSessionService, 'create'>;
 }
 
 export interface RecognitionPageServicesProviderProps {
@@ -498,8 +496,8 @@ export function RecognitionPage() {
   const beginNewRecognitionAttempt = useApplicationStore(
     (state) => state.beginNewRecognitionAttempt,
   );
-  const installScoringSession = useApplicationStore(
-    (state) => state.installScoringSession,
+  const createScoringSession = useApplicationStore(
+    (state) => state.createScoringSession,
   );
 
   useEffect(() => {
@@ -513,14 +511,10 @@ export function RecognitionPage() {
       if (services === null) {
         return;
       }
-      const session = services.scoringSession.create(
-        result,
-        DEFAULT_RULE_PROFILE,
-      );
-      installScoringSession(session);
+      createScoringSession(result, DEFAULT_RULE_PROFILE);
       navigateAfterRecognitionConfirmed(navigate);
     },
-    [installScoringSession, navigate, services],
+    [createScoringSession, navigate, services],
   );
 
   if (services === null) {

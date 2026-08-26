@@ -76,7 +76,7 @@ const applicationStore = createApplicationStore(
   {},
   { scoringSessionService: scoringSession },
 );
-const recognitionServices = createRecognitionServices(scenario, diagnostics, scoringSession);
+const recognitionServices = createRecognitionServices(scenario, diagnostics);
 
 const rootElement = document.getElementById('root');
 if (rootElement === null) {
@@ -86,7 +86,7 @@ if (rootElement === null) {
 createRoot(rootElement).render(
   <MantineProvider>
     <ApplicationStateProvider store={applicationStore}>
-      <ScoringFlowServicesProvider services={{ scoringSession, correctionEditor }}>
+      <ScoringFlowServicesProvider services={{ correctionEditor }}>
         <RecognitionPageServicesProvider services={recognitionServices}>
           <BrowserRouter>
             <AppRoutes />
@@ -119,7 +119,6 @@ function parseInitialRoute(value: string | null): string {
 function createRecognitionServices(
   selectedScenario: FakeFlowScenario,
   state: FakeFlowDiagnostics,
-  sessionService: ReturnType<typeof createScoringSessionService>,
 ): RecognitionPageServices {
   const canvas = document.createElement('canvas');
   let recognitionSequence = 0;
@@ -188,7 +187,6 @@ function createRecognitionServices(
     camera,
     runtime,
     recognizer,
-    scoringSession: sessionService,
   };
 }
 

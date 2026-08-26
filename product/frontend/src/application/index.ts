@@ -50,6 +50,7 @@ export type {
   ActiveScoringSessionState,
   ApplicationStateSnapshot,
   ApplicationStore,
+  ApplicationStoreHydrationState,
   ApplicationStoreState,
   ScoringSessionFixtureOptions,
 } from './application-store';

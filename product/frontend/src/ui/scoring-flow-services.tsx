@@ -1,16 +1,16 @@
 import { createContext, type ReactNode, useContext } from 'react';
 
-import {
-  createCorrectionEditorService,
-  createScoringSessionService,
-  type CorrectionEditorService,
-  type ScoringSessionService,
+import type {
+  CorrectionEditorService,
+  ScoringSessionService,
 } from '@/application';
-import type { ScoringService } from '@/scoring';
 
 export interface ScoringFlowServices {
-  readonly scoringSession: ScoringSessionService;
   readonly correctionEditor: CorrectionEditorService;
+  readonly scoringSession: Pick<
+    ScoringSessionService,
+    'update' | 'preview' | 'calculate'
+  >;
 }
 
 export interface ScoringFlowServicesProviderProps {
@@ -18,22 +18,7 @@ export interface ScoringFlowServicesProviderProps {
   readonly services: ScoringFlowServices;
 }
 
-const deferredScoringService: ScoringService = {
-  validateWinningStructure: () => ({ kind: 'valid' }),
-  preview: () => ({ kind: 'no-yaku' }),
-  calculate: () => {
-    throw new Error('Scoring service is not connected.');
-  },
-};
-
-const defaultScoringFlowServices: ScoringFlowServices = {
-  scoringSession: createScoringSessionService(deferredScoringService),
-  correctionEditor: createCorrectionEditorService(deferredScoringService),
-};
-
-const ScoringFlowServicesContext = createContext<ScoringFlowServices>(
-  defaultScoringFlowServices,
-);
+const ScoringFlowServicesContext = createContext<ScoringFlowServices | null>(null);
 
 export function ScoringFlowServicesProvider({
   children,
@@ -46,6 +31,6 @@ export function ScoringFlowServicesProvider({
   );
 }
 
-export function useScoringFlowServices(): ScoringFlowServices {
+export function useScoringFlowServices(): ScoringFlowServices | null {
   return useContext(ScoringFlowServicesContext);
 }

@@ -10,9 +10,12 @@ import { TileCorrectionEditor } from './tile-correction-editor';
 export interface RecognitionCorrectionPageViewProps {
   readonly session: ScoringSessionState;
   readonly correctionEditorService: CorrectionEditorService;
-  readonly sessionService: ScoringSessionService;
+  readonly sessionService: Pick<
+    ScoringSessionService,
+    'update' | 'preview' | 'calculate'
+  >;
   readonly onCancel: () => void;
-  readonly onSessionChange: (session: ScoringSessionState) => void;
+  readonly onSessionChange?: (session: ScoringSessionState) => void;
   readonly onReturnToResult: () => void;
   readonly onContinueToConditions: () => void;
 }
@@ -32,9 +35,9 @@ export function RecognitionCorrectionPageView({
       structure,
     });
 
-    // Once correction is confirmed, the old Result is stale. Install the
-    // corrected session before deciding whether scoring can finish immediately.
-    onSessionChange(correctedSession);
+    // Once correction is confirmed, the semantic update has already invalidated
+    // the old Result before deciding whether scoring can finish immediately.
+    onSessionChange?.(correctedSession);
 
     let preview: ReturnType<ScoringSessionService['preview']>;
     try {
@@ -51,7 +54,7 @@ export function RecognitionCorrectionPageView({
 
     try {
       const calculation = sessionService.calculate(correctedSession);
-      onSessionChange(calculation.state);
+      onSessionChange?.(calculation.state);
       onReturnToResult();
     } catch {
       // A failed recalculation must not restore the pre-correction Result.

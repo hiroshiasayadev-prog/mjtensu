@@ -29,15 +29,19 @@ export interface ApplicationStateSnapshot {
   readonly activeScoringSession: ActiveScoringSessionState | null;
 }
 
+/** Construction/test hydration only; never exposed as a mutable store action. */
+export type ApplicationStoreHydrationState = Partial<ApplicationStateSnapshot>;
+
 export interface ApplicationStoreState extends ApplicationStateSnapshot {
   beginNewRecognitionAttempt(): void;
   clearActiveScoringSession(): void;
-  installScoringSession(session: ActiveScoringSessionState): void;
   createScoringSession(
     structure: RecognizedStructure,
     ruleProfile: ScoringRuleProfile,
-  ): void;
-  updateScoringSession(command: ScoringSessionCommand): void;
+  ): ActiveScoringSessionState;
+  updateScoringSession(
+    command: ScoringSessionCommand,
+  ): ActiveScoringSessionState;
   previewScoringSession(): ScoringPreview;
   calculateScoringSession(): ScoringSessionCalculation;
   getScoringConditionAvailability(): ScoringConditionAvailability;
@@ -46,13 +50,13 @@ export interface ApplicationStoreState extends ApplicationStateSnapshot {
 export type ApplicationStore = StoreApi<ApplicationStoreState>;
 
 export function createApplicationStore(
-  initialState: Partial<ApplicationStateSnapshot> = {},
+  hydrationState: ApplicationStoreHydrationState = {},
   dependencies: ApplicationStoreDependencies = {},
 ): ApplicationStore {
   const conditionPolicy = dependencies.conditionPolicy ?? scoringConditionPolicy;
 
   return createStore<ApplicationStoreState>()((set, get) => ({
-    activeScoringSession: initialState.activeScoringSession ?? null,
+    activeScoringSession: hydrationState.activeScoringSession ?? null,
 
     beginNewRecognitionAttempt: () => {
       set({ activeScoringSession: null });
@@ -62,16 +66,11 @@ export function createApplicationStore(
       set({ activeScoringSession: null });
     },
 
-    // Compatibility/hydration seam for already-produced session state. New
-    // semantic mutations should use the service-backed actions below.
-    installScoringSession: (session) => {
-      set({ activeScoringSession: session });
-    },
-
     createScoringSession: (structure, ruleProfile) => {
       const scoringSessionService = requireScoringSessionService(dependencies);
       const session = scoringSessionService.create(structure, ruleProfile);
       set({ activeScoringSession: session });
+      return session;
     },
 
     updateScoringSession: (command) => {
@@ -79,6 +78,7 @@ export function createApplicationStore(
       const current = requireActiveScoringSession(get());
       const session = scoringSessionService.update(current, command);
       set({ activeScoringSession: session });
+      return session;
     },
 
     previewScoringSession: () => {

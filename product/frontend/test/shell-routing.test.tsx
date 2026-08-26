@@ -5,17 +5,47 @@ import { describe, expect, it } from 'vitest';
 import { App, AppRoutes, productionRouteTable } from '@/app';
 import {
   createApplicationStore,
+  createCorrectionEditorService,
   createScoringSessionFixture,
+  createScoringSessionService,
   type ApplicationStore,
 } from '@/application';
+import type { ScoringService } from '@/scoring';
+
+const routeScoringService: ScoringService = {
+  validateWinningStructure: () => ({ kind: 'valid' }),
+  preview: () => ({ kind: 'no-yaku' }),
+  calculate: () => {
+    throw new Error('route fixture does not calculate');
+  },
+};
+
+const routeScoringFlowServices = {
+  correctionEditor: createCorrectionEditorService(routeScoringService),
+};
+
+function createActiveApplicationStore(tileIdPrefix: string): ApplicationStore {
+  return createApplicationStore(
+    {
+      activeScoringSession: createScoringSessionFixture({ tileIdPrefix }),
+    },
+    {
+      scoringSessionService: createScoringSessionService(routeScoringService),
+    },
+  );
+}
 
 function renderRoute(
   route: string,
   applicationStore: ApplicationStore = createApplicationStore(),
+  withScoringFlowServices = true,
 ) {
   render(
     <App
       applicationStore={applicationStore}
+      scoringFlowServices={
+        withScoringFlowServices ? routeScoringFlowServices : undefined
+      }
       router={
         <MemoryRouter initialEntries={[route]}>
           <AppRoutes />
@@ -76,18 +106,29 @@ describe('production shell routing', () => {
     ['/conditions', '条件入力'],
     ['/result', '結果'],
   ])('renders guarded %s when an active session exists', (route, heading) => {
-    renderRoute(
-      route,
-      createApplicationStore({
-        activeScoringSession: createScoringSessionFixture({
-          tileIdPrefix: 'active',
-        }),
-      }),
-    );
+    renderRoute(route, createActiveApplicationStore('active'));
 
     expect(screen.getByRole('heading', { name: heading })).toBeVisible();
     expect(screen.getByText('現在の和了牌: active-winning')).toBeVisible();
   });
+
+  it.each([
+    ['/conditions', '条件入力'],
+    ['/recognition/correction', '認識結果を修正'],
+  ])(
+    'shows an explicit unavailable state for %s without scoring-flow composition',
+    (route, heading) => {
+      renderRoute(route, createActiveApplicationStore('unavailable'), false);
+
+      expect(screen.getByRole('heading', { name: heading })).toBeVisible();
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        '点数計算サービスを利用できません。',
+      );
+      expect(screen.queryByText('役なし')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '計算する' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '修正を確定' })).not.toBeInTheDocument();
+    },
+  );
 
   it.each([
     '/recognition/correction',
@@ -119,11 +160,7 @@ describe('production shell routing', () => {
   });
 
   it('starts Recognition only through the explicit Top action and clears prior state', async () => {
-    const applicationStore = createApplicationStore({
-      activeScoringSession: createScoringSessionFixture({
-        tileIdPrefix: 'previous',
-      }),
-    });
+    const applicationStore = createActiveApplicationStore('previous');
 
     renderRoute('/', applicationStore);
 

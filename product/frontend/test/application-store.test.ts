@@ -147,14 +147,15 @@ describe('application store', () => {
     expect(port.create).not.toHaveBeenCalled();
   });
 
-  it('keeps compatibility installation as exact session replacement', () => {
-    const firstSession = createScoringSessionFixture({ tileIdPrefix: 'first' });
-    const secondSession = createScoringSessionFixture({ tileIdPrefix: 'second' });
-    const store = createApplicationStore({ activeScoringSession: firstSession });
+  it('does not expose whole-session replacement on the production mutable surface', () => {
+    const hydratedSession = createScoringSessionFixture({
+      tileIdPrefix: 'hydrated',
+      latestResult: calculation,
+    });
+    const store = createApplicationStore({ activeScoringSession: hydratedSession });
 
-    store.getState().installScoringSession(secondSession);
-
-    expect(store.getState().activeScoringSession).toBe(secondSession);
+    expect(store.getState().activeScoringSession).toBe(hydratedSession);
+    expect('installScoringSession' in store.getState()).toBe(false);
   });
 
   it('delegates session updates and preserves service-owned result invalidation semantics', () => {

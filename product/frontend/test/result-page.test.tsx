@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { App, AppRoutes } from '@/app';
 import {
   createApplicationStore,
+  createCorrectionEditorService,
+  createScoringSessionService,
   INITIAL_SCORING_CONDITIONS,
   type ApplicationStore,
 } from '@/application';
@@ -14,7 +16,11 @@ import type {
   TileInstance,
   TileInstanceId,
 } from '@/domain';
-import { DEFAULT_RULE_PROFILE, type ScoringCalculation } from '@/scoring';
+import {
+  DEFAULT_RULE_PROFILE,
+  type ScoringCalculation,
+  type ScoringService,
+} from '@/scoring';
 
 function tileId(value: string): TileInstanceId {
   return value as TileInstanceId;
@@ -70,6 +76,18 @@ const standardFu = {
   rounded: 40,
 } as const;
 
+const resultPageScoringService: ScoringService = {
+  validateWinningStructure: () => ({ kind: 'valid' }),
+  preview: () => ({ kind: 'no-yaku' }),
+  calculate: () => {
+    throw new Error('result-page fixture does not calculate');
+  },
+};
+
+const resultPageScoringFlowServices = {
+  correctionEditor: createCorrectionEditorService(resultPageScoringService),
+};
+
 const baseCalculation: ScoringCalculation = {
   yaku: [
     { kind: 'regular', id: 'riichi', han: 1 },
@@ -98,19 +116,25 @@ function renderResult(
   latestResult: ScoringCalculation,
   route = '/result',
 ): ApplicationStore {
-  const applicationStore = createApplicationStore({
-    activeScoringSession: {
-      structure,
-      winningTileId: tileId('winning'),
-      conditions: INITIAL_SCORING_CONDITIONS,
-      ruleProfile: DEFAULT_RULE_PROFILE,
-      latestResult,
+  const applicationStore = createApplicationStore(
+    {
+      activeScoringSession: {
+        structure,
+        winningTileId: tileId('winning'),
+        conditions: INITIAL_SCORING_CONDITIONS,
+        ruleProfile: DEFAULT_RULE_PROFILE,
+        latestResult,
+      },
     },
-  });
+    {
+      scoringSessionService: createScoringSessionService(resultPageScoringService),
+    },
+  );
 
   render(
     <App
       applicationStore={applicationStore}
+      scoringFlowServices={resultPageScoringFlowServices}
       router={
         <MemoryRouter initialEntries={[route]}>
           <AppRoutes />

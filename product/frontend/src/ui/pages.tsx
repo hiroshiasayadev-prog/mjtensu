@@ -16,7 +16,10 @@ import {
   useNavigate,
 } from 'react-router-dom';
 
-import { selectHasActiveScoringSession } from '@/application';
+import {
+  selectHasActiveScoringSession,
+  type ScoringSessionService,
+} from '@/application';
 
 import { useApplicationStore } from './application-state';
 import { ConditionsPageView } from './conditions-page';
@@ -147,12 +150,10 @@ export function HelpPage() {
 }
 
 export function ConditionsPage() {
-  const { correctionEditor, scoringSession } = useScoringFlowServices();
+  const scoringFlowServices = useScoringFlowServices();
+  const scoringSession = useStoreBackedScoringSessionService();
   const activeScoringSession = useApplicationStore(
     (state) => state.activeScoringSession,
-  );
-  const installScoringSession = useApplicationStore(
-    (state) => state.installScoringSession,
   );
   const navigate = useNavigate();
 
@@ -160,17 +161,20 @@ export function ConditionsPage() {
     return null;
   }
 
+  if (scoringFlowServices === null) {
+    return <ScoringFlowUnavailableState title="条件入力" />;
+  }
+
   return (
     <ConditionsPageView
       initialSession={activeScoringSession}
       onCalculationComplete={() => navigateAfterCalculation(navigate)}
-      onSessionChange={installScoringSession}
       renderCorrectionEditor={({ session, commitStructure }) => (
         <TileCorrectionEditor
           initialStructure={session.structure}
           onCommit={commitStructure}
           primaryActionLabel="牌姿を反映"
-          service={correctionEditor}
+          service={scoringFlowServices.correctionEditor}
         />
       )}
       sessionService={scoringSession}
@@ -179,12 +183,10 @@ export function ConditionsPage() {
 }
 
 export function RecognitionCorrectionPage() {
-  const { correctionEditor, scoringSession } = useScoringFlowServices();
+  const scoringFlowServices = useScoringFlowServices();
+  const scoringSession = useStoreBackedScoringSessionService();
   const activeScoringSession = useApplicationStore(
     (state) => state.activeScoringSession,
-  );
-  const installScoringSession = useApplicationStore(
-    (state) => state.installScoringSession,
   );
   const navigate = useNavigate();
 
@@ -192,18 +194,53 @@ export function RecognitionCorrectionPage() {
     return null;
   }
 
+  if (scoringFlowServices === null) {
+    return <ScoringFlowUnavailableState title="認識結果を修正" />;
+  }
+
   return (
     <RecognitionCorrectionPageView
-      correctionEditorService={correctionEditor}
+      correctionEditorService={scoringFlowServices.correctionEditor}
       onCancel={() => navigateAfterRecognitionCorrectionCancelled(navigate)}
       onContinueToConditions={() =>
         navigateAfterRecognitionCorrectionNeedsConditions(navigate)
       }
       onReturnToResult={() => navigateAfterRecognitionCorrectionScored(navigate)}
-      onSessionChange={installScoringSession}
       session={activeScoringSession}
       sessionService={scoringSession}
     />
+  );
+}
+
+type StoreBackedScoringSessionService = Pick<
+  ScoringSessionService,
+  'update' | 'preview' | 'calculate'
+>;
+
+function useStoreBackedScoringSessionService(): StoreBackedScoringSessionService {
+  const updateScoringSession = useApplicationStore(
+    (state) => state.updateScoringSession,
+  );
+  const previewScoringSession = useApplicationStore(
+    (state) => state.previewScoringSession,
+  );
+  const calculateScoringSession = useApplicationStore(
+    (state) => state.calculateScoringSession,
+  );
+
+  return {
+    update: (_session, command) => updateScoringSession(command),
+    preview: () => previewScoringSession(),
+    calculate: () => calculateScoringSession(),
+  };
+}
+
+function ScoringFlowUnavailableState({ title }: { readonly title: string }) {
+  return (
+    <Stack gap="md" py="xl">
+      <Title order={1}>{title}</Title>
+      <Text role="alert">点数計算サービスを利用できません。</Text>
+    </Stack>
   );
 }
 

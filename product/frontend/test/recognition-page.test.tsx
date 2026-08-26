@@ -469,17 +469,20 @@ describe('RecognitionPage confirmed transition', () => {
   it('replaces the Application session, replaces Recognition history, and tears down route-owned work', async () => {
     const cameraSession = createCameraSession();
     const recognizer = createRecognizerHarness();
+    const scoringSession = createScoringSessionPort();
     const services: RecognitionPageServices = {
       camera: { open: async () => cameraSession.session },
       runtime: { initialize: async () => undefined },
       recognizer: recognizer.recognizer,
-      scoringSession: createScoringSessionPort(),
     };
-    const store = createApplicationStore({
-      activeScoringSession: createScoringSessionFixture({
-        tileIdPrefix: 'previous',
-      }),
-    });
+    const store = createApplicationStore(
+      {
+        activeScoringSession: createScoringSessionFixture({
+          tileIdPrefix: 'previous',
+        }),
+      },
+      { scoringSessionService: scoringSession },
+    );
 
     renderRecognitionRoute(services, store);
 

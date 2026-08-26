@@ -1,4 +1,10 @@
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 
 import type {
   ScoringConditionAvailability,
@@ -28,9 +34,14 @@ export interface CorrectionEditorSlotProps {
 
 export interface ConditionsPageViewProps {
   readonly initialSession: ScoringSessionState;
-  readonly sessionService: ScoringSessionService;
+  readonly sessionService: Pick<
+    ScoringSessionService,
+    'update' | 'preview' | 'calculate'
+  >;
   readonly conditionPolicy?: ScoringConditionPolicy;
   readonly renderCorrectionEditor?: (props: CorrectionEditorSlotProps) => ReactNode;
+  readonly initialFocus?: 'seatWind';
+  readonly onCancel?: () => void;
   readonly onCalculationComplete?: (calculation: ScoringSessionCalculation) => void;
   readonly onSessionChange?: (state: ScoringSessionState) => void;
 }
@@ -212,6 +223,8 @@ export function ConditionsPageView({
   sessionService,
   conditionPolicy = scoringConditionPolicy,
   renderCorrectionEditor,
+  initialFocus,
+  onCancel,
   onCalculationComplete,
   onSessionChange,
 }: ConditionsPageViewProps) {
@@ -289,6 +302,7 @@ export function ConditionsPageView({
       <ConditionControls
         availability={availability}
         conditions={session.conditions}
+        initialFocus={initialFocus}
         onChange={updateConditions}
       />
 
@@ -297,7 +311,12 @@ export function ConditionsPageView({
         <ScoringPreviewPanel preview={preview} />
       </section>
 
-      <footer>
+      <footer style={{ display: 'flex', gap: 8 }}>
+        {onCancel === undefined ? null : (
+          <button onClick={onCancel} type="button">
+            キャンセル
+          </button>
+        )}
         <button disabled={!canCalculate} onClick={calculate} type="button">
           計算する
         </button>
@@ -395,10 +414,12 @@ function SupportingStructure({
 function ConditionControls({
   conditions,
   availability,
+  initialFocus,
   onChange,
 }: {
   readonly conditions: ScoringConditionsDraft;
   readonly availability: ScoringConditionAvailability;
+  readonly initialFocus?: 'seatWind';
   readonly onChange: (conditions: ScoringConditionsDraft) => void;
 }) {
   function patch(patchConditions: Partial<ScoringConditionsDraft>) {
@@ -424,6 +445,7 @@ function ConditionControls({
           value={conditions.roundWind}
         />
         <RadioButtonSet
+          focusOnMount={initialFocus === 'seatWind'}
           label="自風"
           name="seat-wind"
           onChange={(seatWind) => patch({ seatWind })}
@@ -470,16 +492,41 @@ function RadioButtonSet<TValue extends string>({
   name,
   options,
   value,
+  focusOnMount = false,
   onChange,
 }: {
   readonly label: string;
   readonly name: string;
   readonly options: readonly { readonly value: TValue; readonly label: string }[];
   readonly value: TValue | null;
+  readonly focusOnMount?: boolean;
   readonly onChange: (value: TValue) => void;
 }) {
+  const fieldsetRef = useRef<HTMLFieldSetElement>(null);
+
+  useEffect(() => {
+    if (focusOnMount) {
+      fieldsetRef.current?.focus();
+    }
+  }, [focusOnMount]);
+
   return (
-    <fieldset style={fieldsetStyle}>
+    <fieldset
+      data-edit-focus={focusOnMount ? 'true' : undefined}
+      ref={fieldsetRef}
+      style={
+        focusOnMount
+          ? {
+              ...fieldsetStyle,
+              outline: '3px solid #74c0fc',
+              outlineOffset: 2,
+              borderRadius: 6,
+              padding: 6,
+            }
+          : fieldsetStyle
+      }
+      tabIndex={focusOnMount ? -1 : undefined}
+    >
       <legend>{label}</legend>
       <div style={segmentedStyle}>
         {options.map((option) => (
