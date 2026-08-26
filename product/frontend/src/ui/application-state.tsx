@@ -25,10 +25,16 @@ export function ApplicationStateProvider({
 }: ApplicationStateProviderProps) {
   const defaultStore = useRef<ApplicationStore | null>(null);
 
-  defaultStore.current ??= createApplicationStore();
+  if (store === undefined) {
+    defaultStore.current ??= createApplicationStore();
+  }
+  const resolvedStore = store ?? defaultStore.current;
+  if (resolvedStore === null) {
+    throw new Error('Application store could not be resolved.');
+  }
 
   return (
-    <ApplicationStoreContext.Provider value={store ?? defaultStore.current}>
+    <ApplicationStoreContext.Provider value={resolvedStore}>
       {children}
     </ApplicationStoreContext.Provider>
   );

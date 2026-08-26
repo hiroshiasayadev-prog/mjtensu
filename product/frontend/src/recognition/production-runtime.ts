@@ -1,5 +1,8 @@
 import type { RecognitionPipeline, RecognitionRuntime } from './contracts';
-import { createBrowserRecognitionModelAssets } from './model-runtime/assets';
+import {
+  createBrowserRecognitionModelAssets,
+  type RecognitionModelAssetResolver,
+} from './model-runtime/assets';
 import { createOnnxRecognitionSessionFactory } from './model-runtime/onnx-session-factory';
 import {
   createRecognitionModelRuntime,
@@ -25,9 +28,19 @@ export interface RecognitionRuntimeCompositionOptions {
 export function createProductionRecognitionRuntime(
   options: ProductionRecognitionRuntimeOptions,
 ): RecognitionRuntime {
+  return createProductionRecognitionRuntimeWithAssets(
+    options.manifest,
+    createBrowserRecognitionModelAssets(),
+  );
+}
+
+export function createProductionRecognitionRuntimeWithAssets(
+  manifest: RecognitionModelSetManifest,
+  assets: RecognitionModelAssetResolver,
+): RecognitionRuntime {
   const modelRuntime = createRecognitionModelRuntime({
-    manifest: options.manifest,
-    assets: createBrowserRecognitionModelAssets(),
+    manifest,
+    assets,
     sessions: createOnnxRecognitionSessionFactory(),
   });
   return createRecognitionRuntimeComposition({ modelRuntime });

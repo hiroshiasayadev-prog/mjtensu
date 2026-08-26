@@ -35,6 +35,8 @@ export { createProductionRecognitionRuntime } from './production-runtime';
 export type {
   ProductionRecognitionRuntimeOptions,
 } from './production-runtime';
+export { createProductionRecognitionServices } from './production-services';
+export type { ProductionRecognitionServices } from './production-services';
 export { buildFrameRecognitionSnapshot } from './semantics/frame-semantics';
 export {
   areFrameRecognitionDraftsEqual,
