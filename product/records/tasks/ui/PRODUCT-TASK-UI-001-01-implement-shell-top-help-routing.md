@@ -1,6 +1,6 @@
 # PRODUCT-TASK-UI-001-01: Implement shell Top Help and routing
 
-- **status**: not_started
+- **status**: completed
 - **date**: 2026-08-26
 - **work_item**: PRODUCT-WORK-UI-001
 - **task_type**: implementation
@@ -47,4 +47,11 @@ The production shell, Top, Help, route table, guards, and baseline navigation be
 ## Evidence
 
 - `spec:product.ui.screen_flow` and `spec:product.system.architecture` define the route/history boundary.
-- Execution results are recorded here when the Task is performed.
+- Implemented production shell routing for `/`, `/recognition`, `/conditions`, `/result`, and `/help`.
+- Added Top, Help, Recognition, Conditions, and Result page boundaries with Application-state route guards for Conditions/Result.
+- Added explicit new-recognition navigation semantics, Recognition-to-Conditions replace helper, and route-history helper tests.
+- Verification on 2026-08-26:
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm test`
+  - `npm run build`

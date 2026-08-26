@@ -1,6 +1,6 @@
 # PRODUCT-TASK-SCORING-001-04: Materialize scoring golden corpus
 
-- **status**: not_started
+- **status**: in_progress
 - **date**: 2026-08-26
 - **work_item**: PRODUCT-WORK-SCORING-001
 - **task_type**: implementation
@@ -48,4 +48,11 @@ A versioned deterministic golden corpus exists, passes its schema/coverage check
 
 - `spec:product.system.contracts.testing_strategy` defines the required golden-corpus matrix.
 - `spec:product.system.contracts.scoring_api` defines the normalized product result types asserted by the fixtures.
-- Execution results are recorded here when the Task is performed.
+- SYSTEM T06 and T07 are `done` and record correction of both findings raised by SYSTEM T05 before this Task implementation proceeded.
+- `product/frontend/test/fixtures/scoring-golden-v1.ts` now defines schema-version-1 semantic fixtures using product tile tokens, logical melds, scoring conditions, explicit product-owned rule profiles, and explicit normalized expected results. It does not store Agari hand strings or display names.
+- The corpus explicitly inventories every minimum testing-strategy case and both branches of required rule switches, including all four supported double-yakuman variants, four multiple/double-yakuman interaction combinations, fu categories, payment shapes, and `not-winning-shape` / `no-yaku` / dora-only distinction.
+- The corpus-owned `product-default` rule profile follows the accepted scoring specification: open Tanyao/aka/dora/ippatsu/kiriage enabled; kazoe disabled; multiple yakuman enabled; double-yakuman variants disabled; double-wind pair 2 fu; fixed 25/20/30 fu invariants. The currently pre-existing production `DEFAULT_RULE_PROFILE` constant is intentionally not changed by S04 and remains an S05 implementation concern.
+- `product/frontend/test/support/scoring-golden-corpus.ts` defines the typed V1 schema, syntactic product-`ScoringInput` materializer, deterministic structural/schema validator, tile-multiplicity and meld-shape checks, and minimum-coverage inventory validation. No helper calculates yaku, han, fu, limits, or payments.
+- Expected yaku IDs/awarded han, dora/aka counts, fu breakdown, limit classification, payment values, and total points are literal reviewable fixture data rather than generated scoring snapshots.
+- `product/frontend/test/scoring-golden-corpus.test.ts` verifies complete schema/coverage validation, product-semantic materialization including red-five identity, explicit scored-result shape, and representative validator failure behavior.
+- Objective TypeScript/Vitest execution results are pending local frontend verification; record them here before changing this Task to `done`.
