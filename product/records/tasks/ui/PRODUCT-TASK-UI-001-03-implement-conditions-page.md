@@ -1,6 +1,6 @@
 # PRODUCT-TASK-UI-001-03: Implement Conditions page
 
-- **status**: not_started
+- **status**: completed
 - **date**: 2026-08-26
 - **work_item**: PRODUCT-WORK-UI-001
 - **task_type**: implementation
@@ -53,3 +53,7 @@ The Conditions page implements the accepted selection/condition/preview/readines
 - `spec:product.ui.pages.conditions` and `spec:product.ui.components.condition_controls` define the visible behavior.
 - The Application/scoring condition contracts define the shared semantic state used by this page.
 - Execution results are recorded here when the Task is performed.
+- 2026-08-26: Implemented `ConditionsPageView` for recognized completed-hand display, instance-level winning-tile selection, policy-backed condition controls, preview-state feedback, calculation readiness, and a U04-compatible correction editor slot.
+- 2026-08-26: Added focused component coverage in `product/frontend/test/conditions-page.test.tsx` for duplicate tile identities, meld/dora presentation, policy-cleared dependencies, ippatsu availability, preview/readiness matrix, calculate action, and correction-slot structure replacement.
+- 2026-08-26: Verification passed for this UI scope: `npm test -- conditions-page.test.tsx`, `npm test -- result-page.test.tsx shell-routing.test.tsx`, and `npm run lint` from `product/frontend`.
+- 2026-08-26: Full `npm test` currently stops in pre-existing/unrelated `recognition-model-runtime.test.ts` async-start expectations. The latest full `npm run typecheck` is also blocked by unrelated untracked `recognition/model-runtime/onnx-session-factory.ts` imports of `onnxruntime-web`, which is not installed in `product/frontend`.
