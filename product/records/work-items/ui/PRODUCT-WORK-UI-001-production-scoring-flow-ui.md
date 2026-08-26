@@ -20,6 +20,11 @@
   - PRODUCT-TASK-UI-001-05
   - PRODUCT-TASK-UI-001-06
   - PRODUCT-TASK-UI-001-07
+  - PRODUCT-TASK-UI-001-08
+  - PRODUCT-TASK-UI-001-09
+  - PRODUCT-TASK-UI-001-10
+  - PRODUCT-TASK-UI-001-11
+  - PRODUCT-TASK-UI-001-12
 
 ## Goal
 
@@ -50,6 +55,17 @@ SYSTEM T05 bootstrap review PASS
    +-> U05 Result/yaku/fu/payment presentation
 
 U01 + U02 + U03 + U04 + U05 -> U06 fake-service browser E2E verification -> U07 independent integrated review
+                                                                                  |
+                                                                                  | NEEDS REVISION
+                                                                                  v
+                                               U08 condition-correction transaction
+                                               U09 Recognition public contracts
+                                               U10 scoring-flow dependency seam
+                                                        \   |   /
+                                                         U11 correction verification
+                                                                  |
+                                                                  v
+                                                         U12 independent re-review
 ```
 
 U01 through U05 may proceed in parallel where they do not write the same shared component/router surface. Shared-writer order must be serialized locally when implementation reveals an actual common-file conflict.
@@ -65,6 +81,11 @@ U01 through U05 may proceed in parallel where they do not write the same shared 
 | PRODUCT-TASK-UI-001-05 | implementation | Implement Result page score summary, yaku list, fu detail, payment presentation, and correction/restart actions. | SYSTEM T05 |
 | PRODUCT-TASK-UI-001-06 | verification | Execute the deterministic fake-service Playwright scoring-flow and recovery suite. | U01, U02, U03, U04, U05 |
 | PRODUCT-TASK-UI-001-07 | review | Independently review the complete production UI behavior against the UI Specifications. | U06 |
+| PRODUCT-TASK-UI-001-08 | correction | Make Result-origin condition correction cancellable/transactional and consume the seat-wind focus shortcut. | U07 |
+| PRODUCT-TASK-UI-001-09 | correction | Align Recognition UI and fakes with the public Camera/Recognition service contracts. | U07 |
+| PRODUCT-TASK-UI-001-10 | correction | Remove fabricated scoring fallback semantics from the production UI dependency context. | U07 |
+| PRODUCT-TASK-UI-001-11 | verification | Verify all U07 corrections with focused, browser-flow, architecture, type, and build gates. | U08, U09, U10 |
+| PRODUCT-TASK-UI-001-12 | review | Independently re-review the corrected production UI and close or re-open findings. | U11 |
 
 ## Completion Condition
 
@@ -73,7 +94,7 @@ U01 through U05 may proceed in parallel where they do not write the same shared 
 - Conditions and correction behavior uses the shared policy/editor contracts rather than duplicating semantic rules in page components.
 - Focused component tests pass.
 - Fake-service browser E2E proves the required navigation, recovery, correction, and stale-result behavior.
-- The independent integrated review is PASS with no unresolved findings.
+- The final independent integrated review (U12 after U07 corrections) is PASS with no unresolved findings.
 
 ## Evidence
 
