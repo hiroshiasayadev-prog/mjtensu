@@ -1,6 +1,6 @@
 # PRODUCT-TASK-APPLICATION-001-02: Implement scoring condition policy
 
-- **status**: not_started
+- **status**: completed
 - **date**: 2026-08-26
 - **work_item**: PRODUCT-WORK-APPLICATION-001
 - **task_type**: implementation
@@ -47,4 +47,12 @@ One deterministic shared condition policy implements normalization and availabil
 
 - `spec:product.system.contracts.scoring_condition_policy` is the normative implementation contract.
 - `spec:product.system.contracts.testing_strategy` requires shared policy behavior to be exhaustively deterministic rather than UI-only E2E logic.
-- Execution results are recorded here when the Task is performed.
+- Implemented shared condition policy in `product/frontend/src/application/scoring-condition-policy.ts`.
+- Added `ScoringConditionsDraft` and supporting condition types to `product/frontend/src/scoring/index.ts`.
+- Added exhaustive/table-driven tests in `product/frontend/test/scoring-condition-policy.test.ts`.
+- Verification passed on 2026-08-26:
+  - `npm test -- --run test/scoring-condition-policy.test.ts`
+  - `npm test`
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run build`
