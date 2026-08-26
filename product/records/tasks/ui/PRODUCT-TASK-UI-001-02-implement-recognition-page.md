@@ -1,6 +1,6 @@
 # PRODUCT-TASK-UI-001-02: Implement Recognition page
 
-- **status**: not_started
+- **status**: completed
 - **date**: 2026-08-26
 - **work_item**: PRODUCT-WORK-UI-001
 - **task_type**: implementation
@@ -55,4 +55,7 @@ The Recognition page matches its accepted startup/live/recovery/commit contract 
 - `spec:product.ui.pages.recognition` defines the visible page behavior.
 - Camera/model runtime/public Recognition contracts define service lifecycle/error inputs.
 - `spec:product.system.contracts.testing_strategy` permits deterministic service fakes for this page implementation.
-- Execution results are recorded here when the Task is performed.
+- 2026-08-26: Added `product/frontend/src/ui/recognition-page.tsx` with fixed semantic capture regions, outside-region masking, parallel camera/runtime preparation, landscape-gated realtime start, semantic live overlays, meld connectors/concealed-kan preview, owner-specific recovery, and route-owned teardown.
+- 2026-08-26: Recognition confirmation now creates a scoring session through the injected Application session service, installs it in Application state, and uses the existing replace-history navigation helper to enter Conditions.
+- 2026-08-26: Added `product/frontend/test/recognition-page.test.tsx` covering capture geometry, both preparation orderings, portrait gating, semantic observation/concealed-kan feedback, camera/runtime/both-owner recovery, fatal inference retry, Application session replacement, history replacement, and teardown.
+- 2026-08-26: Focused verification passed from `product/frontend`: `npm test -- recognition-page.test.tsx shell-routing.test.tsx` -> 2 files / 21 tests passed; `npm run typecheck` -> PASS; `npm run lint` -> `Architecture import boundaries: OK (34 source files checked)`.

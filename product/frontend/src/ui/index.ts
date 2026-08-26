@@ -24,10 +24,39 @@ export {
   ConditionsPage,
   HelpPage,
   ProductionShell,
-  RecognitionPage,
   RequireActiveScoringSession,
   ResultPage,
   TopPage,
 } from './pages';
+export {
+  RECOGNITION_CAPTURE_REGIONS,
+  RecognitionPage,
+  RecognitionPageServicesProvider,
+  RecognitionPageView,
+} from './recognition-page';
+export type {
+  NormalizedRect,
+  RecognitionFrameSnapshot,
+  RecognitionMeldInterpretation,
+  RecognitionMeldObservationGroup,
+  RecognitionObservation,
+  RecognitionPageCameraError,
+  RecognitionPageCameraFrame,
+  RecognitionPageCameraPreview,
+  RecognitionPageCameraService,
+  RecognitionPageCameraSession,
+  RecognitionPageFrame,
+  RecognitionPageFrameSource,
+  RecognitionPageRealtimeListener,
+  RecognitionPageRealtimeRecognizer,
+  RecognitionPageRealtimeUpdate,
+  RecognitionPageRun,
+  RecognitionPageRuntime,
+  RecognitionPageServices,
+  RecognitionPageServicesProviderProps,
+  RecognitionPageSize,
+  RecognitionPageViewProps,
+  RecognitionRegion,
+} from './recognition-page';
 export { ResultPresentation, ScoreSummary, YakuList } from './result-presentation';
 export type { ResultPresentationProps } from './result-presentation';

@@ -8,12 +8,11 @@ import {
   Text,
   Title,
 } from '@mantine/core';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   Link as RouterLink,
   Navigate,
   Outlet,
-  useLocation,
   useNavigate,
 } from 'react-router-dom';
 
@@ -153,36 +152,6 @@ export function HelpPage() {
   );
 }
 
-export function RecognitionPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const beginNewRecognitionAttempt = useApplicationStore(
-    (state) => state.beginNewRecognitionAttempt,
-  );
-
-  useEffect(() => {
-    if (shouldClearSessionForRecognition(location.state)) {
-      const timeout = window.setTimeout(beginNewRecognitionAttempt, 0);
-
-      return () => window.clearTimeout(timeout);
-    }
-
-    return undefined;
-  }, [beginNewRecognitionAttempt, location.state]);
-
-  return (
-    <Stack gap="md" py="xl">
-      <Title order={1}>認識</Title>
-      <Text>
-        カメラ認識ページの境界です。安定認識後は履歴を置換して条件入力へ進みます。
-      </Text>
-      <Button variant="light" onClick={() => navigateToTop(navigate)}>
-        トップへ戻る
-      </Button>
-    </Stack>
-  );
-}
-
 export function ConditionsPage() {
   const activeScoringSession = useApplicationStore(
     (state) => state.activeScoringSession,
@@ -246,14 +215,5 @@ export function ResultPage() {
       structure={activeScoringSession.structure}
       winningTileId={activeScoringSession.winningTileId}
     />
-  );
-}
-
-function shouldClearSessionForRecognition(state: unknown): boolean {
-  return (
-    typeof state === 'object' &&
-    state !== null &&
-    'clearActiveScoringSession' in state &&
-    state.clearActiveScoringSession === true
   );
 }
