@@ -1,6 +1,6 @@
 # PRODUCT-TASK-APPLICATION-001-03: Implement correction draft service
 
-- **status**: not_started
+- **status**: completed
 - **date**: 2026-08-26
 - **work_item**: PRODUCT-WORK-APPLICATION-001
 - **task_type**: implementation
@@ -54,4 +54,9 @@ The correction draft implementation supports all accepted edit operations, prese
 
 - `spec:product.system.contracts.correction_editor_api` and the canonical tile model define the correction boundary.
 - `spec:product.system.contracts.scoring_api` owns whole winning-shape validation.
-- Execution results are recorded here when the Task is performed.
+- Implemented `product/frontend/src/application/correction-draft-service.ts` and exported the correction editor API from `product/frontend/src/application/index.ts`.
+- Added focused coverage in `product/frontend/test/correction-draft-service.test.ts` for commands, identity lifecycle, meld derivation, kan openness, targeted validation, and commit gating.
+- `npm test -- correction-draft-service.test.ts` passed on 2026-08-26.
+- `npm run typecheck` passed on 2026-08-26.
+- `npm test` passed on 2026-08-26.
+- `npm run lint` passed on 2026-08-26.

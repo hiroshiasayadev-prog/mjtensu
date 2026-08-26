@@ -8,11 +8,28 @@ export {
   INITIAL_SCORING_CONDITIONS,
   createScoringSessionService,
 } from './scoring-session-service';
+export {
+  createCorrectionEditorService,
+  deriveCorrectionMeldGroup,
+} from './correction-draft-service';
 export type {
   ScoringConditionAvailability,
   ScoringConditionKey,
   ScoringConditionPolicy,
 } from './scoring-condition-policy';
+export type {
+  CorrectionCommand,
+  CorrectionCommit,
+  CorrectionDestination,
+  CorrectionDraft,
+  CorrectionDraftIdGenerator,
+  CorrectionEditorService,
+  CorrectionIssue,
+  CorrectionIssueTarget,
+  CorrectionMeldGroupDraft,
+  CorrectionMeldGroupId,
+  CorrectionValidation,
+} from './correction-draft-service';
 export type {
   ScoringSessionCalculation,
   ScoringSessionCommand,
