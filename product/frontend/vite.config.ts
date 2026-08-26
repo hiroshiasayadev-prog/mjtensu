@@ -7,44 +7,47 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { productionAssetManifestPlugin } from './build/production-assets';
 import { PRODUCTION_PWA_WORKBOX_OPTIONS } from './build/pwa-config';
 
-export default defineConfig(({ mode }) => ({
-  plugins: [
-    react(),
-    productionAssetManifestPlugin(),
-    VitePWA({
-      disable: mode === 'e2e',
-      injectRegister: false,
-      registerType: 'prompt',
-      manifest: {
-        name: 'mjtensu',
-        short_name: 'mjtensu',
-        description: '麻雀点数計算 PWA',
-        lang: 'ja',
-        display: 'standalone',
-        start_url: './',
-        theme_color: '#ffffff',
-        background_color: '#ffffff',
+export default defineConfig(({ mode }) => {
+  const includesBrowserHarnesses = mode === 'e2e' || mode === 'browser-verification';
+
+  return {
+    plugins: [
+      react(),
+      productionAssetManifestPlugin(),
+      VitePWA({
+        disable: mode === 'e2e',
+        injectRegister: false,
+        registerType: 'prompt',
+        manifest: {
+          name: 'mjtensu',
+          short_name: 'mjtensu',
+          description: '麻雀点数計算 PWA',
+          lang: 'ja',
+          display: 'standalone',
+          start_url: './',
+          theme_color: '#ffffff',
+          background_color: '#ffffff',
+        },
+        workbox: PRODUCTION_PWA_WORKBOX_OPTIONS,
+      }),
+    ],
+    publicDir: fileURLToPath(new URL('../../vendor/recognition-models', import.meta.url)),
+    resolve: {
+      alias: {
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
+        '@agari-wasm': fileURLToPath(
+          new URL('../../vendor/agari-wasm', import.meta.url),
+        ),
       },
-      workbox: PRODUCTION_PWA_WORKBOX_OPTIONS,
-    }),
-  ],
-  publicDir: fileURLToPath(new URL('../../vendor/recognition-models', import.meta.url)),
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-      '@agari-wasm': fileURLToPath(
-        new URL('../../vendor/agari-wasm', import.meta.url),
-      ),
     },
-  },
-  server: {
-    fs: {
-      allow: [fileURLToPath(new URL('../..', import.meta.url))],
+    server: {
+      fs: {
+        allow: [fileURLToPath(new URL('../..', import.meta.url))],
+      },
     },
-  },
-  build: mode === 'e2e'
-    ? {
-        rollupOptions: {
+    build: includesBrowserHarnesses
+      ? {
+          rollupOptions: {
           input: {
             app: fileURLToPath(new URL('./index.html', import.meta.url)),
             fakeFlow: fileURLToPath(
@@ -56,8 +59,27 @@ export default defineConfig(({ mode }) => ({
                 import.meta.url,
               ),
             ),
+            ...(mode === 'browser-verification'
+              ? {
+                  productionScoring: fileURLToPath(
+                    new URL('./test/e2e/production-scoring.html', import.meta.url),
+                  ),
+                  updateProbe: fileURLToPath(
+                    new URL('./test/e2e/update-probe-sw.js', import.meta.url),
+                  ),
+                }
+              : {}),
           },
-        },
-      }
-    : undefined,
-}));
+          output: mode === 'browser-verification'
+            ? {
+                entryFileNames: (chunk) =>
+                  chunk.name === 'updateProbe'
+                    ? 'update-probe-sw.js'
+                    : 'assets/[name]-[hash].js',
+              }
+            : undefined,
+          },
+        }
+      : undefined,
+  };
+});
