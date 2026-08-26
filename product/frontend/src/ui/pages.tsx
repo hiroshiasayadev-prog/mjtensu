@@ -16,12 +16,7 @@ import {
   useNavigate,
 } from 'react-router-dom';
 
-import {
-  createCorrectionEditorService,
-  createScoringSessionService,
-  selectHasActiveScoringSession,
-} from '@/application';
-import type { ScoringService } from '@/scoring';
+import { selectHasActiveScoringSession } from '@/application';
 
 import { useApplicationStore } from './application-state';
 import { ConditionsPageView } from './conditions-page';
@@ -39,20 +34,8 @@ import {
 } from './navigation';
 import { RecognitionCorrectionPageView } from './recognition-correction-page';
 import { ResultPresentation } from './result-presentation';
+import { useScoringFlowServices } from './scoring-flow-services';
 import { TileCorrectionEditor } from './tile-correction-editor';
-
-const deferredScoringService: ScoringService = {
-  validateWinningStructure: () => ({ kind: 'valid' }),
-  preview: () => ({ kind: 'no-yaku' }),
-  calculate: () => {
-    throw new Error('Scoring service is not connected.');
-  },
-};
-
-const conditionsPageSessionService =
-  createScoringSessionService(deferredScoringService);
-const correctionEditorService =
-  createCorrectionEditorService(deferredScoringService);
 
 export function ProductionShell() {
   return (
@@ -164,6 +147,7 @@ export function HelpPage() {
 }
 
 export function ConditionsPage() {
+  const { correctionEditor, scoringSession } = useScoringFlowServices();
   const activeScoringSession = useApplicationStore(
     (state) => state.activeScoringSession,
   );
@@ -186,15 +170,16 @@ export function ConditionsPage() {
           initialStructure={session.structure}
           onCommit={commitStructure}
           primaryActionLabel="牌姿を反映"
-          service={correctionEditorService}
+          service={correctionEditor}
         />
       )}
-      sessionService={conditionsPageSessionService}
+      sessionService={scoringSession}
     />
   );
 }
 
 export function RecognitionCorrectionPage() {
+  const { correctionEditor, scoringSession } = useScoringFlowServices();
   const activeScoringSession = useApplicationStore(
     (state) => state.activeScoringSession,
   );
@@ -209,7 +194,7 @@ export function RecognitionCorrectionPage() {
 
   return (
     <RecognitionCorrectionPageView
-      correctionEditorService={correctionEditorService}
+      correctionEditorService={correctionEditor}
       onCancel={() => navigateAfterRecognitionCorrectionCancelled(navigate)}
       onContinueToConditions={() =>
         navigateAfterRecognitionCorrectionNeedsConditions(navigate)
@@ -217,7 +202,7 @@ export function RecognitionCorrectionPage() {
       onReturnToResult={() => navigateAfterRecognitionCorrectionScored(navigate)}
       onSessionChange={installScoringSession}
       session={activeScoringSession}
-      sessionService={conditionsPageSessionService}
+      sessionService={scoringSession}
     />
   );
 }

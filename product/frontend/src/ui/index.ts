@@ -70,5 +70,10 @@ export type {
 } from './recognition-correction-page';
 export { ResultPresentation, ScoreSummary, YakuList } from './result-presentation';
 export type { ResultPresentationProps } from './result-presentation';
+export { ScoringFlowServicesProvider } from './scoring-flow-services';
+export type {
+  ScoringFlowServices,
+  ScoringFlowServicesProviderProps,
+} from './scoring-flow-services';
 export { TileCorrectionEditor } from './tile-correction-editor';
 export type { TileCorrectionEditorProps } from './tile-correction-editor';
