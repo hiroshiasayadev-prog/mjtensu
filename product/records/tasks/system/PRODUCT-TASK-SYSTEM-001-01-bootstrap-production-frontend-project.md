@@ -1,6 +1,6 @@
 # PRODUCT-TASK-SYSTEM-001-01: Bootstrap production frontend project
 
-- **status**: in_progress
+- **status**: done
 - **date**: 2026-08-26
 - **work_item**: PRODUCT-WORK-SYSTEM-001
 - **task_type**: implementation
@@ -48,7 +48,11 @@ The production frontend project, selected stack dependencies, strict TypeScript 
 
 - Production frontend root selected as `product/frontend/`.
 - Added Vite/React/TypeScript project configuration and ADR-selected frontend dependencies in `product/frontend/package.json`.
-- Added strict TypeScript configuration and `@/* -> src/*` import alias.
+- Added strict TypeScript 7-compatible configuration and `@/* -> ./src/*` import alias without the removed `baseUrl` option.
+- Pinned the frontend development runtime to the Node 24 LTS line (`^24.15.0`) and recorded `.node-version` as `24.19.0`; Node 25 is outside the selected supported toolchain.
 - Added `src/app`, `src/domain`, `src/camera`, `src/recognition`, `src/scoring`, `src/application`, and `src/ui`, each with one public `index.ts` entry point.
 - Added minimal `src/main.tsx` and `src/app/App.tsx` bootstrap code; no feature routes, stores, runtime services, or PWA lifecycle semantics were implemented.
-- Command execution results remain to be recorded before changing this Task to `done`.
+- `npm ci` PASS on Node `v24.19.0` / npm `11.12.1`; dependency install completed with 0 audit vulnerabilities.
+- `npm run typecheck` PASS with strict TypeScript checking for production and test configuration.
+- `npm run test:e2e` executed the production build successfully with Vite `v8.2.2`: 820 modules transformed and `dist/` emitted successfully.
+- The seven public entry points are exercised by PRODUCT-TASK-SYSTEM-001-02's public-entry smoke and passed under the shared test harness.

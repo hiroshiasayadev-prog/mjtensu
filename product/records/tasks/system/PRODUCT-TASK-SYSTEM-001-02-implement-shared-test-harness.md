@@ -1,6 +1,6 @@
 # PRODUCT-TASK-SYSTEM-001-02: Implement shared test harness
 
-- **status**: in_progress
+- **status**: done
 - **date**: 2026-08-26
 - **work_item**: PRODUCT-WORK-SYSTEM-001
 - **task_type**: implementation
@@ -58,4 +58,10 @@ The shared production test harness can execute unit, component, and browser smok
 - Added generic fake-service/deferred support under `test/support/` with focused tests in `test/fake-service.test.ts`.
 - Added `playwright.config.ts` and `test/e2e/bootstrap.spec.ts`; the E2E command builds first and serves `dist/` through Vite preview.
 - Added stable `test`, `test:watch`, `test:e2e`, `test:e2e:install`, `build`, and `typecheck` package scripts.
-- Command execution results remain to be recorded before changing this Task to `done`.
+- `npm ci` PASS on Node `v24.19.0` / npm `11.12.1`; 456 packages installed and `npm audit` reported 0 vulnerabilities. The remaining `glob@11.1.0` message is a transitive deprecation warning, not an install failure.
+- `npm run typecheck` PASS after removing the TypeScript 7-incompatible `baseUrl` option and using `@/* -> ./src/*` paths.
+- Initial `npm test` run exposed jsdom's missing `window.matchMedia`, which MantineProvider requires; added a deterministic test-environment stub in `test/setup.ts`.
+- Final `npm run typecheck` PASS.
+- Final `npm test` PASS: 3 test files, 4 tests total (`fake-service` 2, public-entry 1, application bootstrap 1).
+- `npm run test:e2e:install` completed for Chromium.
+- `npm run test:e2e` PASS: production build succeeded and the Chromium bootstrap smoke passed (1/1).
