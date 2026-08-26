@@ -11,6 +11,8 @@ export {
 export {
   createApplicationStore,
   createScoringSessionFixture,
+  selectActiveScoringSession,
+  selectHasActiveScoringSession,
 } from './application-store';
 export {
   createCorrectionEditorService,
@@ -40,6 +42,10 @@ export type {
   ScoringSessionService,
   ScoringSessionState,
 } from './scoring-session-service';
+export type {
+  ApplicationSessionPort,
+  ApplicationStoreDependencies,
+} from './application-store-dependencies';
 export type {
   ActiveScoringSessionState,
   ApplicationStateSnapshot,

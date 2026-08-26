@@ -1,6 +1,6 @@
 # PRODUCT-TASK-APPLICATION-001-04: Bind application session store
 
-- **status**: not_started
+- **status**: completed
 - **date**: 2026-08-26
 - **work_item**: PRODUCT-WORK-APPLICATION-001
 - **task_type**: implementation
@@ -50,4 +50,17 @@ The production global Application store holds only the accepted cross-page sessi
 
 - `spec:product.system.architecture` defines Zustand versus runtime/page-local ownership.
 - `spec:product.system.contracts.application_session_api` defines the session service boundary.
-- Execution results are recorded here when the Task is performed.
+- Extended `product/frontend/src/application/application-store.ts` so the only mutable cross-page data is `activeScoringSession: ScoringSessionState | null`; semantic create/update/preview/calculate actions delegate to the injected Application session port rather than reproducing session rules.
+- Added `product/frontend/src/application/application-store-dependencies.ts` so `ScoringSessionService` and condition-policy references are closure-owned dependencies and never Zustand state fields; this also preserves the architecture lint's runtime-resource isolation rule.
+- Added shared-policy delegation through `getScoringConditionAvailability()` and route-consumable `selectHasActiveScoringSession()` / `selectActiveScoringSession()` selectors.
+- Preserved explicit new-Recognition disposal through `beginNewRecognitionAttempt()`, which clears the prior session without creating a replacement.
+- Kept `installScoringSession()` as a compatibility/hydration seam for existing UI integration; semantic mutations are exposed separately through the service-backed actions.
+- Updated the production route guard in `product/frontend/src/ui/pages.tsx` to consume `selectHasActiveScoringSession()`.
+- Added focused coverage in `product/frontend/test/application-store.test.ts` for empty/active guards, service-backed creation/replacement, restart disposal, exact compatibility replacement, semantic update/result invalidation, preview/calculation delegation, shared condition availability, Zustand data-shape isolation, and no-session action rejection.
+- Verification passed on 2026-08-26:
+  - `npm test -- application-store.test.ts`: PASS, 1 file / 8 tests.
+  - `npm run typecheck`: PASS.
+  - `npm run lint`: PASS, `Architecture import boundaries: OK (37 source files checked)`.
+  - `npm test`: PASS, 21 files / 194 tests.
+  - `npm run build`: PASS, Vite production build completed successfully.
+- The React inline-style shorthand warning emitted by existing `conditions-page.test.tsx` coverage is non-failing and outside this Task's Application-store acceptance scope.

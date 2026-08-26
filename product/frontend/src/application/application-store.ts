@@ -1,10 +1,25 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
-import type { TileInstance, TileInstanceId } from '@/domain';
-import { DEFAULT_RULE_PROFILE, type ScoringCalculation } from '@/scoring';
+import type { RecognizedStructure, TileInstance, TileInstanceId } from '@/domain';
+import {
+  DEFAULT_RULE_PROFILE,
+  type ScoringCalculation,
+  type ScoringPreview,
+  type ScoringRuleProfile,
+} from '@/scoring';
 
+import type {
+  ApplicationSessionPort,
+  ApplicationStoreDependencies,
+} from './application-store-dependencies';
+import {
+  scoringConditionPolicy,
+  type ScoringConditionAvailability,
+} from './scoring-condition-policy';
 import {
   INITIAL_SCORING_CONDITIONS,
+  type ScoringSessionCalculation,
+  type ScoringSessionCommand,
   type ScoringSessionState,
 } from './scoring-session-service';
 
@@ -18,25 +33,101 @@ export interface ApplicationStoreState extends ApplicationStateSnapshot {
   beginNewRecognitionAttempt(): void;
   clearActiveScoringSession(): void;
   installScoringSession(session: ActiveScoringSessionState): void;
+  createScoringSession(
+    structure: RecognizedStructure,
+    ruleProfile: ScoringRuleProfile,
+  ): void;
+  updateScoringSession(command: ScoringSessionCommand): void;
+  previewScoringSession(): ScoringPreview;
+  calculateScoringSession(): ScoringSessionCalculation;
+  getScoringConditionAvailability(): ScoringConditionAvailability;
 }
 
 export type ApplicationStore = StoreApi<ApplicationStoreState>;
 
 export function createApplicationStore(
   initialState: Partial<ApplicationStateSnapshot> = {},
+  dependencies: ApplicationStoreDependencies = {},
 ): ApplicationStore {
-  return createStore<ApplicationStoreState>()((set) => ({
+  const conditionPolicy = dependencies.conditionPolicy ?? scoringConditionPolicy;
+
+  return createStore<ApplicationStoreState>()((set, get) => ({
     activeScoringSession: initialState.activeScoringSession ?? null,
+
     beginNewRecognitionAttempt: () => {
       set({ activeScoringSession: null });
     },
+
     clearActiveScoringSession: () => {
       set({ activeScoringSession: null });
     },
+
+    // Compatibility/hydration seam for already-produced session state. New
+    // semantic mutations should use the service-backed actions below.
     installScoringSession: (session) => {
       set({ activeScoringSession: session });
     },
+
+    createScoringSession: (structure, ruleProfile) => {
+      const scoringSessionService = requireScoringSessionService(dependencies);
+      const session = scoringSessionService.create(structure, ruleProfile);
+      set({ activeScoringSession: session });
+    },
+
+    updateScoringSession: (command) => {
+      const scoringSessionService = requireScoringSessionService(dependencies);
+      const current = requireActiveScoringSession(get());
+      const session = scoringSessionService.update(current, command);
+      set({ activeScoringSession: session });
+    },
+
+    previewScoringSession: () => {
+      const scoringSessionService = requireScoringSessionService(dependencies);
+      return scoringSessionService.preview(requireActiveScoringSession(get()));
+    },
+
+    calculateScoringSession: () => {
+      const scoringSessionService = requireScoringSessionService(dependencies);
+      const calculation = scoringSessionService.calculate(
+        requireActiveScoringSession(get()),
+      );
+      set({ activeScoringSession: calculation.state });
+      return calculation;
+    },
+
+    getScoringConditionAvailability: () =>
+      conditionPolicy.availability(requireActiveScoringSession(get()).conditions),
   }));
+}
+
+export function selectHasActiveScoringSession(
+  state: ApplicationStoreState,
+): boolean {
+  return state.activeScoringSession !== null;
+}
+
+export function selectActiveScoringSession(
+  state: ApplicationStoreState,
+): ActiveScoringSessionState | null {
+  return state.activeScoringSession;
+}
+
+function requireActiveScoringSession(
+  state: ApplicationStateSnapshot,
+): ActiveScoringSessionState {
+  if (state.activeScoringSession === null) {
+    throw new Error('An active scoring session is required.');
+  }
+  return state.activeScoringSession;
+}
+
+function requireScoringSessionService(
+  dependencies: ApplicationStoreDependencies,
+): ApplicationSessionPort {
+  if (dependencies.scoringSessionService === undefined) {
+    throw new Error('ScoringSessionService is not configured for this store.');
+  }
+  return dependencies.scoringSessionService;
 }
 
 export interface ScoringSessionFixtureOptions {
