@@ -93,6 +93,10 @@ export type CorrectionIssue =
       readonly target: { readonly kind: 'completed-hand' };
     }
   | {
+      readonly kind: 'invalid-completed-hand-tile';
+      readonly target: { readonly kind: 'completed-hand' };
+    }
+  | {
       readonly kind: 'invalid-meld';
       readonly target: {
         readonly kind: 'meld';
@@ -625,6 +629,12 @@ function mapWinningStructureIssue(
     case 'completed-hand-count':
       return {
         kind: 'completed-hand-count',
+        target: { kind: 'completed-hand' },
+      };
+
+    case 'completed-hand-tile':
+      return {
+        kind: 'invalid-completed-hand-tile',
         target: { kind: 'completed-hand' },
       };
 

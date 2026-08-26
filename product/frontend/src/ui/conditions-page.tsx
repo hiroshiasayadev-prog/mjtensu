@@ -632,7 +632,10 @@ function inputIssueLabel(issue: ScoringInputIssue): string {
     case 'winning-tile-not-in-completed-hand':
       return '和了牌';
     case 'unresolved-meld':
+    case 'invalid-meld':
       return `副露 ${issue.meldIndex + 1}`;
+    case 'invalid-structure':
+      return '牌姿';
     case 'contradictory-conditions':
       return '矛盾する条件';
   }

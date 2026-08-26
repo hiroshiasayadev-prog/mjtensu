@@ -5,6 +5,8 @@ import type {
   TileInstanceId,
 } from '@/domain';
 
+export { loadProductionScoringService } from './agari/agari-wasm-loader';
+
 export type Wind = 'east' | 'south' | 'west' | 'north';
 export type WinMethod = 'ron' | 'tsumo';
 export type RiichiState = 'none' | 'riichi' | 'double-riichi';
@@ -104,10 +106,10 @@ export const DEFAULT_RULE_PROFILE: ScoringRuleProfile = {
   dora: true,
   ippatsu: true,
   kiriageMangan: true,
-  kazoeYakuman: true,
+  kazoeYakuman: false,
   multipleYakuman: true,
-  doubleYakumanVariants: true,
-  doubleWindPairFu: 4,
+  doubleYakumanVariants: false,
+  doubleWindPairFu: 2,
   chiitoitsuFu: 25,
   pinfuTsumoFu: 20,
   openPinfuRonMinimumFu: 30,
@@ -116,6 +118,10 @@ export const DEFAULT_RULE_PROFILE: ScoringRuleProfile = {
 export type WinningStructureIssue =
   | {
       readonly kind: 'completed-hand-count';
+    }
+  | {
+      readonly kind: 'completed-hand-tile';
+      readonly tileIndex: number;
     }
   | {
       readonly kind: 'meld-group';
@@ -143,6 +149,13 @@ export type ScoringInputIssue =
   | {
       readonly kind: 'unresolved-meld';
       readonly meldIndex: number;
+    }
+  | {
+      readonly kind: 'invalid-meld';
+      readonly meldIndex: number;
+    }
+  | {
+      readonly kind: 'invalid-structure';
     }
   | {
       readonly kind: 'contradictory-conditions';
@@ -300,6 +313,16 @@ export interface ScoringCalculation {
   readonly payment: ScoringPayment;
   readonly totalPoints: number;
 }
+
+export type ScoringError =
+  | {
+      readonly kind: 'input-contract-violation';
+      readonly cause?: unknown;
+    }
+  | {
+      readonly kind: 'adapter-failure';
+      readonly cause: unknown;
+    };
 
 export interface ScoringService {
   validateWinningStructure(

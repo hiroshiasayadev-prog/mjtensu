@@ -1,6 +1,6 @@
 # PRODUCT-TASK-SCORING-001-05: Implement Agari adapter and ScoringService
 
-- **status**: not_started
+- **status**: done
 - **date**: 2026-08-26
 - **work_item**: PRODUCT-WORK-SCORING-001
 - **task_type**: implementation
@@ -54,7 +54,18 @@ The production TypeScript scoring module fully satisfies the Scoring API and Aga
 
 ## Evidence
 
+- `src/scoring/agari/` now owns the private stable V1 ABI model, product-to-Agari input adapter, Agari-to-product result adapter, synchronous ScoringService implementation, and asynchronous WASM initialization boundary.
+- `src/scoring/index.ts` exposes only the product-owned Scoring API plus `loadProductionScoringService()`; no concrete `Agari*` / raw WASM type is exported through the public scoring entry point.
+- Input mapping covers canonical tiles/red fives, chi/pon/open-kan/concealed-kan notation, the one product dora-indicator set -> ordinary Agari indicators plus empty ura list, every scoring condition, and every explicit fork rule field.
+- Product-owned validation now rejects invalid meld composition, invalid red-five identity, impossible tile multiplicity, contradictory conditions, and invalid winning-tile selection before a deterministic score request can reach Agari.
+- Stable yaku codes are normalized without display-string parsing; awarded regular-yaku han is preserved, duplicate same-ID regular entries are aggregated, and actual-yakuman multiplier authority remains `score_level.units`.
+- Fu, chiitoitsu fixed 25 fu, dora/aka contribution, structured limits, and raw Agari ron/tsumo payment fields are normalized without TypeScript score/payment recalculation.
+- Focused fixture tests were added in `test/agari-input-adapter.test.ts`, `test/agari-result-adapter.test.ts`, and `test/agari-scoring-service.test.ts` with shared fixtures in `test/agari-test-fixtures.ts`.
+- During implementation, `DEFAULT_RULE_PROFILE` was corrected to match `spec:product.scoring.input`: kazoe yakuman disabled, double-yakuman variants disabled, and double-wind pair fu set to 2.
+- Focused verification on 2026-08-27 passed: `npm test -- agari-input-adapter.test.ts agari-result-adapter.test.ts agari-scoring-service.test.ts correction-draft-service.test.ts tile-correction-ui.test.tsx` completed 5 test files / 48 tests with 0 failures.
+- `npm run typecheck` passed after fixing Vitest mock literal widening in `agari-scoring-service.test.ts`.
+- `npm run lint` passed with `Architecture import boundaries: OK (47 source files checked)`.
+- The committed production `vendor/agari-wasm/` package required by S01 is not currently present in the mjtensu checkout, so real production-loader/WASM execution is intentionally deferred to S06 together with the full golden corpus compatibility gate.
 - `spec:product.system.contracts.agari_adapter` is the concrete translation authority.
 - `spec:product.system.contracts.scoring_api` is the public library-independent authority.
 - S03 supplies the stable machine ABI consumed here.
-- Execution results are recorded here when the Task is performed.

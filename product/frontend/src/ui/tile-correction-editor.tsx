@@ -620,6 +620,8 @@ function correctionIssueMessage(issue: CorrectionIssue): string {
   switch (issue.kind) {
     case 'completed-hand-count':
       return '手牌の枚数が副露数と合っていません。';
+    case 'invalid-completed-hand-tile':
+      return '手牌に不正な牌があります。';
     case 'invalid-meld':
       return '副露の牌構成を修正してください。';
     case 'not-winning-shape':
