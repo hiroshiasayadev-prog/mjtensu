@@ -8,6 +8,14 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '@agari-wasm': fileURLToPath(
+        new URL('../../vendor/agari-wasm', import.meta.url),
+      ),
+    },
+  },
+  server: {
+    fs: {
+      allow: [fileURLToPath(new URL('../..', import.meta.url))],
     },
   },
   build: mode === 'e2e'

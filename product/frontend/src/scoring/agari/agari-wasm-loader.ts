@@ -4,7 +4,7 @@ import type { AgariEngineV1, AgariWasmModuleV1 } from './agari-abi';
 import { createAgariScoringService } from './agari-scoring-service';
 
 export const PRODUCTION_AGARI_WASM_MODULE_PATH =
-  '/vendor/agari-wasm/agari_wasm.js';
+  '@agari-wasm/agari_wasm.js';
 
 export type AgariWasmModuleLoader = () => Promise<AgariWasmModuleV1>;
 
@@ -36,9 +36,11 @@ export async function loadAgariScoringService(
 
 export async function loadProductionScoringService(): Promise<ScoringService> {
   return loadAgariScoringService(async () => {
-    const loaded: unknown = await import(
-      /* @vite-ignore */ PRODUCTION_AGARI_WASM_MODULE_PATH
-    );
+    // Keep this import statically analyzable so Vite bundles the committed
+    // canonical package (including its relative WASM asset) from repo-root
+    // vendor/agari-wasm. The exported path above documents the production
+    // module identity for tests/tooling; the literal here must match it.
+    const loaded: unknown = await import('@agari-wasm/agari_wasm.js');
     return assertAgariWasmModule(loaded);
   });
 }

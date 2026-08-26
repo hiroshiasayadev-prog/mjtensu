@@ -6,6 +6,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '@agari-wasm': fileURLToPath(
+        new URL('../../vendor/agari-wasm', import.meta.url),
+      ),
     },
   },
   test: {

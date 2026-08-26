@@ -1,6 +1,6 @@
 # PRODUCT-TASK-SCORING-001-04: Materialize scoring golden corpus
 
-- **status**: in_progress
+- **status**: done
 - **date**: 2026-08-26
 - **work_item**: PRODUCT-WORK-SCORING-001
 - **task_type**: implementation
@@ -55,4 +55,4 @@ A versioned deterministic golden corpus exists, passes its schema/coverage check
 - `product/frontend/test/support/scoring-golden-corpus.ts` defines the typed V1 schema, syntactic product-`ScoringInput` materializer, deterministic structural/schema validator, tile-multiplicity and meld-shape checks, and minimum-coverage inventory validation. No helper calculates yaku, han, fu, limits, or payments.
 - Expected yaku IDs/awarded han, dora/aka counts, fu breakdown, limit classification, payment values, and total points are literal reviewable fixture data rather than generated scoring snapshots.
 - `product/frontend/test/scoring-golden-corpus.test.ts` verifies complete schema/coverage validation, product-semantic materialization including red-five identity, explicit scored-result shape, and representative validator failure behavior.
-- Objective TypeScript/Vitest execution results are pending local frontend verification; record them here before changing this Task to `done`.
+- Objective verification on 2026-08-27 passed: `npm test -- scoring-golden-corpus.test.ts scoring-golden-real-wasm.test.ts agari-input-adapter.test.ts agari-result-adapter.test.ts agari-scoring-service.test.ts` executed `scoring-golden-corpus.test.ts` with 5/5 tests passing. The same run also passed all focused adapter/service suites; the real-WASM suite itself was blocked before test execution by a Vitest file-path resolution defect in the S06 runner, not by corpus validation. S06 owns that runner correction and integrated semantic verdict.

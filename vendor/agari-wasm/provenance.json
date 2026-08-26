@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "upstreamRepository": "https://github.com/agari-industries/agari",
+  "upstreamCommit": "a0a9ce15cdf1bea6e7e158bbac1adb4e7a33a547",
+  "forkRepository": "https://github.com/hiroshiasayadev-prog/mjtensu-agari.git",
+  "forkCommit": "fb362b6db416e67984cdb36f704d8ebf6657662e",
+  "abiVersion": "v1",
+  "wasmSha256": "0e3297ed5f6807eac4d7369eb5846bc17e5ea4851470bf9d40c78ec6030e277c",
+  "wasmBytes": 200739,
+  "rustcVersion": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+  "wasmPackVersion": "wasm-pack 0.15.0",
+  "buildProfile": "release"
+}

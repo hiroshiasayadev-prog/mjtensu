@@ -19,7 +19,8 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@agari-wasm/*": ["../../vendor/agari-wasm/*"]
     }
   }
 }
