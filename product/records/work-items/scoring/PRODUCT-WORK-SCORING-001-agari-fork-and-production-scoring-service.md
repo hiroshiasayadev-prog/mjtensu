@@ -1,6 +1,6 @@
 # PRODUCT-WORK-SCORING-001: Agari fork and production scoring service
 
-- **status**: in_progress
+- **status**: done
 - **date**: 2026-08-26
 - **source_refs**:
   - PRODUCT-ADR-SYSTEM-003
@@ -87,3 +87,7 @@ S04 may proceed in parallel with fork implementation because its expected semant
 - The Agari fork and adapter Specifications define the required semantic delta and isolation boundary.
 - The scoring input/result and Scoring API Specifications define product-owned inputs/results.
 - The production testing strategy requires a real-engine golden corpus before scoring acceptance.
+- All registered tasks PRODUCT-TASK-SCORING-001-01 through PRODUCT-TASK-SCORING-001-09 are `done`.
+- PRODUCT-TASK-SCORING-001-06 records final overall PASS for the production artifact/provenance gate, complete 49/49 real-WASM golden compatibility, production loader integrity verification, typecheck, lint/architecture, and production build consumption of the committed WASM package.
+- PRODUCT-TASK-SCORING-001-07 records an independent integrated review verdict of PASS with no findings and confirms the complete production Scoring boundary is ready for production integration.
+- Therefore every Completion Condition of PRODUCT-WORK-SCORING-001 is satisfied as of 2026-08-27.
