@@ -1,6 +1,6 @@
 # PRODUCT-TASK-UI-001-05: Implement Result page
 
-- **status**: not_started
+- **status**: completed
 - **date**: 2026-08-26
 - **work_item**: PRODUCT-WORK-UI-001
 - **task_type**: implementation
@@ -44,14 +44,14 @@ The Result page and reusable score/yaku/fu/payment components present all accept
 
 ## Verification
 
-- Run yaku/dora presentation tests.
-- Run score-limit/payment fixture matrix tests.
-- Run fu-detail ordinary/chiitoitsu/yakuman tests.
-- Run correction/status/new-recognition action tests.
-- Run strict typecheck/lint/architecture checks.
+- 2026-08-26: `npx vitest run test/result-page.test.tsx test/navigation-history.test.ts test/shell-routing.test.tsx` passed: 3 files, 30 tests.
+- 2026-08-26: `npm test` passed: 17 files, 153 tests.
+- 2026-08-26: `npm run typecheck` passed.
+- 2026-08-26: `npm run lint` passed: Architecture import boundaries OK, 33 source files checked.
+- 2026-08-26: `npm run build` passed.
 
 ## Evidence
 
 - `spec:product.ui.pages.result`, yaku-list, score-summary, and fu-detail Specifications define the visible result contract.
 - `spec:product.scoring.result` and `spec:product.system.contracts.scoring_api` define the semantic data consumed here.
-- Execution results are recorded here when the Task is performed.
+- Implemented `ResultPresentation`, yaku display mapping, payment/fu/limit rendering, correction/new-recognition navigation, and deterministic result fixture tests.

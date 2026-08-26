@@ -1,16 +1,27 @@
-import { MantineProvider, Stack, Title } from '@mantine/core';
+import { MantineProvider } from '@mantine/core';
+import type { ReactNode } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 
-export function App() {
+import type { ApplicationStore } from '@/application';
+import { ApplicationStateProvider } from '@/ui';
+
+import { AppRoutes } from './routes';
+
+export interface AppProps {
+  readonly applicationStore?: ApplicationStore;
+  readonly router?: ReactNode;
+}
+
+export function App({ applicationStore, router }: AppProps = {}) {
   return (
     <MantineProvider>
-      <BrowserRouter>
-        <main>
-          <Stack p="md">
-            <Title order={1}>mjtensu</Title>
-          </Stack>
-        </main>
-      </BrowserRouter>
+      <ApplicationStateProvider store={applicationStore}>
+        {router ?? (
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        )}
+      </ApplicationStateProvider>
     </MantineProvider>
   );
 }

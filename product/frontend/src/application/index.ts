@@ -9,6 +9,10 @@ export {
   createScoringSessionService,
 } from './scoring-session-service';
 export {
+  createApplicationStore,
+  createScoringSessionFixture,
+} from './application-store';
+export {
   createCorrectionEditorService,
   deriveCorrectionMeldGroup,
 } from './correction-draft-service';
@@ -36,3 +40,10 @@ export type {
   ScoringSessionService,
   ScoringSessionState,
 } from './scoring-session-service';
+export type {
+  ActiveScoringSessionState,
+  ApplicationStateSnapshot,
+  ApplicationStore,
+  ApplicationStoreState,
+  ScoringSessionFixtureOptions,
+} from './application-store';
