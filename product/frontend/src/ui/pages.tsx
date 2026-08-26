@@ -16,7 +16,11 @@ import {
   useNavigate,
 } from 'react-router-dom';
 
-import { createScoringSessionService } from '@/application';
+import {
+  createCorrectionEditorService,
+  createScoringSessionService,
+  selectHasActiveScoringSession,
+} from '@/application';
 import type { ScoringService } from '@/scoring';
 
 import { useApplicationStore } from './application-state';
@@ -24,13 +28,18 @@ import { ConditionsPageView } from './conditions-page';
 import {
   appRoutePaths,
   navigateAfterCalculation,
+  navigateAfterRecognitionCorrectionCancelled,
+  navigateAfterRecognitionCorrectionNeedsConditions,
+  navigateAfterRecognitionCorrectionScored,
   navigateToConditionCorrection,
   navigateToHelp,
   navigateToNewRecognition,
   navigateToRecognitionCorrection,
   navigateToTop,
 } from './navigation';
+import { RecognitionCorrectionPageView } from './recognition-correction-page';
 import { ResultPresentation } from './result-presentation';
+import { TileCorrectionEditor } from './tile-correction-editor';
 
 const deferredScoringService: ScoringService = {
   validateWinningStructure: () => ({ kind: 'valid' }),
@@ -42,6 +51,8 @@ const deferredScoringService: ScoringService = {
 
 const conditionsPageSessionService =
   createScoringSessionService(deferredScoringService);
+const correctionEditorService =
+  createCorrectionEditorService(deferredScoringService);
 
 export function ProductionShell() {
   return (
@@ -74,7 +85,7 @@ export function RequireActiveScoringSession({
   readonly children: ReactNode;
 }) {
   const hasActiveScoringSession = useApplicationStore(
-    (state) => state.activeScoringSession !== null,
+    selectHasActiveScoringSession,
   );
 
   if (!hasActiveScoringSession) {
@@ -170,6 +181,42 @@ export function ConditionsPage() {
       initialSession={activeScoringSession}
       onCalculationComplete={() => navigateAfterCalculation(navigate)}
       onSessionChange={installScoringSession}
+      renderCorrectionEditor={({ session, commitStructure }) => (
+        <TileCorrectionEditor
+          initialStructure={session.structure}
+          onCommit={commitStructure}
+          primaryActionLabel="牌姿を反映"
+          service={correctionEditorService}
+        />
+      )}
+      sessionService={conditionsPageSessionService}
+    />
+  );
+}
+
+export function RecognitionCorrectionPage() {
+  const activeScoringSession = useApplicationStore(
+    (state) => state.activeScoringSession,
+  );
+  const installScoringSession = useApplicationStore(
+    (state) => state.installScoringSession,
+  );
+  const navigate = useNavigate();
+
+  if (activeScoringSession === null) {
+    return null;
+  }
+
+  return (
+    <RecognitionCorrectionPageView
+      correctionEditorService={correctionEditorService}
+      onCancel={() => navigateAfterRecognitionCorrectionCancelled(navigate)}
+      onContinueToConditions={() =>
+        navigateAfterRecognitionCorrectionNeedsConditions(navigate)
+      }
+      onReturnToResult={() => navigateAfterRecognitionCorrectionScored(navigate)}
+      onSessionChange={installScoringSession}
+      session={activeScoringSession}
       sessionService={conditionsPageSessionService}
     />
   );

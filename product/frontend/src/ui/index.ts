@@ -3,6 +3,9 @@ export {
   appRoutePaths,
   navigateAfterCalculation,
   navigateAfterRecognitionConfirmed,
+  navigateAfterRecognitionCorrectionCancelled,
+  navigateAfterRecognitionCorrectionNeedsConditions,
+  navigateAfterRecognitionCorrectionScored,
   navigateToConditionCorrection,
   navigateToHelp,
   navigateToNewRecognition,
@@ -24,6 +27,7 @@ export {
   ConditionsPage,
   HelpPage,
   ProductionShell,
+  RecognitionCorrectionPage,
   RequireActiveScoringSession,
   ResultPage,
   TopPage,
@@ -58,5 +62,13 @@ export type {
   RecognitionPageViewProps,
   RecognitionRegion,
 } from './recognition-page';
+export {
+  RecognitionCorrectionPageView,
+} from './recognition-correction-page';
+export type {
+  RecognitionCorrectionPageViewProps,
+} from './recognition-correction-page';
 export { ResultPresentation, ScoreSummary, YakuList } from './result-presentation';
 export type { ResultPresentationProps } from './result-presentation';
+export { TileCorrectionEditor } from './tile-correction-editor';
+export type { TileCorrectionEditorProps } from './tile-correction-editor';

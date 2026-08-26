@@ -5,6 +5,7 @@ import {
   ConditionsPage,
   HelpPage,
   ProductionShell,
+  RecognitionCorrectionPage,
   RecognitionPage,
   RequireActiveScoringSession,
   ResultPage,
@@ -21,6 +22,11 @@ export const productionRouteTable = [
     name: 'recognition',
     path: appRoutePaths.recognition,
     requiresActiveScoringSession: false,
+  },
+  {
+    name: 'recognitionCorrection',
+    path: appRoutePaths.recognitionCorrection,
+    requiresActiveScoringSession: true,
   },
   {
     name: 'conditions',
@@ -45,6 +51,14 @@ export function AppRoutes() {
       <Route element={<ProductionShell />}>
         <Route path={appRoutePaths.top} element={<TopPage />} />
         <Route path={appRoutePaths.recognition} element={<RecognitionPage />} />
+        <Route
+          path={appRoutePaths.recognitionCorrection}
+          element={
+            <RequireActiveScoringSession>
+              <RecognitionCorrectionPage />
+            </RequireActiveScoringSession>
+          }
+        />
         <Route
           path={appRoutePaths.conditions}
           element={

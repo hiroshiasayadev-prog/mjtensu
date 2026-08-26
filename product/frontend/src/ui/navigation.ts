@@ -1,6 +1,7 @@
 export const appRoutePaths = {
   top: '/',
   recognition: '/recognition',
+  recognitionCorrection: '/recognition/correction',
   conditions: '/conditions',
   result: '/result',
   help: '/help',
@@ -53,5 +54,26 @@ export function navigateToConditionCorrection(
 }
 
 export function navigateToRecognitionCorrection(navigate: AppNavigate): void {
-  navigate(appRoutePaths.recognition, { state: { mode: 'correction' } });
+  navigate(appRoutePaths.recognitionCorrection);
+}
+
+export function navigateAfterRecognitionCorrectionCancelled(
+  navigate: AppNavigate,
+): void {
+  navigate(appRoutePaths.result, { replace: true });
+}
+
+export function navigateAfterRecognitionCorrectionScored(
+  navigate: AppNavigate,
+): void {
+  navigate(appRoutePaths.result, { replace: true });
+}
+
+export function navigateAfterRecognitionCorrectionNeedsConditions(
+  navigate: AppNavigate,
+): void {
+  navigate(appRoutePaths.conditions, {
+    replace: true,
+    state: { fromConfirmedRecognitionCorrection: true },
+  });
 }

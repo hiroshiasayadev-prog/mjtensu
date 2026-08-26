@@ -1,6 +1,6 @@
 # PRODUCT-TASK-UI-001-04: Implement tile correction UI
 
-- **status**: not_started
+- **status**: completed
 - **date**: 2026-08-26
 - **work_item**: PRODUCT-WORK-UI-001
 - **task_type**: implementation
@@ -54,3 +54,11 @@ The shared correction editor and Result-origin correction page implement all acc
 - `spec:product.ui.components.tile_correction_editor` and the Recognition correction page Specification define the visible interaction boundary.
 - `spec:product.system.contracts.correction_editor_api` defines the semantic draft/command/validation interface consumed here.
 - Execution results are recorded here when the Task is performed.
+- 2026-08-26: Implemented reusable `product/frontend/src/ui/tile-correction-editor.tsx` with separated hand/meld/dora regions, selector-driven add/replace/delete including red fives, tile reorder/regroup commands, meld group add/remove, explicit kan openness control, targeted validation feedback, and commit gating through `CorrectionEditorService`.
+- 2026-08-26: Implemented `product/frontend/src/ui/recognition-correction-page.tsx` and the guarded `/recognition/correction` route. Result-origin cancel leaves the existing session untouched; confirmed correction installs the corrected structure before preview, recalculates ready-with-yaku state to Result, and routes no-yaku/incomplete/invalid-input or calculation failure to Conditions without restoring the stale Result.
+- 2026-08-26: Integrated the shared correction editor into the production Conditions page through the U03 correction slot.
+- 2026-08-26: Added focused `product/frontend/test/tile-correction-ui.test.tsx` coverage for insertion without placeholders, red-five commands, replace/delete identity targeting, reorder/regroup, kan openness, local validation/readiness, and Result-origin cancel/recalculate/Conditions flow; updated route/history/result expectations for the dedicated correction route.
+- 2026-08-26: Focused verification passed: `npm test -- tile-correction-ui.test.tsx conditions-page.test.tsx result-page.test.tsx navigation-history.test.ts shell-routing.test.tsx` -> 5 files, 57 tests passed.
+- 2026-08-26: `npm run typecheck` passed.
+- 2026-08-26: `npm run lint` passed: Architecture import boundaries OK (37 source files checked).
+- 2026-08-26: React emitted existing style shorthand/non-shorthand warnings from `conditions-page.test.tsx`; they did not fail verification and are outside U04 correction semantics.

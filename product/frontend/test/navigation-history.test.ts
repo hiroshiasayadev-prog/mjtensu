@@ -4,6 +4,9 @@ import {
   appRoutePaths,
   navigateAfterCalculation,
   navigateAfterRecognitionConfirmed,
+  navigateAfterRecognitionCorrectionCancelled,
+  navigateAfterRecognitionCorrectionNeedsConditions,
+  navigateAfterRecognitionCorrectionScored,
   navigateToConditionCorrection,
   navigateToHelp,
   navigateToNewRecognition,
@@ -45,8 +48,8 @@ describe('route history helpers', () => {
         options: { state: { focus: 'seatWind' } },
       },
       {
-        destination: appRoutePaths.recognition,
-        options: { state: { mode: 'correction' } },
+        destination: appRoutePaths.recognitionCorrection,
+        options: undefined,
       },
     ]);
   });
@@ -60,6 +63,26 @@ describe('route history helpers', () => {
       {
         destination: appRoutePaths.conditions,
         options: { replace: true },
+      },
+    ]);
+  });
+
+  it('encodes Result-origin recognition-correction follow-up without stale Result restoration', () => {
+    const { calls, navigate } = navigationRecorder();
+
+    navigateAfterRecognitionCorrectionCancelled(navigate);
+    navigateAfterRecognitionCorrectionScored(navigate);
+    navigateAfterRecognitionCorrectionNeedsConditions(navigate);
+
+    expect(calls).toEqual([
+      { destination: appRoutePaths.result, options: { replace: true } },
+      { destination: appRoutePaths.result, options: { replace: true } },
+      {
+        destination: appRoutePaths.conditions,
+        options: {
+          replace: true,
+          state: { fromConfirmedRecognitionCorrection: true },
+        },
       },
     ]);
   });

@@ -26,7 +26,7 @@ function renderRoute(
 }
 
 describe('production shell routing', () => {
-  it('declares the five production routes and guards session-owned pages', () => {
+  it('declares the production routes and guards session-owned pages', () => {
     expect(productionRouteTable).toEqual([
       {
         name: 'top',
@@ -37,6 +37,11 @@ describe('production shell routing', () => {
         name: 'recognition',
         path: '/recognition',
         requiresActiveScoringSession: false,
+      },
+      {
+        name: 'recognitionCorrection',
+        path: '/recognition/correction',
+        requiresActiveScoringSession: true,
       },
       {
         name: 'conditions',
@@ -67,6 +72,7 @@ describe('production shell routing', () => {
   });
 
   it.each([
+    ['/recognition/correction', '認識結果を修正'],
     ['/conditions', '条件入力'],
     ['/result', '結果'],
   ])('renders guarded %s when an active session exists', (route, heading) => {
@@ -83,7 +89,12 @@ describe('production shell routing', () => {
     expect(screen.getByText('現在の和了牌: active-winning')).toBeVisible();
   });
 
-  it.each(['/conditions', '/result', '/conditions?winningTileId=url-only'])(
+  it.each([
+    '/recognition/correction',
+    '/conditions',
+    '/result',
+    '/conditions?winningTileId=url-only',
+  ])(
     'redirects %s to Top when no active session exists',
     (route) => {
       renderRoute(route);

@@ -300,7 +300,9 @@ describe('result page presentation', () => {
     const initialSession = applicationStore.getState().activeScoringSession;
 
     fireEvent.click(screen.getByRole('button', { name: '認識結果を修正' }));
-    expect(screen.getByRole('heading', { name: '認識' })).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: '認識結果を修正' }),
+    ).toBeVisible();
     expect(applicationStore.getState().activeScoringSession).toBe(initialSession);
   });
 
