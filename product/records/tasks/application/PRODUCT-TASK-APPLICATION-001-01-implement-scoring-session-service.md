@@ -1,6 +1,6 @@
 # PRODUCT-TASK-APPLICATION-001-01: Implement scoring session service
 
-- **status**: not_started
+- **status**: done
 - **date**: 2026-08-26
 - **work_item**: PRODUCT-WORK-APPLICATION-001
 - **task_type**: implementation
@@ -52,4 +52,16 @@ ScoringSessionService matches the accepted Application state/command contract an
 
 - `spec:product.application.scoring_session` and `spec:product.system.contracts.application_session_api` are the implementation authorities.
 - `spec:product.system.contracts.testing_strategy` requires these Application transitions at the deterministic layer.
-- Execution results are recorded here when the Task is performed.
+- Added canonical domain types for `TileInstanceId`, `TileInstance`, `RecognizedMeldGroup`, and `RecognizedStructure` in `product/frontend/src/domain/index.ts`.
+- Added the public scoring contract surface in `product/frontend/src/scoring/index.ts`, including draft/strict inputs, rule profiles, preview/calculation result types, and `ScoringService`.
+- Implemented `createScoringSessionService()` in `product/frontend/src/application/scoring-session-service.ts`.
+- Session creation now installs `INITIAL_SCORING_CONDITIONS`, preserves the explicit rule profile, selects only the rightmost completed-hand tile, and leaves `latestResult` null.
+- Session updates support completed-hand winning-tile selection, stable-ID preservation on structure replacement, corrected-rightmost fallback when the selected instance is gone or moved out of completed hand, condition/rule replacement, and score-result invalidation.
+- Preview delegates the current `ScoringDraft` to the public `ScoringService`; calculate builds strict `ScoringInput`, delegates to `ScoringService.calculate()`, and installs only successful returned calculations as `latestResult`.
+- Added focused fake-service tests in `product/frontend/test/scoring-session-service.test.ts` for defaults, identity selection, replacement matrix behavior, invalidation, preview orchestration, strict calculate orchestration, and failed-calculation non-installation.
+- Adjusted the existing condition-policy normalization implementation to avoid excessive per-draft object copying so the full deterministic condition/session suite completes within the Vitest timeout.
+- Focused verification PASS: `npm test -- scoring-session-service.test.ts scoring-condition-policy.test.ts` completed 2 test files / 38 tests.
+- Strict typecheck PASS: `npm run typecheck`.
+- Full Vitest PASS: `npm test` completed 10 test files / 82 tests.
+- Architecture lint PASS: `npm run lint` reported `Architecture import boundaries: OK (16 source files checked)`.
+- Production build PASS: `npm run build` completed TypeScript check and Vite production build successfully.
