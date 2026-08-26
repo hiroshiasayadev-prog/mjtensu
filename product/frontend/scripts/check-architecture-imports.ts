@@ -16,11 +16,38 @@ const TOP_LEVEL_MODULES = new Set([
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx']);
 
+const ALLOWED_CROSS_MODULE_DEPENDENCIES: Readonly<Record<string, ReadonlySet<string>>> = {
+  app: new Set(['application', 'camera', 'domain', 'recognition', 'scoring', 'ui']),
+  application: new Set(['camera', 'domain', 'recognition', 'scoring']),
+  camera: new Set(['domain']),
+  domain: new Set(),
+  recognition: new Set(['domain']),
+  scoring: new Set(['domain']),
+  ui: new Set(['application', 'camera', 'domain', 'recognition', 'scoring']),
+};
+
+const ZUSTAND_RUNTIME_RESOURCE_IDENTIFIERS = new Set([
+  'InferenceSession',
+  'MediaStream',
+  'MediaStreamTrack',
+  'MediaDevices',
+  'HTMLVideoElement',
+  'VideoFrame',
+  'ImageBitmap',
+  'CameraService',
+  'RecognitionModelAssets',
+  'RecognitionRuntime',
+  'ScoringService',
+  'ScoringSessionService',
+]);
+
 type ArchitectureRule =
   | 'cross-feature-public-entry'
+  | 'top-level-dependency-direction'
   | 'recognition-no-ui'
   | 'ui-application-no-onnxruntime-web'
-  | 'ui-application-no-concrete-agari-wasm';
+  | 'ui-application-no-concrete-agari-wasm'
+  | 'zustand-no-runtime-resource-state';
 
 export interface ArchitectureViolation {
   readonly rule: ArchitectureRule;
@@ -249,13 +276,41 @@ function isConcreteAgariWasmImport(specifier: string): boolean {
   return normalized.includes('agari') && normalized.includes('wasm');
 }
 
+function isZustandImport(specifier: string): boolean {
+  return specifier === 'zustand' || specifier.startsWith('zustand/');
+}
+
+function isAllowedCrossModuleDependency(importerModule: string, targetModule: string): boolean {
+  return ALLOWED_CROSS_MODULE_DEPENDENCIES[importerModule]?.has(targetModule) ?? false;
+}
+
+function findRuntimeResourceReference(
+  sourceText: string,
+): { identifier: string; position: number } | null {
+  const scanner = createScanner(true, undefined, sourceText);
+  let token = scanner.scan();
+
+  while (token !== SyntaxKind.EndOfFile) {
+    if (token === SyntaxKind.Identifier) {
+      const identifier = scanner.getTokenValue();
+      if (ZUSTAND_RUNTIME_RESOURCE_IDENTIFIERS.has(identifier)) {
+        return { identifier, position: scanner.getTokenStart() };
+      }
+    }
+    token = scanner.scan();
+  }
+
+  return null;
+}
+
 export function analyzeSourceText(options: AnalyzeSourceOptions): ArchitectureViolation[] {
   const filePath = resolve(options.filePath);
   const srcRoot = resolve(options.srcRoot);
   const importerModule = moduleForFile(filePath, srcRoot);
   const violations: ArchitectureViolation[] = [];
+  const importReferences = collectImportReferences(options.sourceText);
 
-  for (const reference of collectImportReferences(options.sourceText)) {
+  for (const reference of importReferences) {
     const { specifier } = reference;
 
     if (importerModule === 'ui' || importerModule === 'application') {
@@ -304,6 +359,22 @@ export function analyzeSourceText(options: AnalyzeSourceOptions): ArchitectureVi
       continue;
     }
 
+    if (
+      importerModule !== null &&
+      !isAllowedCrossModuleDependency(importerModule, target.moduleName)
+    ) {
+      violations.push(
+        makeViolation(
+          options.sourceText,
+          filePath,
+          reference,
+          'top-level-dependency-direction',
+          `${importerModule} must not depend on ${target.moduleName}.`,
+        ),
+      );
+      continue;
+    }
+
     if (!isPublicEntryTarget(target.remainder)) {
       violations.push(
         makeViolation(
@@ -312,6 +383,21 @@ export function analyzeSourceText(options: AnalyzeSourceOptions): ArchitectureVi
           reference,
           'cross-feature-public-entry',
           `Cross-module import into ${target.moduleName} must use its public index entry point.`,
+        ),
+      );
+    }
+  }
+
+  if (importerModule === 'application' && importReferences.some(({ specifier }) => isZustandImport(specifier))) {
+    const runtimeResource = findRuntimeResourceReference(options.sourceText);
+    if (runtimeResource !== null) {
+      violations.push(
+        makeViolation(
+          options.sourceText,
+          filePath,
+          { specifier: runtimeResource.identifier, position: runtimeResource.position },
+          'zustand-no-runtime-resource-state',
+          `Application Zustand state must not own app-lifetime runtime/resource type ${runtimeResource.identifier}.`,
         ),
       );
     }

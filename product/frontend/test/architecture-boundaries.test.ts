@@ -47,6 +47,66 @@ describe('architecture import boundaries', () => {
     ]);
   });
 
+  it('accepts the top-level dependency directions allowed by the architecture contract', () => {
+    const applicationViolations = analyze(
+      'application/example.ts',
+      [
+        "import type { CameraPort } from '@/camera';",
+        "import type { Tile } from '@/domain';",
+        "import type { RecognitionPort } from '@/recognition';",
+        "import type { ScoringPort } from '@/scoring';",
+      ].join('\n'),
+    );
+    const uiViolations = analyze(
+      'ui/example.ts',
+      [
+        "import type { ApplicationPort } from '@/application';",
+        "import type { CameraPort } from '@/camera';",
+        "import type { Tile } from '@/domain';",
+        "import type { RecognitionPort } from '@/recognition';",
+        "import type { ScoringPort } from '@/scoring';",
+      ].join('\n'),
+    );
+    const appViolations = analyze(
+      'app/example.ts',
+      [
+        "import * as application from '@/application';",
+        "import * as camera from '@/camera';",
+        "import * as domain from '@/domain';",
+        "import * as recognition from '@/recognition';",
+        "import * as scoring from '@/scoring';",
+        "import * as ui from '@/ui';",
+      ].join('\n'),
+    );
+
+    expect(applicationViolations).toEqual([]);
+    expect(uiViolations).toEqual([]);
+    expect(appViolations).toEqual([]);
+  });
+
+  it('rejects forbidden top-level dependency directions even through public entries', () => {
+    const domainViolations = analyze('domain/example.ts', "import * as ui from '@/ui';");
+    const cameraViolations = analyze(
+      'camera/example.ts',
+      "import * as recognition from '@/recognition';",
+    );
+    const scoringViolations = analyze(
+      'scoring/example.ts',
+      "import * as application from '@/application';",
+    );
+    const uiToAppViolations = analyze('ui/example.ts', "import * as app from '@/app';");
+
+    for (const violations of [
+      domainViolations,
+      cameraViolations,
+      scoringViolations,
+      uiToAppViolations,
+    ]) {
+      expect(violations).toHaveLength(1);
+      expect(violations[0]?.rule).toBe('top-level-dependency-direction');
+    }
+  });
+
   it('covers re-exports and dynamic imports without treating comments or strings as imports', () => {
     const violations = analyze(
       'ui/example.ts',
@@ -109,6 +169,46 @@ describe('architecture import boundaries', () => {
     const violations = analyze(
       'recognition/infra/onnx-runtime.ts',
       "import * as ort from 'onnxruntime-web';",
+    );
+
+    expect(violations).toEqual([]);
+  });
+
+  it('rejects runtime-resource ownership in Application Zustand state', () => {
+    const runtimeIdentifiers = [
+      'InferenceSession',
+      'MediaStream',
+      'RecognitionRuntime',
+      'CameraService',
+      'ScoringService',
+    ];
+
+    for (const runtimeIdentifier of runtimeIdentifiers) {
+      const violations = analyze(
+        'application/store.ts',
+        [
+          "import { create } from 'zustand';",
+          `interface StoreState { runtime: ${runtimeIdentifier} | null }`,
+          'export const useStore = create<StoreState>()(() => ({ runtime: null }));',
+        ].join('\n'),
+      );
+
+      expect(violations).toHaveLength(1);
+      expect(violations[0]?.rule).toBe('zustand-no-runtime-resource-state');
+      expect(violations[0]?.specifier).toBe(runtimeIdentifier);
+    }
+  });
+
+  it('accepts semantic Application Zustand state and ignores resource names in comments or strings', () => {
+    const violations = analyze(
+      'application/store.ts',
+      [
+        "import { create } from 'zustand';",
+        '// MediaStream and RecognitionRuntime are intentionally not state fields.',
+        "const note = 'InferenceSession';",
+        'interface StoreState { sessionId: string | null; score: number | null }',
+        'export const useStore = create<StoreState>()(() => ({ sessionId: null, score: null }));',
+      ].join('\n'),
     );
 
     expect(violations).toEqual([]);

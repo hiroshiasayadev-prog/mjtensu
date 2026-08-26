@@ -13,6 +13,8 @@
   - PRODUCT-TASK-SYSTEM-001-03
   - PRODUCT-TASK-SYSTEM-001-04
   - PRODUCT-TASK-SYSTEM-001-05
+  - PRODUCT-TASK-SYSTEM-001-06
+  - PRODUCT-TASK-SYSTEM-001-07
 
 ## Goal
 
@@ -41,6 +43,8 @@ T01 bootstrap production project/module skeleton
   +-> T03 architecture/static enforcement
 
 T01 + T02 + T03 -> T04 objective bootstrap verification -> T05 independent integrated review
+                                                        +-> T06 correct F-MAJ-01
+                                                        +-> T07 correct F-MAJ-02
 ```
 
 T02 and T03 may proceed in parallel after T01 establishes the project root and package/tool configuration surface.
@@ -54,6 +58,8 @@ T02 and T03 may proceed in parallel after T01 establishes the project root and p
 | PRODUCT-TASK-SYSTEM-001-03 | implementation | Implement mechanical architecture/static import-boundary enforcement. | T01 |
 | PRODUCT-TASK-SYSTEM-001-04 | verification | Execute the objective bootstrap gate across build, typecheck, lint/architecture, unit/component smoke, and Playwright smoke. | T01, T02, T03 |
 | PRODUCT-TASK-SYSTEM-001-05 | review | Independently review the complete bootstrap/test-harness implementation boundary. | T04 |
+| PRODUCT-TASK-SYSTEM-001-06 | correction | Correct T05 F-MAJ-01 by enforcing accepted top-level module dependency direction. | T05 |
+| PRODUCT-TASK-SYSTEM-001-07 | correction | Correct T05 F-MAJ-02 by adding the required Zustand runtime-resource state guard. | T05 |
 
 ## Completion Condition
 
@@ -63,10 +69,12 @@ T02 and T03 may proceed in parallel after T01 establishes the project root and p
 - Vitest, Testing Library, and Playwright can execute at least one non-placeholder smoke path.
 - Architecture/static rules fail on prohibited private/concrete-library imports.
 - PRODUCT-TASK-SYSTEM-001-04 records PASS for the objective bootstrap gate.
-- PRODUCT-TASK-SYSTEM-001-05 records an independent PASS with no unresolved findings.
+- The independent bootstrap review has no unresolved findings; if an earlier review returned NEEDS REVISION, every named finding is corrected and independently closed before this Work Item completes.
 
 ## Evidence
 
 - PRODUCT-ADR-SYSTEM-001 fixes the production frontend stack.
 - `spec:product.system.architecture` fixes module/dependency/public-entry-point boundaries.
 - `spec:product.system.contracts.testing_strategy` fixes the production test toolchain and verification layers.
+- T04 completed the objective bootstrap gate with PASS on all predefined checks.
+- T05 returned NEEDS REVISION with F-MAJ-01 and F-MAJ-02; those findings are routed independently to T06 and T07.
