@@ -16,6 +16,25 @@ export type {
   TensorOutput,
 } from './detector/types';
 export type { TileClassification } from './classifier/labels';
+export type {
+  RecognitionFrame,
+  RecognitionFrameSource,
+  RecognitionPipeline,
+  RecognitionRun,
+  RecognitionRuntime,
+  RealtimeRecognitionListener,
+  RealtimeRecognitionUpdate,
+  RealtimeRecognizer,
+  Size,
+} from './contracts';
+export {
+  createRealtimeRecognizer,
+  RECOGNITION_REQUEST_CADENCE_MS,
+} from './realtime-recognizer';
+export { createProductionRecognitionRuntime } from './production-runtime';
+export type {
+  ProductionRecognitionRuntimeOptions,
+} from './production-runtime';
 export { buildFrameRecognitionSnapshot } from './semantics/frame-semantics';
 export {
   areFrameRecognitionDraftsEqual,

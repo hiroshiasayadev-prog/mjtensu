@@ -4,9 +4,15 @@ import {
   type RecognitionModelRuntimeSpec,
 } from './types';
 
+export interface RuntimeSpecClassifierNormalization {
+  readonly mean: readonly number[];
+  readonly std: readonly number[];
+}
+
 export interface RecognitionRuntimeSpecDescriptor {
   readonly runtimeSpec: RecognitionModelRuntimeSpec;
   readonly role: RecognitionModelRole;
+  readonly classifierNormalization?: RuntimeSpecClassifierNormalization | null;
 }
 
 const RUNTIME_SPEC_DESCRIPTORS = {
@@ -17,10 +23,18 @@ const RUNTIME_SPEC_DESCRIPTORS = {
   'c8-tile-35-v1': {
     runtimeSpec: 'c8-tile-35-v1',
     role: 'tile-classifier',
+    classifierNormalization: {
+      mean: [0.68306223733377514],
+      std: [0.27237886485683077],
+    },
   },
   'c8-red-five-v1': {
     runtimeSpec: 'c8-red-five-v1',
     role: 'red-five-classifier',
+    classifierNormalization: {
+      mean: [0.66025093606229934, 0.69172744263865471, 0.6489080530422624],
+      std: [0.30491469480493394, 0.24924454491506576, 0.27107025824445752],
+    },
   },
 } as const satisfies Record<
   RecognitionModelRuntimeSpec,
@@ -42,4 +56,17 @@ export function getRecognitionRuntimeSpecDescriptor(
   runtimeSpec: RecognitionModelRuntimeSpec,
 ): RecognitionRuntimeSpecDescriptor {
   return RUNTIME_SPEC_DESCRIPTORS[runtimeSpec];
+}
+
+export function getRecognitionClassifierNormalization(
+  runtimeSpec: RecognitionModelRuntimeSpec,
+): RuntimeSpecClassifierNormalization | null {
+  const descriptor = RUNTIME_SPEC_DESCRIPTORS[runtimeSpec];
+  if (
+    descriptor.role !== 'tile-classifier' &&
+    descriptor.role !== 'red-five-classifier'
+  ) {
+    return null;
+  }
+  return descriptor.classifierNormalization;
 }

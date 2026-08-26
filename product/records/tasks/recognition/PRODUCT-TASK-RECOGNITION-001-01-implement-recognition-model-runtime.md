@@ -1,6 +1,6 @@
 # PRODUCT-TASK-RECOGNITION-001-01: Implement recognition model runtime
 
-- **status**: in_progress
+- **status**: completed
 - **date**: 2026-08-26
 - **work_item**: PRODUCT-WORK-RECOGNITION-001
 - **task_type**: implementation
@@ -57,5 +57,8 @@ The three-role production model runtime satisfies the model-runtime contract, in
 - `product/frontend/package.json` now declares `onnxruntime-web` `1.27.0`, matching the already-used recognition PWA runtime tooling rather than changing runtime-library behavior during this Task.
 - Focused coverage is added in `product/frontend/test/recognition-model-runtime.test.ts` for manifest incompatibility, prefetch/runtime acquisition deduplication, integrity and unavailable-asset normalization, initialization idempotence/concurrency, per-role provider fallback, provider exhaustion, failure-then-success retry, public ORT-type isolation, and runtime-owned disposal.
 - Actual production ONNX artifact loading remains deferred to PRODUCT-TASK-RECOGNITION-001-06 as required.
-- Verification is pending local dependency installation/lockfile update and execution of the declared Vitest/typecheck/lint/build commands; do not mark this Task `done` until those results are recorded.
-- The recorded SYSTEM T05 review verdict is still `NEEDS REVISION`; T06 and T07 record both named corrections as `done`, but the bootstrap review gate must be re-established as PASS before R01 completion is treated as dependency-clean.
+- Focused verification was re-established on 2026-08-27 from `product/frontend`: the combined Recognition suite passed with 6 test files / 50 tests, including `recognition-model-runtime.test.ts` with 11/11 passing; `npm run typecheck` passed with no diagnostics; and `npm run lint` passed with `Architecture import boundaries: OK (51 source files checked)`.
+- SYSTEM T05's two major findings are both closed by completed correction Tasks T06 (top-level dependency-direction gate) and T07 (Zustand runtime-resource guard). Both correction Tasks record focused tests, typecheck, lint, and production build PASS, so the stale pre-correction T05 `NEEDS REVISION` note no longer blocks this dependency.
+- The configured provider preference remains `wasm-simd -> wasm-threaded -> webgl`; focused model-runtime coverage exercises first-choice success, independent per-role fallback, provider exhaustion, retry, initialization deduplication, asset integrity/acquisition failures, and app-lifetime disposal ownership.
+- Actual production ONNX artifact loading remains intentionally deferred to PRODUCT-TASK-RECOGNITION-001-06, as required by this Task's scope.
+- R01 implementation and focused verification are complete.
