@@ -18,7 +18,8 @@
     "build:browser-verification": "vite build --mode browser-verification",
     "test:e2e": "npm run build:browser-verification && playwright test",
     "test:browser-verification": "npm run test:e2e",
-    "test:e2e:install": "playwright install chromium"
+    "test:e2e:install": "playwright install chromium",
+    "assets:tiles": "node scripts/generate-tile-assets.mjs"
   },
   "dependencies": {
     "@mantine/core": "^9.5.2",
