@@ -191,6 +191,20 @@ describe('RecognitionPageView preparation and capture surface', () => {
         (16 / 9),
     ).toBeCloseTo(1, 8);
     expect(screen.queryByText(/14/)).not.toBeInTheDocument();
+
+    const dora = RECOGNITION_CAPTURE_REGIONS['dora-indicators'];
+    const hand = RECOGNITION_CAPTURE_REGIONS['completed-hand'];
+    const verticalGap = hand.y - (dora.y + dora.height);
+    expect(verticalGap).toBeGreaterThanOrEqual(0);
+    expect(verticalGap).toBeLessThan(0.05);
+
+    const viewport = screen.getByTestId('recognition-viewport');
+    const captureSurface = screen.getByTestId('recognition-capture-surface');
+    expect(viewport.style.position).toBe('fixed');
+    expect(viewport.style.inset).toBe('0px');
+    expect(captureSurface.style.width).toBe('min(100vw, 177.7778dvh)');
+    expect(captureSurface.style.height).toBe('min(100dvh, 56.25vw)');
+    expect(screen.getByRole('button', { name: '認識を終了' })).toBeVisible();
   });
 
   it('opens camera and runtime in parallel, exposes preview first, then starts realtime only when both are ready', async () => {

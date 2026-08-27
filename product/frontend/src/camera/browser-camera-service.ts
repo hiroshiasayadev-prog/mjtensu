@@ -49,6 +49,7 @@ export function createBrowserCameraService(
 class BrowserCameraSession implements CameraSession {
   readonly preview: CameraPreview;
   private attachedVideo: HTMLVideoElement | null = null;
+  private playbackRetryTarget: HTMLVideoElement | null = null;
   private stopped = false;
 
   constructor(
@@ -82,7 +83,17 @@ class BrowserCameraSession implements CameraSession {
       return null;
     }
 
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    try {
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    } catch (error) {
+      if (isTransientVideoFrameError(error)) {
+        // Safari can expose readyState/video dimensions just before the first
+        // decoded frame is drawable after camera permission. This is warmup,
+        // not a Recognition inference failure; the realtime loop will retry.
+        return null;
+      }
+      throw error;
+    }
     return {
       image: canvas,
       size: { width: canvas.width, height: canvas.height },
@@ -110,14 +121,62 @@ class BrowserCameraSession implements CameraSession {
       this.detachPreview();
     }
 
+    this.clearPlaybackRetry();
     this.attachedVideo = video;
     video.srcObject = this.stream;
     video.muted = true;
     video.playsInline = true;
+    if (video.readyState >= 2) {
+      this.startPreviewPlayback(video);
+    } else {
+      this.waitForPreviewData(video);
+    }
+  }
+
+  private startPreviewPlayback(video: HTMLVideoElement): void {
     void video.play().catch(() => {
-      // Presentation readiness is reflected by captureLatest() returning null
-      // until the browser exposes a usable current frame.
+      if (this.stopped || this.attachedVideo !== video) {
+        return;
+      }
+
+      // A newly-permitted iOS camera may still be transitioning even after
+      // media data becomes visible. Retry once without reopening the healthy
+      // camera session; captureLatest() keeps returning null during warmup.
+      void Promise.resolve().then(() => {
+        if (this.stopped || this.attachedVideo !== video) {
+          return;
+        }
+        void video.play().catch(() => undefined);
+      });
     });
+  }
+
+  private waitForPreviewData(video: HTMLVideoElement): void {
+    this.clearPlaybackRetry();
+    this.playbackRetryTarget = video;
+    video.addEventListener(
+      'loadeddata',
+      this.retryPreviewPlayback,
+      { once: true },
+    );
+  }
+
+  private readonly retryPreviewPlayback = () => {
+    const video = this.playbackRetryTarget;
+    this.playbackRetryTarget = null;
+    if (video === null || this.stopped || this.attachedVideo !== video) {
+      return;
+    }
+    this.startPreviewPlayback(video);
+  };
+
+  private clearPlaybackRetry(): void {
+    const video = this.playbackRetryTarget;
+    if (video === null) {
+      return;
+    }
+    this.playbackRetryTarget = null;
+    video.removeEventListener('loadeddata', this.retryPreviewPlayback);
   }
 
   private detachPreview(): void {
@@ -127,6 +186,7 @@ class BrowserCameraSession implements CameraSession {
     }
 
     this.attachedVideo = null;
+    this.clearPlaybackRetry();
     try {
       video.pause();
     } catch {
@@ -163,6 +223,11 @@ function normalizeCameraOpenError(cause: unknown): CameraRuntimeError {
     default:
       return { kind: 'runtime-failure', cause };
   }
+}
+
+function isTransientVideoFrameError(value: unknown): boolean {
+  const name = domExceptionName(value);
+  return name === 'InvalidStateError' || name === 'AbortError';
 }
 
 function domExceptionName(value: unknown): string | null {

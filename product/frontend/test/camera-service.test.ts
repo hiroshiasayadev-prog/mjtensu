@@ -76,6 +76,102 @@ describe('browser CameraService', () => {
     expect(track.stop).toHaveBeenCalledTimes(1);
   });
 
+  it('treats a transient first-frame draw failure as camera warmup instead of fatal Recognition failure', async () => {
+    const stream = {
+      getTracks: () => [{ stop: vi.fn() }],
+    } as unknown as MediaStream;
+    const drawImage = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw { name: 'InvalidStateError' };
+      })
+      .mockImplementation(() => undefined);
+    const canvases: HTMLCanvasElement[] = [];
+    const service = createBrowserCameraService({
+      mediaDevices: {
+        getUserMedia: vi.fn(async () => stream),
+      } as unknown as Pick<MediaDevices, 'getUserMedia'>,
+      createCanvas: () => {
+        const canvas = {
+          width: 0,
+          height: 0,
+          getContext: () => ({ drawImage }),
+        } as unknown as HTMLCanvasElement;
+        canvases.push(canvas);
+        return canvas;
+      },
+      now: () => 5678,
+    });
+    const session = await service.open({ facingMode: 'environment' });
+    const video = document.createElement('video');
+    Object.defineProperties(video, {
+      readyState: { configurable: true, value: 2 },
+      videoWidth: { configurable: true, value: 1280 },
+      videoHeight: { configurable: true, value: 720 },
+    });
+    video.play = vi.fn(async () => undefined);
+    video.pause = vi.fn();
+    session.preview.attach(video);
+
+    expect(session.captureLatest()).toBeNull();
+    expect(session.captureLatest()).toEqual({
+      image: canvases[1],
+      size: { width: 1280, height: 720 },
+      capturedAtMs: 5678,
+    });
+  });
+
+  it('waits for attached video data before explicitly starting preview playback', async () => {
+    const stream = {
+      getTracks: () => [{ stop: vi.fn() }],
+    } as unknown as MediaStream;
+    const service = createBrowserCameraService({
+      mediaDevices: {
+        getUserMedia: vi.fn(async () => stream),
+      } as unknown as Pick<MediaDevices, 'getUserMedia'>,
+    });
+    const session = await service.open({ facingMode: 'environment' });
+    const video = document.createElement('video');
+    const play = vi.fn(async () => undefined);
+    video.play = play;
+    video.pause = vi.fn();
+
+    session.preview.attach(video);
+    expect(play).not.toHaveBeenCalled();
+
+    video.dispatchEvent(new Event('loadeddata'));
+    await Promise.resolve();
+
+    expect(play).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a transient first preview play rejection without reopening the camera', async () => {
+    const stream = {
+      getTracks: () => [{ stop: vi.fn() }],
+    } as unknown as MediaStream;
+    const service = createBrowserCameraService({
+      mediaDevices: {
+        getUserMedia: vi.fn(async () => stream),
+      } as unknown as Pick<MediaDevices, 'getUserMedia'>,
+    });
+    const session = await service.open({ facingMode: 'environment' });
+    const video = document.createElement('video');
+    Object.defineProperty(video, 'readyState', { configurable: true, value: 2 });
+    const play = vi
+      .fn<HTMLMediaElement['play']>()
+      .mockRejectedValueOnce({ name: 'AbortError' })
+      .mockResolvedValueOnce(undefined);
+    video.play = play;
+    video.pause = vi.fn();
+
+    session.preview.attach(video);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(play).toHaveBeenCalledTimes(2);
+  });
+
   it('normalizes browser camera failures at the Camera boundary', async () => {
     const service = createBrowserCameraService({
       mediaDevices: {

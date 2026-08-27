@@ -70,13 +70,13 @@ export function RecognitionPageServicesProvider({
 export const RECOGNITION_CAPTURE_REGIONS = {
   'dora-indicators': {
     x: 0.04,
-    y: 0.08,
+    y: 0.22,
     width: 0.62,
     height: 0.2593464052,
   },
   'completed-hand': {
     x: 0.04,
-    y: 0.6606535948,
+    y: 0.5,
     width: 0.62,
     height: 0.2593464052,
   },
@@ -293,22 +293,27 @@ export function RecognitionPageView({
   );
 
   return (
-    <Stack gap="md" py="md">
-      <Group justify="space-between" align="center">
-        <Title order={1}>認識</Title>
-        <Button variant="subtle" onClick={onAbandon}>
-          トップへ戻る
-        </Button>
-      </Group>
-
+    <Box
+      data-testid="recognition-viewport"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        background: '#000',
+      }}
+    >
       <Box
         data-testid="recognition-capture-surface"
         style={{
           position: 'relative',
-          width: '100%',
+          width: 'min(100vw, 177.7778dvh)',
+          height: 'min(100dvh, 56.25vw)',
           aspectRatio: '16 / 9',
           overflow: 'hidden',
-          borderRadius: 8,
           background: '#111',
         }}
       >
@@ -330,16 +335,25 @@ export function RecognitionPageView({
             />
             <CaptureRegionOverlay snapshot={snapshot} />
           </>
-        ) : cameraStatus === 'failed' ? (
-          <OwnedRecoveryPanel
-            owner="camera"
-            message={cameraErrorMessage(cameraError)}
-            onRetry={prepareCamera}
-            onTop={onAbandon}
-          />
         ) : (
           <CaptureRegionOverlay snapshot={null} />
         )}
+
+        <Button
+          aria-label="認識を終了"
+          size="compact-sm"
+          variant="light"
+          onClick={onAbandon}
+          style={{
+            position: 'absolute',
+            top: 'max(10px, env(safe-area-inset-top))',
+            right: 'max(10px, env(safe-area-inset-right))',
+            zIndex: 20,
+            background: 'rgba(255,255,255,0.92)',
+          }}
+        >
+          終了
+        </Button>
 
         {cameraStatus !== 'failed' && runtimeStatus !== 'failed' ? (
           <Paper
@@ -351,14 +365,24 @@ export function RecognitionPageView({
             style={{
               position: 'absolute',
               left: '50%',
-              bottom: 12,
+              bottom: 'max(10px, env(safe-area-inset-bottom))',
               transform: 'translateX(-50%)',
               whiteSpace: 'nowrap',
               background: 'rgba(255,255,255,0.9)',
+              zIndex: 20,
             }}
           >
             <Text size="sm">{preparationMessage}</Text>
           </Paper>
+        ) : null}
+
+        {cameraStatus === 'failed' && runtimeStatus !== 'failed' ? (
+          <OwnedRecoveryPanel
+            owner="camera"
+            message={cameraErrorMessage(cameraError)}
+            onRetry={prepareCamera}
+            onTop={onAbandon}
+          />
         ) : null}
 
         {cameraStatus !== 'failed' && runtimeStatus === 'failed' ? (
@@ -369,24 +393,57 @@ export function RecognitionPageView({
             onTop={onAbandon}
           />
         ) : null}
+
+        {cameraStatus === 'failed' && runtimeStatus === 'failed' ? (
+          <Stack
+            gap="sm"
+            style={{
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              width: 'min(90%, 420px)',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 20,
+            }}
+          >
+            <OwnedRecoveryPanel
+              owner="camera"
+              message={cameraErrorMessage(cameraError)}
+              onRetry={prepareCamera}
+              onTop={onAbandon}
+              inline
+            />
+            <OwnedRecoveryPanel
+              owner="recognition"
+              message={runtimeErrorMessage(runtimeError)}
+              onRetry={prepareRuntime}
+              onTop={onAbandon}
+              inline
+            />
+          </Stack>
+        ) : null}
+
+        {!isLandscape ? (
+          <Paper
+            role="note"
+            px="sm"
+            py={6}
+            radius="md"
+            style={{
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              transform: 'translate(-50%, -50%)',
+              whiteSpace: 'nowrap',
+              background: 'rgba(255,255,255,0.92)',
+              zIndex: 20,
+            }}
+          >
+            <Text size="sm">認識を開始するには端末を横向きにしてください。</Text>
+          </Paper>
+        ) : null}
       </Box>
-
-      {cameraStatus === 'failed' && runtimeStatus === 'failed' ? (
-        <OwnedRecoveryPanel
-          owner="recognition"
-          message={runtimeErrorMessage(runtimeError)}
-          onRetry={prepareRuntime}
-          onTop={onAbandon}
-          inline
-        />
-      ) : null}
-
-      {!isLandscape ? (
-        <Text role="note" size="sm" c="dimmed">
-          認識を開始するには端末を横向きにしてください。
-        </Text>
-      ) : null}
-    </Stack>
+    </Box>
   );
 }
 
