@@ -131,13 +131,17 @@ function scoringService(
   );
 }
 
-function renderEditor(initialStructure: RecognizedStructure = structure(closedWinningHand)) {
+function renderEditor(
+  initialStructure: RecognizedStructure = structure(closedWinningHand),
+  options: { readonly autoCommitValidChanges?: boolean } = {},
+) {
   const service = createCorrectionEditorService(scoringService());
   const update = vi.spyOn(service, 'update');
   const onCommit = vi.fn();
 
   render(
     <TileCorrectionEditor
+      autoCommitValidChanges={options.autoCommitValidChanges}
       initialStructure={initialStructure}
       onCommit={onCommit}
       service={service}
@@ -166,6 +170,30 @@ function resultOriginSession(
 }
 
 describe('TileCorrectionEditor', () => {
+  it('auto-commits valid edits without rendering a separate confirmation action', () => {
+    const { onCommit } = renderEditor(structure(closedWinningHand), {
+      autoCommitValidChanges: true,
+    });
+
+    expect(screen.queryByRole('button', { name: '修正を確定' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'ドラ表示牌に追加' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: '牌を選択' })).getByRole('button', {
+        name: '4p',
+      }),
+    );
+
+    expect(onCommit).toHaveBeenCalledOnce();
+    expect(onCommit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        doraIndicators: [
+          expect.objectContaining({ tile: { kind: '4p', red: false } }),
+        ],
+      }),
+    );
+  });
+
   it('opens insertion without a placeholder and emits add only after choosing a red five', () => {
     const { update } = renderEditor();
 

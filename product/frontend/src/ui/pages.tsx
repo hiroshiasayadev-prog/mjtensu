@@ -213,9 +213,9 @@ export function ConditionsPage() {
           ? undefined
           : ({ session, commitStructure }) => (
               <TileCorrectionEditor
+                autoCommitValidChanges
                 initialStructure={session.structure}
                 onCommit={commitStructure}
-                primaryActionLabel="牌姿を反映"
                 service={scoringFlowServices.correctionEditor}
               />
             )

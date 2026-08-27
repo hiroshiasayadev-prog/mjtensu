@@ -362,6 +362,52 @@ describe('RecognitionPageView live feedback', () => {
     expect(
       screen.getByLabelText('暗槓プレビュー 裏 5s 5s 裏'),
     ).toBeVisible();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '認識しています（有効牌 3/10、手牌 1/2）',
+    );
+
+    act(() => {
+      recognizer.getListener()?.onUpdate({ kind: 'stabilizing', snapshot });
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '認識結果を安定確認しています',
+    );
+  });
+
+  it('surfaces unresolved meld geometry instead of an opaque scanning state', async () => {
+    const cameraSession = createCameraSession();
+    const recognizer = createRecognizerHarness();
+
+    renderView({
+      camera: { open: async () => cameraSession.session },
+      runtime: createRuntime(),
+      recognizer: recognizer.recognizer,
+    });
+
+    await waitFor(() => expect(recognizer.start).toHaveBeenCalledTimes(1));
+
+    const snapshot: FrameRecognitionSnapshot = {
+      observations: [],
+      meldGroups: [],
+      draft: {
+        completedHand: [],
+        doraIndicators: [],
+        meldGroups: [],
+      },
+      commitEligibility: {
+        kind: 'ineligible',
+        reason: 'unresolved-meld-geometry',
+      },
+    };
+
+    act(() => {
+      recognizer.getListener()?.onUpdate({ kind: 'scanning', snapshot });
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '副露の配置を調整してください',
+    );
   });
 });
 

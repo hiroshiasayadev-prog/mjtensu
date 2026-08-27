@@ -113,6 +113,9 @@ export function RecognitionPageView({
   const [runtimeError, setRuntimeError] = useState<unknown>(null);
   const [cameraSession, setCameraSession] = useState<CameraSession | null>(null);
   const [snapshot, setSnapshot] = useState<FrameRecognitionSnapshot | null>(null);
+  const [recognitionProgress, setRecognitionProgress] = useState<
+    'scanning' | 'stabilizing' | null
+  >(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mountedRef = useRef(false);
   const cameraAttemptRef = useRef(0);
@@ -150,6 +153,7 @@ export function RecognitionPageView({
     setRuntimeStatus('preparing');
     setRuntimeError(null);
     setSnapshot(null);
+    setRecognitionProgress(null);
 
     void runtime.initialize().then(
       () => {
@@ -201,6 +205,7 @@ export function RecognitionPageView({
     setRuntimeStatus('failed');
     setRuntimeError(error);
     setSnapshot(null);
+    setRecognitionProgress(null);
   }, []);
 
   useEffect(() => {
@@ -244,6 +249,7 @@ export function RecognitionPageView({
           }
 
           setSnapshot(update.snapshot);
+          setRecognitionProgress(update.kind);
         },
         onError(error) {
           if (!active || !mountedRef.current || committedRef.current) {
@@ -282,6 +288,8 @@ export function RecognitionPageView({
     cameraStatus,
     runtimeStatus,
     isLandscape,
+    recognitionProgress,
+    snapshot,
   );
 
   return (
@@ -783,6 +791,8 @@ function getPreparationMessage(
   cameraStatus: PreparationStatus,
   runtimeStatus: PreparationStatus,
   isLandscape: boolean,
+  recognitionProgress: 'scanning' | 'stabilizing' | null,
+  snapshot: FrameRecognitionSnapshot | null,
 ): string {
   if (cameraStatus !== 'ready') {
     return 'カメラを起動しています';
@@ -793,7 +803,32 @@ function getPreparationMessage(
   if (!isLandscape) {
     return '端末を横向きにしてください';
   }
+  if (recognitionProgress === 'stabilizing') {
+    return '認識結果を安定確認しています';
+  }
+  if (
+    recognitionProgress === 'scanning' &&
+    snapshot?.commitEligibility.kind === 'ineligible'
+  ) {
+    if (snapshot.commitEligibility.reason === 'unresolved-meld-geometry') {
+      return '副露の配置を調整してください';
+    }
+
+    const completedHandTiles = countRecognizedTiles(snapshot, 'completed-hand');
+    const meldTiles = countRecognizedTiles(snapshot, 'melds');
+    return `認識しています（有効牌 ${completedHandTiles + meldTiles}/10、手牌 ${completedHandTiles}/2）`;
+  }
   return '認識しています';
+}
+
+function countRecognizedTiles(
+  snapshot: FrameRecognitionSnapshot,
+  region: RecognitionRegion,
+): number {
+  return snapshot.observations.filter(
+    (observation) =>
+      observation.region === region && observation.classification.kind === 'tile',
+  ).length;
 }
 
 function cameraErrorMessage(error: unknown): string {

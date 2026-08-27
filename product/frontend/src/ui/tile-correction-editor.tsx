@@ -27,6 +27,7 @@ export interface TileCorrectionEditorProps {
   readonly service: CorrectionEditorService;
   readonly onCommit: (structure: RecognizedStructure) => void;
   readonly primaryActionLabel?: string;
+  readonly autoCommitValidChanges?: boolean;
 }
 
 type SelectorState =
@@ -186,6 +187,7 @@ export function TileCorrectionEditor({
   service,
   onCommit,
   primaryActionLabel = '修正を確定',
+  autoCommitValidChanges = false,
 }: TileCorrectionEditorProps) {
   const [draft, setDraft] = useState(() => service.create(initialStructure));
   const [selector, setSelector] = useState<SelectorState | null>(null);
@@ -213,7 +215,15 @@ export function TileCorrectionEditor({
   );
 
   function dispatch(command: CorrectionCommand) {
-    setDraft((current) => service.update(current, command));
+    const next = service.update(draft, command);
+    setDraft(next);
+
+    if (autoCommitValidChanges) {
+      const result = service.commit(next);
+      if (result.kind === 'valid') {
+        onCommit(result.structure);
+      }
+    }
   }
 
   function commit() {
@@ -366,20 +376,22 @@ export function TileCorrectionEditor({
         />
       </CorrectionRegion>
 
-      <button
-        disabled={!validation.canCommit}
-        onClick={commit}
-        style={{
-          ...actionButtonStyle,
-          minHeight: 46,
-          fontWeight: 700,
-          cursor: validation.canCommit ? 'pointer' : 'not-allowed',
-          opacity: validation.canCommit ? 1 : 0.5,
-        }}
-        type="button"
-      >
-        {primaryActionLabel}
-      </button>
+      {autoCommitValidChanges ? null : (
+        <button
+          disabled={!validation.canCommit}
+          onClick={commit}
+          style={{
+            ...actionButtonStyle,
+            minHeight: 46,
+            fontWeight: 700,
+            cursor: validation.canCommit ? 'pointer' : 'not-allowed',
+            opacity: validation.canCommit ? 1 : 0.5,
+          }}
+          type="button"
+        >
+          {primaryActionLabel}
+        </button>
+      )}
 
       {selector === null ? null : (
         <TileSelector
