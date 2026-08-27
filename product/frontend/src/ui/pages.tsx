@@ -25,13 +25,14 @@ import {
 
 import { useApplicationStore } from './application-state';
 import { ConditionsPageView } from './conditions-page';
+import { MobileScoringPageShell } from './mobile-scoring-shell';
 import {
   appRoutePaths,
   navigateAfterCalculation,
-  navigateAfterConditionCorrectionCancelled,
   navigateAfterRecognitionCorrectionCancelled,
   navigateAfterRecognitionCorrectionNeedsConditions,
   navigateAfterRecognitionCorrectionScored,
+  navigateBackFromConditions,
   navigateToConditionCorrection,
   navigateToHelp,
   navigateToNewRecognition,
@@ -46,23 +47,31 @@ import { useScoringFlowServices } from './scoring-flow-services';
 import { TileCorrectionEditor } from './tile-correction-editor';
 
 export function ProductionShell() {
+  const location = useLocation();
+  const usesMobileScoringShell = location.pathname === appRoutePaths.conditions;
+
   return (
-    <AppShell header={{ height: 60 }} padding="md">
-      <AppShell.Header>
-        <Group h="100%" px="md" justify="space-between">
-          <Button
-            component={RouterLink}
-            to={appRoutePaths.top}
-            variant="transparent"
-            px={0}
-            size="compact-md"
-          >
-            mjtensu
-          </Button>
-        </Group>
-      </AppShell.Header>
+    <AppShell
+      header={usesMobileScoringShell ? undefined : { height: 60 }}
+      padding={usesMobileScoringShell ? 0 : 'md'}
+    >
+      {usesMobileScoringShell ? null : (
+        <AppShell.Header>
+          <Group h="100%" px="md" justify="space-between">
+            <Button
+              component={RouterLink}
+              to={appRoutePaths.top}
+              variant="transparent"
+              px={0}
+              size="compact-md"
+            >
+              mjtensu
+            </Button>
+          </Group>
+        </AppShell.Header>
+      )}
       <AppShell.Main>
-        <Container size="sm">
+        <Container px={usesMobileScoringShell ? 0 : undefined} size="sm">
           <Outlet />
         </Container>
       </AppShell.Main>
@@ -174,7 +183,15 @@ export function ConditionsPage() {
   }
 
   if (scoringFlowServices === null) {
-    return <ScoringFlowUnavailableState title="条件入力" />;
+    return (
+      <MobileScoringPageShell
+        bottomClearancePx={24}
+        onBack={() => navigateBackFromConditions(navigate, mode)}
+        title="条件入力"
+      >
+        <Text role="alert">点数計算サービスを利用できません。</Text>
+      </MobileScoringPageShell>
+    );
   }
 
   const initialScoringSession = activeScoringSession;
@@ -203,11 +220,7 @@ export function ConditionsPage() {
           ? commitResultConditionCorrection
           : () => navigateAfterCalculation(navigate)
       }
-      onCancel={
-        mode === 'result-correction'
-          ? () => navigateAfterConditionCorrectionCancelled(navigate)
-          : undefined
-      }
+      onBack={() => navigateBackFromConditions(navigate, mode)}
       renderCorrectionEditor={
         mode === 'result-correction'
           ? undefined

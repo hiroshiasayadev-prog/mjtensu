@@ -8,6 +8,7 @@ import {
   navigateAfterRecognitionCorrectionCancelled,
   navigateAfterRecognitionCorrectionNeedsConditions,
   navigateAfterRecognitionCorrectionScored,
+  navigateBackFromConditions,
   navigateToConditionCorrection,
   navigateToHelp,
   navigateToNewRecognition,
@@ -61,6 +62,20 @@ describe('route history helpers', () => {
         destination: appRoutePaths.recognitionCorrection,
         options: undefined,
       },
+    ]);
+  });
+
+  it('routes the Conditions app-bar back action without restoring stale scoring surfaces', () => {
+    const { calls, navigate } = navigationRecorder();
+
+    navigateBackFromConditions(navigate, 'initial');
+    navigateBackFromConditions(navigate, 'result-correction');
+    navigateBackFromConditions(navigate, 'recognition-repair');
+
+    expect(calls).toEqual([
+      { destination: appRoutePaths.top, options: { replace: true } },
+      { destination: appRoutePaths.result, options: { replace: true } },
+      { destination: appRoutePaths.top, options: { replace: true } },
     ]);
   });
 

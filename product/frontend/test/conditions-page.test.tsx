@@ -48,10 +48,14 @@ function tileId(value: string): TileInstanceId {
   return value as TileInstanceId;
 }
 
-function tile(id: string, kind: TileInstance['tile']['kind'] = '5m'): TileInstance {
+function tile(
+  id: string,
+  kind: TileInstance['tile']['kind'] = '5m',
+  red = false,
+): TileInstance {
   return {
     id: tileId(id),
-    tile: { kind, red: false },
+    tile: { kind, red },
   };
 }
 
@@ -141,7 +145,7 @@ describe('ConditionsPageView', () => {
     const onSessionChange = vi.fn();
     renderConditionsPage({ onSessionChange });
 
-    const duplicateButtons = screen.getAllByRole('button', { name: /5m/ });
+    const duplicateButtons = screen.getAllByRole('button', { name: /5萬/ });
 
     expect(duplicateButtons.at(-1)).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(duplicateButtons[1]);
@@ -152,13 +156,31 @@ describe('ConditionsPageView', () => {
     expect(duplicateButtons[1]).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it('preserves red-five identity in the selectable completed hand', () => {
+    renderConditionsPage({
+      completedHand: [tile('ordinary-five', '5m'), tile('red-five', '5m', true)],
+    });
+
+    const ordinary = screen.getByRole('button', { name: '5萬 1' });
+    const red = screen.getByRole('button', { name: '赤5萬 2 和了牌' });
+
+    expect(ordinary).toBeVisible();
+    expect(red).toBeVisible();
+    expect(
+      ordinary.querySelector('[data-tile-asset]')?.getAttribute('data-tile-asset'),
+    ).toContain('5m.svg');
+    expect(
+      red.querySelector('[data-tile-asset]')?.getAttribute('data-tile-asset'),
+    ).toContain('5m-red.svg');
+  });
+
   it('renders hand, meld, and dora structure while keeping meld tiles out of winning selection', () => {
     renderConditionsPage();
 
     expect(screen.getByRole('group', { name: '和了牌選択' })).toBeVisible();
     expect(screen.getByLabelText('チー 1')).toBeVisible();
-    expect(screen.getByLabelText('ドラ表示牌 1 1z')).toBeVisible();
-    expect(screen.queryByRole('button', { name: /2m/ })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('ドラ表示牌 1 東')).toBeVisible();
+    expect(screen.queryByRole('button', { name: /2萬/ })).not.toBeInTheDocument();
   });
 
   it('uses policy-normalized state to clear dependent selections after ordinary condition changes', () => {
@@ -259,11 +281,78 @@ describe('ConditionsPageView', () => {
     expect(seatWind).toHaveFocus();
     expect(seatWind).toHaveAttribute('data-edit-focus', 'true');
 
-    fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
+    fireEvent.click(screen.getByRole('button', { name: '戻る' }));
     expect(onCancel).toHaveBeenCalledOnce();
   });
 
-  it('keeps structure correction entry separate and commits through session replacement', () => {
+  it('uses the mobile scoring shell without exposing tile instance ids or canonical tile codes', () => {
+    renderConditionsPage();
+
+    expect(screen.getByTestId('mobile-scoring-app-bar')).toHaveTextContent('条件入力');
+    expect(screen.getByTestId('persistent-bottom-bar')).toBeVisible();
+    expect(screen.getByTestId('mobile-scoring-app-bar')).toHaveAttribute(
+      'data-safe-area-top',
+      'true',
+    );
+    expect(screen.getByTestId('mobile-scoring-scroll-content')).toHaveAttribute(
+      'data-bottom-clearance-px',
+      '112',
+    );
+    expect(screen.getByTestId('persistent-bottom-bar')).toHaveAttribute(
+      'data-safe-area-bottom',
+      'true',
+    );
+    expect(document.body.textContent).not.toContain('first-five');
+    expect(document.body.textContent).not.toContain('second-five');
+    expect(document.body.textContent).not.toContain('1z');
+    expect(screen.getByRole('heading', { name: '和了牌を選択' })).toBeVisible();
+  });
+
+  it('updates persistent yaku feedback and calculation availability after condition changes', () => {
+    renderConditionsPage({
+      preview: { kind: 'no-yaku' },
+      scoringOverrides: {
+        preview: (input) =>
+          input.conditions.riichi === 'riichi'
+            ? {
+                kind: 'ready',
+                yaku: [{ kind: 'regular', id: 'riichi', han: 1 }],
+              }
+            : { kind: 'no-yaku' },
+      },
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('役なし');
+    expect(screen.getByRole('button', { name: '計算する' })).toBeDisabled();
+
+    fireEvent.click(screen.getByLabelText('リーチ'));
+
+    expect(screen.getByRole('status')).toHaveTextContent('立直 1翻');
+    expect(screen.getByRole('button', { name: '計算する' })).toBeEnabled();
+  });
+
+  it('expands the full current-yaku list inside the persistent dock', () => {
+    renderConditionsPage({
+      preview: {
+        kind: 'ready',
+        yaku: [
+          { kind: 'regular', id: 'riichi', han: 1 },
+          { kind: 'regular', id: 'tanyao', han: 1 },
+          { kind: 'regular', id: 'pinfu', han: 1 },
+        ],
+      },
+    });
+
+    expect(screen.queryByLabelText('現在の役一覧')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'すべて表示' }));
+
+    const list = screen.getByLabelText('現在の役一覧');
+    expect(list).toHaveTextContent('立直 1翻');
+    expect(list).toHaveTextContent('断么九 1翻');
+    expect(list).toHaveTextContent('平和 1翻');
+  });
+
+  it('keeps structure correction secondary until explicitly opened and commits through session replacement', () => {
     const onSessionChange = vi.fn();
     const replacement = structure([tile('replacement-left'), tile('replacement-right')]);
 
@@ -276,6 +365,8 @@ describe('ConditionsPageView', () => {
       ),
     });
 
+    expect(screen.queryByRole('button', { name: '修正を確定' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '牌を修正' }));
     fireEvent.click(screen.getByRole('button', { name: '修正を確定' }));
 
     expect(onSessionChange).toHaveBeenLastCalledWith(

@@ -9,7 +9,9 @@ test.describe('fake-service scoring flow acceptance', () => {
     await page.getByRole('button', { name: '判定する' }).click();
     await expect(page).toHaveURL('/conditions');
     await expect(page.getByRole('heading', { name: '条件入力' })).toBeVisible();
-    await expect(page.getByText('現在の和了牌: recognition-1-hand-14')).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: '4筒 14 和了牌' }),
+    ).toHaveAttribute('aria-pressed', 'true');
 
     await page.goBack();
     await expect(page).toHaveURL('/');
@@ -21,6 +23,15 @@ test.describe('fake-service scoring flow acceptance', () => {
     await expect(page).toHaveURL('/result');
     await expect(page.getByRole('heading', { name: '結果' })).toBeVisible();
     await expect(page.getByText('6,000点', { exact: true })).toBeVisible();
+  });
+
+  test('initial Conditions app-bar back returns to Top without reopening Recognition', async ({ page }) => {
+    await reachConditions(page);
+
+    await page.getByRole('button', { name: '戻る' }).click();
+
+    await expect(page).toHaveURL('/');
+    await expect(page.getByRole('heading', { name: 'mjtensu' })).toBeVisible();
   });
 
   test('Recognition preparation exposes camera-first and runtime-first states', async ({ page }) => {
@@ -82,12 +93,14 @@ test.describe('fake-service scoring flow acceptance', () => {
     await reachConditions(page);
 
     const winningTiles = page.getByRole('group', { name: '和了牌選択' });
-    await winningTiles.getByRole('button', { name: '9s 2' }).click();
+    await winningTiles.getByRole('button', { name: '9索 2' }).click();
     await expect(page.getByText('和了形として成立していません')).toBeVisible();
     await expect(page.getByRole('button', { name: '計算する' })).toBeDisabled();
 
-    await winningTiles.getByRole('button', { name: '1m 1' }).click();
-    await expect(page.getByText('現在の和了牌: recognition-1-hand-1')).toBeVisible();
+    await winningTiles.getByRole('button', { name: '1萬 1' }).click();
+    await expect(
+      winningTiles.getByRole('button', { name: '1萬 1 和了牌' }),
+    ).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByText('門前清自摸和 1翻')).toBeVisible();
 
     await page.getByRole('radio', { name: 'ロン' }).check();
@@ -95,7 +108,7 @@ test.describe('fake-service scoring flow acceptance', () => {
     await expect(page.getByRole('button', { name: '計算する' })).toBeDisabled();
 
     await page.getByRole('radio', { name: 'リーチ', exact: true }).check();
-    await expect(page.getByText('リーチ 1翻')).toBeVisible();
+    await expect(page.getByText('立直 1翻')).toBeVisible();
     await expect(page.getByRole('button', { name: '計算する' })).toBeEnabled();
 
     await page.getByRole('radio', { name: '西', exact: true }).first().check();
@@ -104,9 +117,11 @@ test.describe('fake-service scoring flow acceptance', () => {
     await expect(page.getByRole('button', { name: '計算する' })).toBeDisabled();
 
     await page.getByRole('radio', { name: '東', exact: true }).last().check();
-    await expect(page.getByText('リーチ 1翻')).toBeVisible();
-    await expect(page.getByRole('heading', { name: '牌姿修正' })).toBeVisible();
-    await expect(page.getByRole('button', { name: '牌姿を反映' })).toBeEnabled();
+    await expect(page.getByText('立直 1翻')).toBeVisible();
+    await expect(page.getByRole('button', { name: '牌を修正' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '手牌に追加' })).toHaveCount(0);
+    await page.getByRole('button', { name: '牌を修正' }).click();
+    await expect(page.getByRole('button', { name: '手牌に追加' })).toBeVisible();
 
     await page.getByRole('button', { name: '計算する' }).click();
     await expect(page).toHaveURL('/result');
@@ -118,8 +133,8 @@ test.describe('fake-service scoring flow acceptance', () => {
 
     await page.getByRole('button', { name: '条件を修正' }).click();
     await expect(page).toHaveURL('/conditions');
-    await expect(page.getByRole('heading', { name: '牌姿修正' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'キャンセル' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '牌を修正' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '戻る' })).toBeVisible();
     await page.getByRole('radio', { name: '南', exact: true }).last().check();
     await page.getByRole('button', { name: '計算する' }).click();
 
@@ -133,7 +148,7 @@ test.describe('fake-service scoring flow acceptance', () => {
     await page.getByRole('button', { name: '条件を修正' }).click();
     await page.getByRole('radio', { name: '南', exact: true }).last().check();
 
-    await page.getByRole('button', { name: 'キャンセル' }).click();
+    await page.getByRole('button', { name: '戻る' }).click();
     await expect(page).toHaveURL('/result');
     await expect(page.getByText('6,000点', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: '親子を修正' })).toHaveText('親');
@@ -156,7 +171,7 @@ test.describe('fake-service scoring flow acceptance', () => {
   test('pre-confirm recognition correction cancel preserves old Result', async ({ page }) => {
     await reachResult(page);
     await page.getByRole('button', { name: '認識結果を修正' }).click();
-    await replaceFirstCorrectionTile(page, '2m');
+    await replaceFirstCorrectionTile(page, '2萬');
 
     await page.getByRole('button', { name: 'キャンセル' }).click();
     await expect(page).toHaveURL('/result');
@@ -167,7 +182,7 @@ test.describe('fake-service scoring flow acceptance', () => {
   test('confirmed recognition correction immediately recalculates when still ready', async ({ page }) => {
     await reachResult(page);
     await page.getByRole('button', { name: '認識結果を修正' }).click();
-    await replaceFirstCorrectionTile(page, '2m');
+    await replaceFirstCorrectionTile(page, '2萬');
 
     await page.getByRole('button', { name: '修正を確定' }).click();
     await expect(page).toHaveURL('/result');
@@ -178,7 +193,7 @@ test.describe('fake-service scoring flow acceptance', () => {
   test('confirmed repair-needed correction falls back to Conditions and stale Result never returns', async ({ page }) => {
     await reachResult(page);
     await page.getByRole('button', { name: '認識結果を修正' }).click();
-    await replaceFirstCorrectionTile(page, '9p');
+    await replaceFirstCorrectionTile(page, '9筒');
 
     await page.getByRole('button', { name: '修正を確定' }).click();
     await expect(page).toHaveURL('/conditions');
@@ -196,7 +211,9 @@ test.describe('fake-service scoring flow acceptance', () => {
     await page.getByRole('button', { name: 'もう一度判定' }).click();
 
     await expect(page).toHaveURL('/conditions');
-    await expect(page.getByText('現在の和了牌: recognition-2-hand-14')).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: '4筒 14 和了牌' }),
+    ).toHaveAttribute('aria-pressed', 'true');
 
     await page.goBack();
     await expect(page).toHaveURL('/result');
@@ -258,7 +275,7 @@ async function reachResult(page: Page): Promise<void> {
 }
 
 async function replaceFirstCorrectionTile(page: Page, tile: string): Promise<void> {
-  await page.getByRole('button', { name: '手牌 1 1m' }).click();
+  await page.getByRole('button', { name: '手牌 1 1萬' }).click();
   const selector = page.getByRole('dialog', { name: '牌を選択' });
   await expect(selector).toBeVisible();
   await selector.getByRole('button', { name: tile, exact: true }).click();

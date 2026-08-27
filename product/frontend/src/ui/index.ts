@@ -7,6 +7,7 @@ export {
   navigateAfterRecognitionCorrectionCancelled,
   navigateAfterRecognitionCorrectionNeedsConditions,
   navigateAfterRecognitionCorrectionScored,
+  navigateBackFromConditions,
   navigateToConditionCorrection,
   navigateToHelp,
   navigateToNewRecognition,
@@ -20,9 +21,20 @@ export type {
   AppNavigationOptions,
   AppRouteName,
   AppRoutePath,
+  ConditionsNavigationMode,
   ConditionsNavigationState,
 } from './navigation';
 export { ConditionsPageView } from './conditions-page';
+export {
+  MobileScoringPageShell,
+  PersistentBottomBar,
+} from './mobile-scoring-shell';
+export type {
+  MobileScoringPageShellProps,
+  PersistentBottomBarProps,
+} from './mobile-scoring-shell';
+export { formatTileIdentity, TileFace } from './tile-presentation';
+export type { TileFaceProps } from './tile-presentation';
 export type {
   ConditionsPageViewProps,
   CorrectionEditorSlotProps,

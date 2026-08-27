@@ -22,6 +22,11 @@ export interface ConditionsNavigationState {
   readonly focus?: 'seatWind';
 }
 
+export type ConditionsNavigationMode =
+  | 'initial'
+  | 'result-correction'
+  | 'recognition-repair';
+
 export type AppNavigate = (
   destination: AppRoutePath,
   options?: AppNavigationOptions,
@@ -87,6 +92,18 @@ export function navigateAfterConditionCorrectionCancelled(
   navigate: AppNavigate,
 ): void {
   navigate(appRoutePaths.result, { replace: true });
+}
+
+export function navigateBackFromConditions(
+  navigate: AppNavigate,
+  mode: ConditionsNavigationMode,
+): void {
+  if (mode === 'result-correction') {
+    navigateAfterConditionCorrectionCancelled(navigate);
+    return;
+  }
+
+  navigate(appRoutePaths.top, { replace: true });
 }
 
 export function navigateToRecognitionCorrection(navigate: AppNavigate): void {

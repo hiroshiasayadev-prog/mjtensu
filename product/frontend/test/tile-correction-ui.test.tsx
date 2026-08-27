@@ -180,7 +180,7 @@ describe('TileCorrectionEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'ドラ表示牌に追加' }));
     fireEvent.click(
       within(screen.getByRole('dialog', { name: '牌を選択' })).getByRole('button', {
-        name: '4p',
+        name: '4筒',
       }),
     );
 
@@ -201,7 +201,7 @@ describe('TileCorrectionEditor', () => {
 
     expect(update).not.toHaveBeenCalled();
     const selector = screen.getByRole('dialog', { name: '牌を選択' });
-    fireEvent.click(within(selector).getByRole('button', { name: '赤5m' }));
+    fireEvent.click(within(selector).getByRole('button', { name: '赤5萬' }));
 
     expect(update).toHaveBeenLastCalledWith(
       expect.anything(),
@@ -214,13 +214,43 @@ describe('TileCorrectionEditor', () => {
     );
   });
 
+  it('lays out the tile keyboard as suit rows with red fives beside normal fives', () => {
+    renderEditor();
+
+    fireEvent.click(screen.getByRole('button', { name: '手牌に追加' }));
+
+    const selector = screen.getByRole('dialog', { name: '牌を選択' });
+    const manzu = within(selector).getByRole('group', { name: '萬子' });
+    const pinzu = within(selector).getByRole('group', { name: '筒子' });
+    const souzu = within(selector).getByRole('group', { name: '索子' });
+    const honors = within(selector).getByRole('group', { name: '字牌' });
+
+    expect(
+      within(manzu).getAllByRole('button').map((button) => button.getAttribute('aria-label')),
+    ).toEqual(['1萬', '2萬', '3萬', '4萬', '5萬', '赤5萬', '6萬', '7萬', '8萬', '9萬']);
+    expect(within(pinzu).getAllByRole('button')).toHaveLength(10);
+    expect(within(souzu).getAllByRole('button')).toHaveLength(10);
+    expect(
+      within(honors).getAllByRole('button').map((button) => button.getAttribute('aria-label')),
+    ).toEqual(['東', '南', '西', '北', '白', '發', '中']);
+
+    const redFive = within(manzu).getByRole('button', { name: '赤5萬' });
+    expect(
+      redFive.querySelector('[data-tile-asset]')?.getAttribute('data-tile-asset'),
+    ).toContain('5m-red.svg');
+    expect(redFive.querySelector('[data-tile-face-size]')).toHaveAttribute(
+      'data-tile-face-size',
+      'keyboard',
+    );
+  });
+
   it('emits replacement and deletion against the existing tile instance', () => {
     const { update } = renderEditor();
 
-    fireEvent.click(screen.getByRole('button', { name: '手牌 1 1m' }));
+    fireEvent.click(screen.getByRole('button', { name: '手牌 1 1萬' }));
     fireEvent.click(
       within(screen.getByRole('dialog', { name: '牌を選択' })).getByRole('button', {
-        name: '4m',
+        name: '4萬',
       }),
     );
 
@@ -233,7 +263,7 @@ describe('TileCorrectionEditor', () => {
       },
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '手牌 1 4m' }));
+    fireEvent.click(screen.getByRole('button', { name: '手牌 1 4萬' }));
     fireEvent.click(
       within(screen.getByRole('dialog', { name: '牌を選択' })).getByRole('button', {
         name: 'この牌を削除',
@@ -249,7 +279,7 @@ describe('TileCorrectionEditor', () => {
   it('supports local reorder and movement between semantic regions', () => {
     const { update } = renderEditor(oneMeldStructure);
 
-    fireEvent.click(screen.getByRole('button', { name: '手牌 2 2m' }));
+    fireEvent.click(screen.getByRole('button', { name: '手牌 2 2萬' }));
     fireEvent.click(
       within(screen.getByRole('dialog', { name: '牌を選択' })).getByRole('button', {
         name: '右へ',
@@ -263,7 +293,7 @@ describe('TileCorrectionEditor', () => {
       index: 2,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: '手牌 1 1m' }));
+    fireEvent.click(screen.getByRole('button', { name: '手牌 1 1萬' }));
     fireEvent.click(
       within(screen.getByRole('dialog', { name: '牌を選択' })).getByRole('button', {
         name: '副露 1へ移動',

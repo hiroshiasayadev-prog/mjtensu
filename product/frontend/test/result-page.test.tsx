@@ -176,27 +176,78 @@ function renderResult(
 }
 
 describe('result page presentation', () => {
-  it('renders recognized evidence and marks the selected winning tile instance', () => {
+  it('renders tile evidence as dora, completed hand, isolated winning tile, and grouped meld rows', () => {
     renderResult(calculation());
 
     expect(screen.getByRole('heading', { name: '結果' })).toBeVisible();
-    expect(screen.getByLabelText('赤5筒 和了牌')).toHaveAttribute(
-      'data-winning',
-      'true',
-    );
-    expect(screen.getByText('白')).toBeVisible();
-    expect(screen.getByText('5萬')).toBeVisible();
+    expect(screen.getByLabelText('ドラ表示牌')).toBeVisible();
+    expect(screen.getByLabelText('完成手牌')).toBeVisible();
+    expect(screen.getByLabelText('副露')).toBeVisible();
+
+    const winningTile = screen.getByLabelText('赤5筒 和了牌');
+    expect(winningTile).toHaveAttribute('data-winning', 'true');
+    expect(
+      winningTile
+        .querySelector('[data-tile-asset]')
+        ?.getAttribute('data-tile-asset'),
+    ).toMatch(/\/tiles\/5p-red\.svg$/);
+    expect(within(screen.getByLabelText('和了牌')).getByText('ロン')).toBeVisible();
+
+    const whiteDora = screen.getByLabelText('白');
+    const fiveManDora = screen.getByLabelText('5萬');
+    expect(
+      whiteDora
+        .querySelector('[data-tile-asset]')
+        ?.getAttribute('data-tile-asset'),
+    ).toMatch(/\/tiles\/5z\.svg$/);
+    expect(
+      fiveManDora
+        .querySelector('[data-tile-asset]')
+        ?.getAttribute('data-tile-asset'),
+    ).toMatch(/\/tiles\/5m\.svg$/);
     expect(screen.getByLabelText('chi meld')).toBeVisible();
+    expect(screen.queryByText('4p')).not.toBeInTheDocument();
+    expect(screen.queryByText('7s')).not.toBeInTheDocument();
   });
 
-  it('renders product yaku names and separates indicator dora from aka dora', () => {
+  it('renders compact yaku rows with awarded-han bands and textual values', () => {
     renderResult(calculation());
 
-    expect(screen.getByText('立直')).toBeVisible();
-    expect(screen.getByText('三色同順')).toBeVisible();
-    expect(screen.getByText('ドラ')).toBeVisible();
+    const riichiRow = screen.getByText('立直').closest('[data-han-band]');
+    const sanshokuRow = screen.getByText('三色同順').closest('[data-han-band]');
+    const doraRows = screen.getAllByText('ドラ');
+
+    expect(riichiRow).toHaveAttribute('data-han-band', 'one');
+    expect(sanshokuRow).toHaveAttribute('data-han-band', 'two');
+    expect(doraRows).toHaveLength(2);
     expect(screen.getByText('赤ドラ')).toBeVisible();
     expect(screen.getByText('6翻')).toBeVisible();
+  });
+
+  it('maps 3-5 han, 6+ han, and yakuman rows to distinct visual bands', () => {
+    renderResult(
+      calculation({
+        yaku: [{ kind: 'yakuman', id: 'daisangen' }],
+        dora: { dora: 3, akaDora: 6 },
+        han: null,
+        fu: null,
+        limit: { kind: 'yakuman', units: 1, counted: false },
+        totalPoints: 32000,
+      }),
+    );
+
+    expect(screen.getByText('3翻').closest('[data-han-band]')).toHaveAttribute(
+      'data-han-band',
+      'three-to-five',
+    );
+    expect(screen.getByText('6翻').closest('[data-han-band]')).toHaveAttribute(
+      'data-han-band',
+      'six-plus',
+    );
+    expect(screen.getByText('大三元').closest('[data-han-band]')).toHaveAttribute(
+      'data-han-band',
+      'yakuman',
+    );
   });
 
   it.each([
@@ -303,7 +354,7 @@ describe('result page presentation', () => {
     expect(screen.queryByText(/\d+翻/)).not.toBeInTheDocument();
   });
 
-  it('renders aggregate standard fu detail without per-meld reconstruction', () => {
+  it('renders aggregate standard fu detail in an on-demand sheet and returns to unchanged Result', () => {
     renderResult(calculation());
 
     fireEvent.click(screen.getByRole('button', { name: '符の詳細' }));
@@ -316,6 +367,11 @@ describe('result page presentation', () => {
     expect(within(dialog).getByText('切り上げ後')).toBeVisible();
     expect(within(dialog).getByText('38符')).toBeVisible();
     expect(within(dialog).getByText('40符')).toBeVisible();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '閉じる' }));
+    expect(screen.queryByRole('dialog', { name: '符の詳細' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '結果' })).toBeVisible();
+    expect(screen.getByText('12,000点')).toBeVisible();
   });
 
   it('renders chiitoitsu as fixed 25 fu', () => {
@@ -347,7 +403,7 @@ describe('result page presentation', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '条件を修正' }));
     expect(screen.getByRole('heading', { name: '条件入力' })).toBeVisible();
-    expect(screen.queryByRole('heading', { name: '牌姿修正' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '牌を修正' })).not.toBeInTheDocument();
 
     const southSeat = screen.getAllByLabelText('南').at(-1);
     if (southSeat === undefined) {
@@ -357,7 +413,7 @@ describe('result page presentation', () => {
     fireEvent.click(
       within(screen.getByRole('group', { name: '和了牌選択' })).getByRole(
         'button',
-        { name: '1m 1' },
+        { name: '1萬 1' },
       ),
     );
 
@@ -369,7 +425,7 @@ describe('result page presentation', () => {
       tileId('winning'),
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
+    fireEvent.click(screen.getByRole('button', { name: '戻る' }));
 
     expect(screen.getByRole('heading', { name: '結果' })).toBeVisible();
     expect(applicationStore.getState().activeScoringSession).toBe(initialSession);
@@ -416,7 +472,7 @@ describe('result page presentation', () => {
     fireEvent.click(
       within(screen.getByRole('group', { name: '和了牌選択' })).getByRole(
         'button',
-        { name: '1m 1' },
+        { name: '1萬 1' },
       ),
     );
 
@@ -433,6 +489,22 @@ describe('result page presentation', () => {
     expect(committedSession?.latestResult).not.toBe(initialResult);
     expect(committedSession?.latestResult?.winnerRole).toBe('non-dealer');
     expect(committedSession?.latestResult?.totalPoints).toBe(4000);
+  });
+
+  it('keeps the final points dominant and actions fixed above safe-area-aware content clearance', () => {
+    renderResult(calculation());
+
+    expect(screen.getByTestId('result-primary-points')).toHaveTextContent('12,000点');
+    const bottomBar = screen.getByTestId('persistent-bottom-bar');
+    expect(bottomBar).toHaveStyle({ position: 'fixed', bottom: '0px' });
+    expect(bottomBar).toHaveAttribute('data-safe-area-bottom', 'true');
+
+    expect(screen.getByTestId('mobile-scoring-page-shell')).toBeVisible();
+    const scrollContent = screen.getByTestId('mobile-scoring-scroll-content');
+    expect(scrollContent).toHaveAttribute('data-bottom-clearance-px', '132');
+    expect(screen.getByRole('button', { name: '認識結果を修正' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '条件を修正' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'もう一度判定' })).toBeVisible();
   });
 
   it('preserves conditions for recognition correction', () => {

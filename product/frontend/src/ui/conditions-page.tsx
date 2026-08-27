@@ -16,16 +16,22 @@ import type {
 } from '@/application';
 import { scoringConditionPolicy } from '@/application';
 import type { RecognizedStructure, TileInstance, TileInstanceId } from '@/domain';
-import type {
-  RiichiState,
-  ScoringConditionsDraft,
-  ScoringInputIssue,
-  ScoringPreview,
-  ScoringRequiredField,
-  Wind,
-  WinMethod,
-  YakuId,
+import {
+  getYakuDisplayName,
+  type RiichiState,
+  type ScoringConditionsDraft,
+  type ScoringInputIssue,
+  type ScoringPreview,
+  type ScoringRequiredField,
+  type Wind,
+  type WinMethod,
 } from '@/scoring';
+
+import {
+  MobileScoringPageShell,
+  PersistentBottomBar,
+} from './mobile-scoring-shell';
+import { formatTileIdentity, TileFace } from './tile-presentation';
 
 export interface CorrectionEditorSlotProps {
   readonly session: ScoringSessionState;
@@ -41,6 +47,7 @@ export interface ConditionsPageViewProps {
   readonly conditionPolicy?: ScoringConditionPolicy;
   readonly renderCorrectionEditor?: (props: CorrectionEditorSlotProps) => ReactNode;
   readonly initialFocus?: 'seatWind';
+  readonly onBack?: () => void;
   readonly onCancel?: () => void;
   readonly onCalculationComplete?: (calculation: ScoringSessionCalculation) => void;
   readonly onSessionChange?: (state: ScoringSessionState) => void;
@@ -76,101 +83,80 @@ const SECONDARY_CONDITIONS = [
   label: string;
 }[];
 
-const YAKU_LABELS: Record<YakuId, string> = {
-  riichi: 'リーチ',
-  'double-riichi': 'ダブルリーチ',
-  ippatsu: '一発',
-  'menzen-tsumo': '門前清自摸和',
-  tanyao: '断么九',
-  pinfu: '平和',
-  iipeikou: '一盃口',
-  'yakuhai-east': '役牌 東',
-  'yakuhai-south': '役牌 南',
-  'yakuhai-west': '役牌 西',
-  'yakuhai-north': '役牌 北',
-  'yakuhai-white': '役牌 白',
-  'yakuhai-green': '役牌 發',
-  'yakuhai-red': '役牌 中',
-  'rinshan-kaihou': '嶺上開花',
-  chankan: '槍槓',
-  haitei: '海底摸月',
-  houtei: '河底撈魚',
-  toitoi: '対々和',
-  'sanshoku-doujun': '三色同順',
-  'sanshoku-doukou': '三色同刻',
-  ittsu: '一気通貫',
-  chiitoitsu: '七対子',
-  chanta: '混全帯么九',
-  sanankou: '三暗刻',
-  sankantsu: '三槓子',
-  honroutou: '混老頭',
-  shousangen: '小三元',
-  honitsu: '混一色',
-  junchan: '純全帯么九',
-  ryanpeikou: '二盃口',
-  chinitsu: '清一色',
-  tenhou: '天和',
-  chiihou: '地和',
-  'kokushi-musou': '国士無双',
-  'kokushi-13-wait': '国士無双十三面待ち',
-  suuankou: '四暗刻',
-  'suuankou-tanki': '四暗刻単騎',
-  daisangen: '大三元',
-  shousuushii: '小四喜',
-  daisuushii: '大四喜',
-  tsuuiisou: '字一色',
-  chinroutou: '清老頭',
-  ryuuiisou: '緑一色',
-  'chuuren-poutou': '九蓮宝燈',
-  'junsei-chuuren-poutou': '純正九蓮宝燈',
-  suukantsu: '四槓子',
-};
-
-const pageStyle: CSSProperties = {
-  display: 'grid',
-  gap: 24,
-  maxWidth: 960,
-  margin: '0 auto',
-  padding: 16,
-};
-
-const sectionStyle: CSSProperties = {
+const contentStyle: CSSProperties = {
   display: 'grid',
   gap: 12,
 };
 
+const cardStyle: CSSProperties = {
+  display: 'grid',
+  gap: 12,
+  padding: 14,
+  border: '1px solid #e0e4e8',
+  borderRadius: 12,
+  background: '#ffffff',
+  boxShadow: '0 1px 3px rgba(20, 24, 32, 0.04)',
+};
+
+const cardHeadingStyle: CSSProperties = {
+  margin: 0,
+  fontSize: 17,
+  lineHeight: 1.3,
+};
+
 const tileRowStyle: CSSProperties = {
   display: 'flex',
-  flexWrap: 'wrap',
-  gap: 8,
-  alignItems: 'center',
+  gap: 1,
+  alignItems: 'flex-end',
+  overflowX: 'auto',
+  padding: '4px 1px 6px',
+  scrollbarWidth: 'thin',
 };
 
-const tileButtonStyle: CSSProperties = {
-  minWidth: 42,
-  minHeight: 56,
-  border: '1px solid #c7cdd8',
+const winningTileButtonStyle: CSSProperties = {
+  display: 'grid',
+  justifyItems: 'center',
+  gap: 2,
+  flex: '0 0 auto',
+  padding: '4px 0 0',
+  border: 0,
   borderRadius: 6,
-  background: '#fffaf0',
+  background: 'transparent',
   color: '#1b1d22',
-  fontWeight: 700,
+  cursor: 'pointer',
+  touchAction: 'manipulation',
 };
 
-const selectedTileStyle: CSSProperties = {
-  ...tileButtonStyle,
-  border: '3px solid #1c7ed6',
-  background: '#e7f5ff',
-  transform: 'translateY(-4px)',
+const selectedWinningTileButtonStyle: CSSProperties = {
+  ...winningTileButtonStyle,
+  background: '#f1f8ff',
 };
 
-const supportTileStyle: CSSProperties = {
-  ...tileButtonStyle,
-  display: 'inline-flex',
+const supportRowStyle: CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
   alignItems: 'center',
-  justifyContent: 'center',
-  minWidth: 34,
-  minHeight: 46,
-  fontSize: 12,
+  gap: 6,
+};
+
+const supportBlockStyle: CSSProperties = {
+  display: 'inline-flex',
+  gap: 3,
+  padding: 4,
+  border: '1px solid #e0e4e8',
+  borderRadius: 6,
+  background: '#f8f9fa',
+};
+
+const secondaryActionStyle: CSSProperties = {
+  minHeight: 36,
+  padding: '0 10px',
+  border: '1px solid #adb5bd',
+  borderRadius: 8,
+  background: '#ffffff',
+  color: '#343a40',
+  fontWeight: 700,
+  cursor: 'pointer',
 };
 
 const fieldsetStyle: CSSProperties = {
@@ -191,10 +177,10 @@ const optionLabelStyle: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  minHeight: 36,
+  minHeight: 40,
   padding: '0 12px',
   border: '1px solid #c7cdd8',
-  borderRadius: 6,
+  borderRadius: 8,
   background: '#ffffff',
   cursor: 'pointer',
 };
@@ -210,12 +196,27 @@ const checkboxGridStyle: CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
   gap: 8,
+  marginTop: 10,
 };
 
-const previewStyle: CSSProperties = {
-  borderLeft: '4px solid #1c7ed6',
-  padding: '8px 12px',
-  background: '#f8f9fa',
+const dockRowStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'minmax(0, 1fr) auto',
+  gap: 10,
+  alignItems: 'center',
+};
+
+const calculateButtonStyle: CSSProperties = {
+  minWidth: 104,
+  minHeight: 46,
+  padding: '0 16px',
+  border: 0,
+  borderRadius: 10,
+  background: '#1971c2',
+  color: '#ffffff',
+  fontWeight: 800,
+  fontSize: 15,
+  cursor: 'pointer',
 };
 
 export function ConditionsPageView({
@@ -224,11 +225,13 @@ export function ConditionsPageView({
   conditionPolicy = scoringConditionPolicy,
   renderCorrectionEditor,
   initialFocus,
+  onBack,
   onCancel,
   onCalculationComplete,
   onSessionChange,
 }: ConditionsPageViewProps) {
   const [session, setSession] = useState(initialSession);
+  const [correctionOpen, setCorrectionOpen] = useState(false);
   const availability = conditionPolicy.availability(session.conditions);
   const preview = sessionService.preview(session);
   const canCalculate = isScoringReady(session, preview);
@@ -276,52 +279,70 @@ export function ConditionsPageView({
   }
 
   return (
-    <main style={pageStyle}>
-      <header>
-        <h1>条件入力</h1>
-        <p>現在の和了牌: {session.winningTileId}</p>
-      </header>
-
-      <section aria-labelledby="recognized-structure" style={sectionStyle}>
-        <h2 id="recognized-structure">認識牌姿</h2>
-        <CompletedHandTiles
-          onSelect={selectWinningTile}
-          tiles={session.structure.completedHand}
-          winningTileId={session.winningTileId}
+    <MobileScoringPageShell
+      bottomBar={
+        <ConditionsYakuDock
+          canCalculate={canCalculate}
+          onCalculate={calculate}
+          preview={preview}
         />
-        <SupportingStructure structure={session.structure} />
-      </section>
+      }
+      onBack={onBack ?? onCancel}
+      title="条件入力"
+    >
+      <div style={contentStyle}>
+        <section aria-labelledby="winning-tile-selection" style={cardStyle}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+            }}
+          >
+            <h2 id="winning-tile-selection" style={cardHeadingStyle}>
+              和了牌を選択
+            </h2>
+            {renderCorrectionEditor === undefined ? null : (
+              <button
+                aria-expanded={correctionOpen}
+                onClick={() => setCorrectionOpen((open) => !open)}
+                style={secondaryActionStyle}
+                type="button"
+              >
+                {correctionOpen ? '修正を閉じる' : '牌を修正'}
+              </button>
+            )}
+          </div>
 
-      {renderCorrectionEditor === undefined ? null : (
-        <section aria-labelledby="structure-correction" style={sectionStyle}>
-          <h2 id="structure-correction">牌姿修正</h2>
-          {renderCorrectionEditor({ session, commitStructure })}
+          <CompletedHandTiles
+            onSelect={selectWinningTile}
+            tiles={session.structure.completedHand}
+            winningTileId={session.winningTileId}
+          />
+          <SupportingStructure structure={session.structure} />
+
+          {renderCorrectionEditor === undefined || !correctionOpen ? null : (
+            <div
+              aria-label="牌を修正"
+              style={{
+                paddingTop: 12,
+                borderTop: '1px solid #e9ecef',
+              }}
+            >
+              {renderCorrectionEditor({ session, commitStructure })}
+            </div>
+          )}
         </section>
-      )}
 
-      <ConditionControls
-        availability={availability}
-        conditions={session.conditions}
-        initialFocus={initialFocus}
-        onChange={updateConditions}
-      />
-
-      <section aria-labelledby="scoring-preview" style={sectionStyle}>
-        <h2 id="scoring-preview">現在の役</h2>
-        <ScoringPreviewPanel preview={preview} />
-      </section>
-
-      <footer style={{ display: 'flex', gap: 8 }}>
-        {onCancel === undefined ? null : (
-          <button onClick={onCancel} type="button">
-            キャンセル
-          </button>
-        )}
-        <button disabled={!canCalculate} onClick={calculate} type="button">
-          計算する
-        </button>
-      </footer>
-    </main>
+        <ConditionControls
+          availability={availability}
+          conditions={session.conditions}
+          initialFocus={initialFocus}
+          onChange={updateConditions}
+        />
+      </div>
+    </MobileScoringPageShell>
   );
 }
 
@@ -338,18 +359,20 @@ function CompletedHandTiles({
     <div aria-label="和了牌選択" role="group" style={tileRowStyle}>
       {tiles.map((tile, index) => {
         const selected = tile.id === winningTileId;
+        const label = formatTileIdentity(tile.tile);
 
         return (
           <button
+            aria-label={`${label} ${index + 1}${selected ? ' 和了牌' : ''}`}
             aria-pressed={selected}
             key={tile.id}
             onClick={() => onSelect(tile.id)}
-            style={selected ? selectedTileStyle : tileButtonStyle}
+            style={selected ? selectedWinningTileButtonStyle : winningTileButtonStyle}
             type="button"
           >
-            <span>{tileLabel(tile)}</span>
-            <span style={{ display: 'block', fontSize: 10 }}>
-              {selected ? '和了' : `${index + 1}`}
+            <TileFace selected={selected} tile={tile.tile} />
+            <span style={{ minHeight: 12, fontSize: 10, fontWeight: 700 }}>
+              {selected ? '和了' : ''}
             </span>
           </button>
         );
@@ -364,47 +387,38 @@ function SupportingStructure({
   readonly structure: RecognizedStructure;
 }) {
   return (
-    <div style={{ display: 'grid', gap: 10 }}>
-      {structure.meldGroups.length === 0 ? null : (
-        <div>
-          <strong>副露</strong>
-          <div style={tileRowStyle}>
-            {structure.meldGroups.map((meld, index) => (
-              <div
-                aria-label={`${meldKindLabel(meld.kind)} ${index + 1}`}
-                key={`${meld.kind}-${index}`}
-                style={{
-                  display: 'inline-flex',
-                  gap: 4,
-                  padding: 6,
-                  border: '1px solid #d8dee9',
-                  borderRadius: 6,
-                }}
-              >
-                {meld.tiles.map((tile) => (
-                  <span key={tile.id} style={supportTileStyle}>
-                    {tileLabel(tile)}
-                  </span>
-                ))}
-              </div>
-            ))}
-          </div>
+    <div style={{ display: 'grid', gap: 8 }}>
+      {structure.doraIndicators.length === 0 ? null : (
+        <div style={supportRowStyle}>
+          <strong style={{ fontSize: 13 }}>ドラ</strong>
+          {structure.doraIndicators.map((tile, index) => (
+            <span
+              aria-label={`ドラ表示牌 ${index + 1} ${formatTileIdentity(tile.tile)}`}
+              key={tile.id}
+            >
+              <TileFace compact tile={tile.tile} />
+            </span>
+          ))}
         </div>
       )}
-      {structure.doraIndicators.length === 0 ? null : (
-        <div>
-          <strong>ドラ表示牌</strong>
-          <div style={tileRowStyle}>
-            {structure.doraIndicators.map((tile, index) => (
-              <span
-                aria-label={`ドラ表示牌 ${index + 1} ${tileLabel(tile)}`}
-                key={tile.id}
-                style={supportTileStyle}
-              >
-                {tileLabel(tile)}
+
+      {structure.meldGroups.length === 0 ? null : (
+        <div style={supportRowStyle}>
+          <strong style={{ fontSize: 13 }}>副露</strong>
+          {structure.meldGroups.map((meld, index) => (
+            <div
+              aria-label={`${meldKindLabel(meld.kind)} ${index + 1}`}
+              key={`${meld.kind}-${index}`}
+              style={supportBlockStyle}
+            >
+              <span style={{ alignSelf: 'center', fontSize: 9, fontWeight: 700 }}>
+                {meldKindLabel(meld.kind)}
               </span>
-            ))}
-          </div>
+              {meld.tiles.map((tile) => (
+                <TileFace compact key={tile.id} tile={tile.tile} />
+              ))}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -428,8 +442,10 @@ function ConditionControls({
 
   return (
     <>
-      <section aria-labelledby="ordinary-conditions" style={sectionStyle}>
-        <h2 id="ordinary-conditions">基本条件</h2>
+      <section aria-labelledby="ordinary-conditions" style={cardStyle}>
+        <h2 id="ordinary-conditions" style={cardHeadingStyle}>
+          基本条件
+        </h2>
         <RadioButtonSet
           label="和了方法"
           name="win-method"
@@ -467,9 +483,11 @@ function ConditionControls({
         />
       </section>
 
-      <section aria-labelledby="secondary-conditions" style={sectionStyle}>
+      <section aria-labelledby="secondary-conditions" style={cardStyle}>
         <details>
-          <summary id="secondary-conditions">その他の条件</summary>
+          <summary id="secondary-conditions" style={{ cursor: 'pointer', fontWeight: 800 }}>
+            その他の条件
+          </summary>
           <div style={checkboxGridStyle}>
             {SECONDARY_CONDITIONS.map(({ key, label }) => (
               <CheckboxControl
@@ -583,50 +601,134 @@ function CheckboxControl({
   );
 }
 
-function ScoringPreviewPanel({ preview }: { readonly preview: ScoringPreview }) {
+function ConditionsYakuDock({
+  preview,
+  canCalculate,
+  onCalculate,
+}: {
+  readonly preview: ScoringPreview;
+  readonly canCalculate: boolean;
+  readonly onCalculate: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const readyYaku = preview.kind === 'ready' ? preview.yaku : [];
+  const canExpand = readyYaku.length > 2;
+
+  useEffect(() => {
+    if (!canExpand) {
+      setExpanded(false);
+    }
+  }, [canExpand]);
+
+  return (
+    <PersistentBottomBar ariaLabel="現在の役と計算">
+      <div data-preview-state={preview.kind} style={{ display: 'grid', gap: 8 }}>
+        {expanded && preview.kind === 'ready' ? (
+          <div
+            aria-label="現在の役一覧"
+            style={{
+              maxHeight: '32dvh',
+              overflowY: 'auto',
+              paddingBottom: 8,
+              borderBottom: '1px solid #e9ecef',
+            }}
+          >
+            <YakuEntries preview={preview} />
+          </div>
+        ) : null}
+
+        <div style={dockRowStyle}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <strong style={{ fontSize: 13 }}>現在の役</strong>
+              {canExpand ? (
+                <button
+                  aria-expanded={expanded}
+                  onClick={() => setExpanded((open) => !open)}
+                  style={{
+                    padding: 0,
+                    border: 0,
+                    background: 'transparent',
+                    color: '#1971c2',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                  type="button"
+                >
+                  {expanded ? '閉じる' : 'すべて表示'}
+                </button>
+              ) : null}
+            </div>
+            <div
+              aria-live="polite"
+              role="status"
+              style={{
+                marginTop: 3,
+                overflow: 'hidden',
+                color: preview.kind === 'ready' ? '#212529' : '#5c6770',
+                fontSize: 13,
+                fontWeight: 600,
+                lineHeight: 1.35,
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {previewSummary(preview)}
+            </div>
+          </div>
+
+          <button
+            disabled={!canCalculate}
+            onClick={onCalculate}
+            style={{
+              ...calculateButtonStyle,
+              cursor: canCalculate ? 'pointer' : 'not-allowed',
+              opacity: canCalculate ? 1 : 0.45,
+            }}
+            type="button"
+          >
+            計算する
+          </button>
+        </div>
+      </div>
+    </PersistentBottomBar>
+  );
+}
+
+function YakuEntries({ preview }: { readonly preview: Extract<ScoringPreview, { kind: 'ready' }> }) {
+  return (
+    <ul style={{ display: 'grid', gap: 6, margin: 0, paddingLeft: 20 }}>
+      {preview.yaku.map((entry) => (
+        <li key={entry.id}>
+          {getYakuDisplayName(entry.id)}
+          {entry.kind === 'regular' ? ` ${entry.han}翻` : ' 役満'}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function previewSummary(preview: ScoringPreview): string {
   switch (preview.kind) {
     case 'incomplete':
-      return (
-        <div role="status" style={previewStyle}>
-          未入力: {preview.missing.map(requiredFieldLabel).join('、')}
-        </div>
-      );
-
+      return `未入力: ${preview.missing.map(requiredFieldLabel).join('、')}`;
     case 'invalid-input':
-      return (
-        <div role="status" style={previewStyle}>
-          入力の組み合わせを確認してください:
-          {preview.issues.map(inputIssueLabel).join('、')}
-        </div>
-      );
-
+      return `入力の組み合わせを確認してください:${preview.issues.map(inputIssueLabel).join('、')}`;
     case 'invalid-winning-shape':
-      return (
-        <div role="status" style={previewStyle}>
-          和了形として成立していません
-        </div>
-      );
-
+      return '和了形として成立していません';
     case 'no-yaku':
-      return (
-        <div role="status" style={previewStyle}>
-          役なし
-        </div>
+      return '役なし';
+    case 'ready': {
+      if (preview.yaku.length === 0) {
+        return '役なし';
+      }
+      const visible = preview.yaku.slice(0, 2).map((entry) =>
+        `${getYakuDisplayName(entry.id)}${entry.kind === 'regular' ? ` ${entry.han}翻` : ' 役満'}`,
       );
-
-    case 'ready':
-      return (
-        <div role="status" style={previewStyle}>
-          <ul>
-            {preview.yaku.map((entry) => (
-              <li key={entry.id}>
-                {YAKU_LABELS[entry.id]}
-                {entry.kind === 'regular' ? ` ${entry.han}翻` : ''}
-              </li>
-            ))}
-          </ul>
-        </div>
-      );
+      const remaining = preview.yaku.length - visible.length;
+      return `${visible.join(' / ')}${remaining > 0 ? ` / ほか${remaining}件` : ''}`;
+    }
   }
 }
 
@@ -642,10 +744,6 @@ function isScoringReady(
     session.conditions.seatWind !== null &&
     session.structure.completedHand.some((tile) => tile.id === session.winningTileId)
   );
-}
-
-function tileLabel(tile: TileInstance): string {
-  return `${tile.tile.red ? '赤' : ''}${tile.tile.kind}`;
 }
 
 function meldKindLabel(kind: RecognizedStructure['meldGroups'][number]['kind']): string {

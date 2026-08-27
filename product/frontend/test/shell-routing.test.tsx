@@ -111,7 +111,13 @@ describe('production shell routing', () => {
     renderRoute(route, createActiveApplicationStore('active'));
 
     expect(screen.getByRole('heading', { name: heading })).toBeVisible();
-    expect(screen.getByText('現在の和了牌: active-winning')).toBeVisible();
+  });
+
+  it('replaces the generic production header with the Conditions mobile app bar', () => {
+    renderRoute('/conditions', createActiveApplicationStore('mobile-shell'));
+
+    expect(screen.getByTestId('mobile-scoring-app-bar')).toHaveTextContent('条件入力');
+    expect(screen.queryByRole('link', { name: 'mjtensu' })).not.toBeInTheDocument();
   });
 
   it.each([
@@ -158,6 +164,7 @@ describe('production shell routing', () => {
 
     expect(screen.getByRole('heading', { name: '条件入力' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'キャンセル' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '戻る' })).toBeVisible();
   });
 
   it('keeps Top Help round-trip navigation from creating a scoring session', () => {

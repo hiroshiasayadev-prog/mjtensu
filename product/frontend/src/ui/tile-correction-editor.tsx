@@ -22,6 +22,8 @@ import type {
   TileKind,
 } from '@/domain';
 
+import { formatTileIdentity, TileFace } from './tile-presentation';
+
 export interface TileCorrectionEditorProps {
   readonly initialStructure: RecognizedStructure;
   readonly service: CorrectionEditorService;
@@ -46,44 +48,29 @@ type DraftTileLocation = {
   readonly index: number;
 };
 
-const TILE_KINDS: readonly TileKind[] = [
-  '1m',
-  '2m',
-  '3m',
-  '4m',
-  '5m',
-  '6m',
-  '7m',
-  '8m',
-  '9m',
-  '1p',
-  '2p',
-  '3p',
-  '4p',
-  '5p',
-  '6p',
-  '7p',
-  '8p',
-  '9p',
-  '1s',
-  '2s',
-  '3s',
-  '4s',
-  '5s',
-  '6s',
-  '7s',
-  '8s',
-  '9s',
-  '1z',
-  '2z',
-  '3z',
-  '4z',
-  '5z',
-  '6z',
-  '7z',
+const TILE_KEYBOARD_ROWS: readonly {
+  readonly label: string;
+  readonly tiles: readonly TileIdentity[];
+}[] = [
+  {
+    label: '萬子',
+    tiles: keyboardSuitRow('m'),
+  },
+  {
+    label: '筒子',
+    tiles: keyboardSuitRow('p'),
+  },
+  {
+    label: '索子',
+    tiles: keyboardSuitRow('s'),
+  },
+  {
+    label: '字牌',
+    tiles: ['1z', '2z', '3z', '4z', '5z', '6z', '7z'].map(
+      (kind) => ({ kind: kind as TileKind, red: false }),
+    ),
+  },
 ];
-
-const RED_FIVES: readonly TileKind[] = ['5m', '5p', '5s'];
 
 const editorStyle: CSSProperties = {
   display: 'grid',
@@ -176,10 +163,29 @@ const selectorStyle: CSSProperties = {
   background: '#ffffff',
 };
 
-const tileGridStyle: CSSProperties = {
+const tileKeyboardStyle: CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(48px, 1fr))',
-  gap: 6,
+  gap: 10,
+};
+
+const tileKeyboardRowStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(10, minmax(0, 1fr))',
+  gap: 3,
+  alignItems: 'center',
+};
+
+const selectorTileButtonStyle: CSSProperties = {
+  minWidth: 0,
+  minHeight: 0,
+  padding: 0,
+  border: 0,
+  borderRadius: 4,
+  background: 'transparent',
+  cursor: 'pointer',
+  display: 'grid',
+  placeItems: 'center',
+  touchAction: 'manipulation',
 };
 
 export function TileCorrectionEditor({
@@ -455,13 +461,13 @@ function TileRow({
     <div style={tileRowStyle}>
       {tiles.map((tile, index) => (
         <button
-          aria-label={`${label} ${index + 1} ${tileIdentityLabel(tile.tile)}`}
+          aria-label={`${label} ${index + 1} ${formatTileIdentity(tile.tile)}`}
           key={tile.id}
           onClick={() => onEdit(tile.id)}
           style={tileButtonStyle}
           type="button"
         >
-          {tileIdentityLabel(tile.tile)}
+          <TileFace size="keyboard" tile={tile.tile} />
         </button>
       ))}
     </div>
@@ -517,26 +523,26 @@ function TileSelector({
           </button>
         </div>
 
-        <div style={tileGridStyle}>
-          {TILE_KINDS.map((kind) => (
-            <button
-              key={kind}
-              onClick={() => choose({ kind, red: false })}
-              style={tileButtonStyle}
-              type="button"
-            >
-              {kind}
-            </button>
-          ))}
-          {RED_FIVES.map((kind) => (
-            <button
-              key={`red-${kind}`}
-              onClick={() => choose({ kind, red: true })}
-              style={tileButtonStyle}
-              type="button"
-            >
-              赤{kind}
-            </button>
+        <div aria-label="牌キーボード" style={tileKeyboardStyle}>
+          {TILE_KEYBOARD_ROWS.map((row) => (
+            <div key={row.label} style={{ display: 'grid', gap: 4 }}>
+              <span style={{ color: '#6c757d', fontSize: 12, fontWeight: 700 }}>
+                {row.label}
+              </span>
+              <div aria-label={row.label} role="group" style={tileKeyboardRowStyle}>
+                {row.tiles.map((tile) => (
+                  <button
+                    aria-label={formatTileIdentity(tile)}
+                    key={`${tile.kind}-${tile.red ? 'red' : 'normal'}`}
+                    onClick={() => choose(tile)}
+                    style={selectorTileButtonStyle}
+                    type="button"
+                  >
+                    <TileFace size="keyboard" tile={tile} />
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
 
@@ -641,12 +647,20 @@ function correctionIssueMessage(issue: CorrectionIssue): string {
   }
 }
 
-function tileIdentityLabel(tile: TileIdentity): string {
-  return `${tile.red ? '赤' : ''}${tile.kind}`;
-}
-
 function kanOpennessLabel(openness: 'open' | 'concealed'): string {
   return openness === 'open' ? '明槓' : '暗槓';
+}
+
+function keyboardSuitRow(suit: 'm' | 'p' | 's'): readonly TileIdentity[] {
+  return [
+    ...[1, 2, 3, 4, 5].map(
+      (rank) => ({ kind: `${rank}${suit}` as TileKind, red: false }),
+    ),
+    { kind: `5${suit}` as TileKind, red: true },
+    ...[6, 7, 8, 9].map(
+      (rank) => ({ kind: `${rank}${suit}` as TileKind, red: false }),
+    ),
+  ];
 }
 
 function findDraftTileLocation(
