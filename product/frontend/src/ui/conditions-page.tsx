@@ -301,7 +301,7 @@ export function ConditionsPageView({
             }}
           >
             <h2 id="winning-tile-selection" style={cardHeadingStyle}>
-              和了牌を選択
+              牌姿確認 / 和了牌選択
             </h2>
             {renderCorrectionEditor === undefined ? null : (
               <button

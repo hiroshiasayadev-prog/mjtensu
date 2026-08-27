@@ -88,15 +88,29 @@ const structureStyle: CSSProperties = {
 const regionStyle: CSSProperties = {
   display: 'grid',
   gap: 8,
+};
+
+const invalidRegionStyle: CSSProperties = {
+  ...regionStyle,
+  padding: 8,
+  border: '2px solid #c92a2a',
+  borderRadius: 8,
+  background: '#fff5f5',
+};
+
+const meldRegionStyle: CSSProperties = {
+  display: 'grid',
+  gap: 8,
   padding: 10,
   border: '1px solid #d8dee9',
   borderRadius: 8,
   background: '#ffffff',
 };
 
-const invalidRegionStyle: CSSProperties = {
-  ...regionStyle,
+const invalidMeldRegionStyle: CSSProperties = {
+  ...meldRegionStyle,
   border: '2px solid #c92a2a',
+  background: '#fff5f5',
 };
 
 const tileRowStyle: CSSProperties = {
@@ -109,13 +123,16 @@ const tileRowStyle: CSSProperties = {
 const tileButtonStyle: CSSProperties = {
   minWidth: 44,
   minHeight: 56,
-  padding: '4px 6px',
-  border: '1px solid #adb5bd',
+  padding: 0,
+  border: 0,
   borderRadius: 6,
-  background: '#fffaf0',
+  background: 'transparent',
   color: '#1b1d22',
   fontWeight: 700,
   cursor: 'pointer',
+  display: 'grid',
+  placeItems: 'center',
+  touchAction: 'manipulation',
 };
 
 const addButtonStyle: CSSProperties = {
@@ -295,7 +312,7 @@ export function TileCorrectionEditor({
                 aria-label={`副露 ${number}`}
                 data-invalid={issues.length > 0 ? 'true' : 'false'}
                 key={group.id}
-                style={issues.length > 0 ? invalidRegionStyle : regionStyle}
+                style={issues.length > 0 ? invalidMeldRegionStyle : meldRegionStyle}
               >
                 <div
                   style={{

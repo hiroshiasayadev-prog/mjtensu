@@ -36,7 +36,7 @@ const appBarInnerStyle: CSSProperties = {
   minHeight: 52,
   maxWidth: 720,
   margin: '0 auto',
-  padding: '0 8px',
+  padding: '0 max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left))',
 };
 
 const backButtonStyle: CSSProperties = {
@@ -76,7 +76,8 @@ const bottomBarOuterStyle: CSSProperties = {
 const bottomBarInnerStyle: CSSProperties = {
   maxWidth: 720,
   margin: '0 auto',
-  padding: '10px 12px calc(10px + env(safe-area-inset-bottom))',
+  padding:
+    '10px max(16px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))',
 };
 
 export function MobileScoringPageShell({
@@ -117,7 +118,7 @@ export function MobileScoringPageShell({
         style={{
           maxWidth: 720,
           margin: '0 auto',
-          padding: `12px 12px calc(${bottomClearancePx}px + env(safe-area-inset-bottom))`,
+          padding: `12px max(16px, env(safe-area-inset-right)) calc(${bottomClearancePx}px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))`,
         }}
       >
         {children}

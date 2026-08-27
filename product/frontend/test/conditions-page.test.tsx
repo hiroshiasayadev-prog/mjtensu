@@ -305,7 +305,9 @@ describe('ConditionsPageView', () => {
     expect(document.body.textContent).not.toContain('first-five');
     expect(document.body.textContent).not.toContain('second-five');
     expect(document.body.textContent).not.toContain('1z');
-    expect(screen.getByRole('heading', { name: '和了牌を選択' })).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: '牌姿確認 / 和了牌選択' }),
+    ).toBeVisible();
   });
 
   it('updates persistent yaku feedback and calculation availability after condition changes', () => {
