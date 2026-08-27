@@ -614,17 +614,22 @@ function ObservationBox({
   const tile = observation.classification.kind === 'tile'
     ? observation.classification.tile
     : null;
-  const label = tile === null ? '未解決' : tileLabel(tile);
+  const feedbackState = tile === null ? 'unresolved' : 'recognized';
+  const label = tile === null ? '未解決' : tileAccessibleLabel(tile);
 
   return (
     <Box
       aria-label={`認識候補 ${label}`}
       data-testid="recognition-observation-box"
+      data-recognition-state={feedbackState}
       style={{
         ...rectStyle(observation.bbox),
         border: tile === null
-          ? '2px dashed rgba(255,255,255,0.95)'
-          : '2px solid rgba(255,255,255,0.95)',
+          ? '2px dashed #ffd43b'
+          : '2px solid #51cf66',
+        boxShadow: tile === null
+          ? '0 0 0 1px rgba(0,0,0,0.55), 0 0 7px rgba(255,212,59,0.9)'
+          : '0 0 0 1px rgba(0,0,0,0.55), 0 0 7px rgba(81,207,102,0.85)',
         boxSizing: 'border-box',
         pointerEvents: 'none',
       }}
@@ -634,18 +639,9 @@ function ObservationBox({
           position: 'absolute',
           right: -1,
           top: -1,
-          minWidth: 20,
-          padding: '1px 4px',
-          borderRadius: 3,
-          background: 'rgba(255,255,255,0.94)',
-          color: '#111',
-          fontSize: 11,
-          fontWeight: 700,
-          lineHeight: 1.35,
-          textAlign: 'center',
         }}
       >
-        {tile === null ? '?' : tileLabel(tile)}
+        {tile === null ? <UnresolvedTileFace /> : <TileFace tile={tile} compact />}
       </Box>
     </Box>
   );
@@ -682,13 +678,15 @@ function MeldGroupOverlay({
             return (
               <line
                 key={`${group.memberObservationIds.join('-')}-${previous.id}-${member.id}`}
+                data-testid="meld-group-connector"
+                data-overlay-kind="meld-connector"
                 x1={centerX(previous.bbox)}
                 y1={centerY(previous.bbox)}
                 x2={centerX(member.bbox)}
                 y2={centerY(member.bbox)}
-                stroke="white"
-                strokeWidth="0.007"
-                strokeDasharray="0.012 0.009"
+                stroke="#22b8cf"
+                strokeWidth="0.009"
+                strokeDasharray="0.014 0.008"
               />
             );
           });
@@ -721,14 +719,15 @@ function MeldPreview({
     return null;
   }
 
-  const recognizedLabels = members.map((member) =>
+  const recognizedTiles = members.map((member) =>
     member.classification.kind === 'tile'
-      ? tileLabel(member.classification.tile)
-      : '?',
+      ? member.classification.tile
+      : null,
   );
-  const logicalPreview = group.interpretation.kind === 'concealed-kan'
-    ? ['裏', ...recognizedLabels, '裏']
-    : recognizedLabels;
+  const logicalPreview: readonly MeldPreviewFace[] =
+    group.interpretation.kind === 'concealed-kan'
+      ? ['back', ...recognizedTiles, 'back']
+      : recognizedTiles;
   const minY = Math.min(...members.map((member) => member.bbox.y));
   const center = members.reduce((sum, member) => sum + centerX(member.bbox), 0) /
     members.length;
@@ -736,28 +735,161 @@ function MeldPreview({
 
   return (
     <Paper
-      aria-label={`${interpretation}プレビュー ${logicalPreview.join(' ')}`}
+      aria-label={`${interpretation}プレビュー ${logicalPreview.map(meldPreviewFaceLabel).join(' ')}`}
       data-testid="meld-group-preview"
-      px={5}
-      py={2}
+      data-overlay-kind="meld-preview"
+      px={4}
+      py={3}
       radius="sm"
       style={{
         position: 'absolute',
         left: `${center * 100}%`,
-        top: `${Math.max(0.01, minY - 0.075) * 100}%`,
+        top: `${Math.max(0.01, minY - 0.085) * 100}%`,
         transform: 'translateX(-50%)',
-        background: 'rgba(255,255,255,0.92)',
-        fontSize: 10,
-        lineHeight: 1.25,
+        background: 'rgba(8,68,83,0.92)',
+        border: '1px solid #22b8cf',
+        boxShadow: '0 1px 5px rgba(0,0,0,0.45)',
         whiteSpace: 'nowrap',
         pointerEvents: 'none',
       }}
     >
-      <Text size="xs" fw={700}>
-        {logicalPreview.join(' ')}
-      </Text>
+      <Group gap={2} wrap="nowrap">
+        {logicalPreview.map((face, index) => (
+          <MeldPreviewTileFace key={index} face={face} />
+        ))}
+      </Group>
     </Paper>
   );
+}
+
+type MeldPreviewFace = TileIdentity | null | 'back';
+
+function TileFace({
+  tile,
+  compact = false,
+}: {
+  readonly tile: TileIdentity;
+  readonly compact?: boolean;
+}) {
+  const presentation = tilePresentation(tile);
+  const width = compact ? 22 : 26;
+  const height = compact ? 30 : 36;
+
+  return (
+    <Box
+      aria-hidden="true"
+      data-testid="recognition-tile-face"
+      data-red-five={tile.red ? 'true' : 'false'}
+      style={{
+        width,
+        height,
+        display: 'grid',
+        placeItems: 'center',
+        alignContent: 'center',
+        border: '1px solid rgba(0,0,0,0.72)',
+        borderRadius: 3,
+        background: '#fffdf4',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.5)',
+        color: tile.red ? '#c92a2a' : '#111',
+        fontWeight: 800,
+        lineHeight: 1,
+      }}
+    >
+      <span style={{ fontSize: compact ? 12 : 14 }}>{presentation.face}</span>
+      {presentation.suit === null ? null : (
+        <span style={{ fontSize: compact ? 8 : 9, marginTop: 1 }}>
+          {presentation.suit}
+        </span>
+      )}
+    </Box>
+  );
+}
+
+function UnresolvedTileFace() {
+  return (
+    <Box
+      aria-hidden="true"
+      data-testid="recognition-unresolved-face"
+      style={{
+        width: 22,
+        height: 30,
+        display: 'grid',
+        placeItems: 'center',
+        border: '1px solid #5f4b00',
+        borderRadius: 3,
+        background: '#fff3bf',
+        color: '#5f4b00',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.5)',
+        fontSize: 16,
+        fontWeight: 900,
+        lineHeight: 1,
+      }}
+    >
+      ?
+    </Box>
+  );
+}
+
+function MeldPreviewTileFace({ face }: { readonly face: MeldPreviewFace }) {
+  if (face === 'back') {
+    return (
+      <Box
+        aria-hidden="true"
+        data-testid="meld-preview-tile-back"
+        style={{
+          width: 18,
+          height: 25,
+          border: '1px solid rgba(255,255,255,0.78)',
+          borderRadius: 2,
+          background: '#1971c2',
+          boxShadow: 'inset 0 0 0 2px rgba(255,255,255,0.16)',
+        }}
+      />
+    );
+  }
+
+  if (face === null) {
+    return <UnresolvedTileFace />;
+  }
+
+  return <TileFace tile={face} compact />;
+}
+
+function tilePresentation(tile: TileIdentity): {
+  readonly face: string;
+  readonly suit: string | null;
+  readonly accessibleLabel: string;
+} {
+  const rank = Number(tile.kind[0]);
+  const rankLabel = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'][rank] ?? '？';
+  const redPrefix = tile.red ? '赤' : '';
+
+  if (tile.kind.endsWith('m')) {
+    return { face: String(rank), suit: '萬', accessibleLabel: `${redPrefix}${rankLabel}萬` };
+  }
+  if (tile.kind.endsWith('p')) {
+    return { face: String(rank), suit: '筒', accessibleLabel: `${redPrefix}${rankLabel}筒` };
+  }
+  if (tile.kind.endsWith('s')) {
+    return { face: String(rank), suit: '索', accessibleLabel: `${redPrefix}${rankLabel}索` };
+  }
+
+  const honor = ['?', '東', '南', '西', '北', '白', '發', '中'][rank] ?? '?';
+  return { face: honor, suit: null, accessibleLabel: honor };
+}
+
+function tileAccessibleLabel(tile: TileIdentity): string {
+  return tilePresentation(tile).accessibleLabel;
+}
+
+function meldPreviewFaceLabel(face: MeldPreviewFace): string {
+  if (face === 'back') {
+    return '裏';
+  }
+  if (face === null) {
+    return '未解決';
+  }
+  return tileAccessibleLabel(face);
 }
 
 function OwnedRecoveryPanel({
@@ -1044,10 +1176,6 @@ function centerX(rect: NormalizedRect): number {
 
 function centerY(rect: NormalizedRect): number {
   return rect.y + rect.height / 2;
-}
-
-function tileLabel(tile: TileIdentity): string {
-  return `${tile.red ? '赤' : ''}${tile.kind}`;
 }
 
 function meldInterpretationLabel(

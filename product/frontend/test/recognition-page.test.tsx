@@ -401,8 +401,8 @@ describe('RecognitionPageView live feedback', () => {
 
     await waitFor(() => expect(recognizer.start).toHaveBeenCalledTimes(1));
 
-    const handTile = { kind: '1m', red: false } as const;
-    const meldTile = { kind: '5s', red: false } as const;
+    const handTile = { kind: '7z', red: false } as const;
+    const meldTile = { kind: '5s', red: true } as const;
     const concealedKan = {
       kind: 'concealed-kan',
       tiles: [meldTile, meldTile, meldTile, meldTile],
@@ -459,11 +459,31 @@ describe('RecognitionPageView live feedback', () => {
     });
 
     expect(screen.getAllByTestId('recognition-observation-box')).toHaveLength(4);
-    expect(screen.getByLabelText('認識候補 1m')).toBeVisible();
-    expect(screen.getByLabelText('認識候補 未解決')).toBeVisible();
+    const recognized = screen.getByLabelText('認識候補 中');
+    const unresolved = screen.getByLabelText('認識候補 未解決');
+    expect(recognized).toBeVisible();
+    expect(unresolved).toBeVisible();
+    expect(recognized).toHaveAttribute('data-recognition-state', 'recognized');
+    expect(unresolved).toHaveAttribute('data-recognition-state', 'unresolved');
+    expect(recognized.style.border).not.toBe(unresolved.style.border);
+    expect(screen.getByTestId('recognition-unresolved-face')).toBeVisible();
+
+    const connector = screen.getByTestId('meld-group-connector');
+    expect(connector).toHaveAttribute('data-overlay-kind', 'meld-connector');
+    expect(connector.getAttribute('stroke')).not.toBe('white');
+    const meldPreview = screen.getByLabelText(
+      '暗槓プレビュー 裏 赤五索 赤五索 裏',
+    );
+    expect(meldPreview).toBeVisible();
+    expect(meldPreview).toHaveAttribute('data-overlay-kind', 'meld-preview');
+    expect(screen.getAllByTestId('meld-preview-tile-back')).toHaveLength(2);
+
+    const tileFaces = screen.getAllByTestId('recognition-tile-face');
     expect(
-      screen.getByLabelText('暗槓プレビュー 裏 5s 5s 裏'),
-    ).toBeVisible();
+      tileFaces.filter((face) => face.getAttribute('data-red-five') === 'true'),
+    ).toHaveLength(4);
+    expect(screen.queryByText('7z')).not.toBeInTheDocument();
+    expect(screen.queryByText('5s')).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent(
       '認識しています（有効牌 3/10、手牌 1/2）',
     );
