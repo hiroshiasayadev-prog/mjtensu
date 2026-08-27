@@ -24,7 +24,11 @@ import type {
   SemanticRegion,
   TensorOutput,
 } from './detector/types';
-import type { RecognitionFrame, RecognitionPipeline } from './contracts';
+import type {
+  RecognitionEvaluationTiming,
+  RecognitionFrame,
+  RecognitionPipeline,
+} from './contracts';
 import type {
   RecognitionInferenceSession,
   RecognitionModelRuntimeInspection,
@@ -61,6 +65,8 @@ export interface ProductionRecognitionPipelineDependencies {
   readonly classifierNormalizationOverride?: ProductionClassifierNormalization;
   readonly detectorPostprocessor?: NanoDetDetectionPostprocessor;
   readonly platform?: RecognitionPipelinePlatform;
+  readonly now?: () => number;
+  readonly onEvaluationTiming?: (timing: RecognitionEvaluationTiming) => void;
 }
 
 export function createProductionRecognitionPipeline(
@@ -83,6 +89,7 @@ export function createProductionRecognitionPipeline(
   const detectorPostprocessor =
     dependencies.detectorPostprocessor ?? createProductionNanoDetPostprocessor();
   const platform = dependencies.platform ?? browserPipelinePlatform;
+  const now = dependencies.now ?? monotonicNow;
   const classifier = createC8ClassifierRuntime({
     baseClassifier: createClassifierSessionAdapter(
       baseClassifier,
@@ -96,6 +103,7 @@ export function createProductionRecognitionPipeline(
     ),
     baseNormalization: classifierNormalization.base,
     redFiveNormalization: classifierNormalization.redFive,
+    now,
   });
 
   const inFlight = new Set<Promise<FrameRecognitionSnapshot>>();
@@ -106,8 +114,10 @@ export function createProductionRecognitionPipeline(
     frame: RecognitionFrame,
   ): Promise<FrameRecognitionSnapshot> => {
     validateFrame(frame);
+    const evaluationStartedAt = now();
 
     const captureRegions = toCaptureRegions(frame);
+    const detectorPreprocessingStartedAt = now();
     let detectorInput: Float32Array;
     try {
       const composite = platform.buildComposite(frame, captureRegions);
@@ -118,7 +128,13 @@ export function createProductionRecognitionPipeline(
       }
       throw inferenceFailure('detector', error);
     }
+    const detectorPreprocessingFinishedAt = now();
+
+    const detectorInferenceStartedAt = now();
     const detectorOutput = await runDetector(detector, detectorInput);
+    const detectorInferenceFinishedAt = now();
+
+    const detectorPostprocessingStartedAt = now();
     let detections: readonly RegionDetection[];
     try {
       detections = detectorPostprocessor.process(
@@ -131,24 +147,73 @@ export function createProductionRecognitionPipeline(
       }
       throw modelIncompatible('detector');
     }
+    const detectorPostprocessingFinishedAt = now();
 
-    const candidates: ClassifiedRecognitionCandidate[] = [];
-    for (const detection of detections) {
-      const classification = await classifyDetection(
-        frame,
-        detection,
-        classifier.classify,
-        platform,
+    const cropExtractionStartedAt = now();
+    let crops: readonly ClassifierCropImage[];
+    try {
+      crops = detections.map((detection) =>
+        platform.extractCrop(frame, detection.sourceBox),
       );
-      candidates.push({
-        id: detection.id,
-        region: toRecognitionRegion(detection.region),
-        bbox: normalizeRect(detection.sourceBox, frame),
-        classification,
+    } catch (error) {
+      if (isRecognitionRuntimeError(error)) {
+        throw error;
+      }
+      throw inferenceFailure('tile-classifier', error);
+    }
+    const cropExtractionFinishedAt = now();
+
+    let classifications: readonly TileClassification[];
+    try {
+      classifications = await classifier.classifyBatch(crops);
+    } catch (error) {
+      if (isRecognitionRuntimeError(error)) {
+        throw error;
+      }
+      throw inferenceFailure('tile-classifier', error);
+    }
+    if (classifications.length !== detections.length) {
+      throw modelIncompatible('tile-classifier');
+    }
+
+    const candidates: ClassifiedRecognitionCandidate[] = detections.map(
+      (detection, index) => {
+        const classification = classifications[index];
+        if (classification === undefined) {
+          throw modelIncompatible('tile-classifier');
+        }
+        return {
+          id: detection.id,
+          region: toRecognitionRegion(detection.region),
+          bbox: normalizeRect(detection.sourceBox, frame),
+          classification,
+        };
+      },
+    );
+    const snapshot = buildFrameRecognitionSnapshot(candidates);
+    const classifierTiming = classifier.getLastBatchTiming();
+    const evaluationFinishedAt = now();
+
+    if (classifierTiming !== null) {
+      reportEvaluationTiming(dependencies.onEvaluationTiming, {
+        totalMs: evaluationFinishedAt - evaluationStartedAt,
+        candidateCount: classifierTiming.candidateCount,
+        redFiveCandidateCount: classifierTiming.redFiveCandidateCount,
+        detectorPreprocessingMs:
+          detectorPreprocessingFinishedAt - detectorPreprocessingStartedAt,
+        detectorInferenceMs:
+          detectorInferenceFinishedAt - detectorInferenceStartedAt,
+        detectorPostprocessingMs:
+          detectorPostprocessingFinishedAt - detectorPostprocessingStartedAt,
+        cropExtractionMs: cropExtractionFinishedAt - cropExtractionStartedAt,
+        baseClassifierPreprocessingMs: classifierTiming.basePreprocessingMs,
+        baseClassifierInferenceMs: classifierTiming.baseInferenceMs,
+        redFiveClassifierPreprocessingMs: classifierTiming.redFivePreprocessingMs,
+        redFiveClassifierInferenceMs: classifierTiming.redFiveInferenceMs,
       });
     }
 
-    return buildFrameRecognitionSnapshot(candidates);
+    return snapshot;
   };
 
   return {
@@ -272,28 +337,18 @@ function createClassifierSessionAdapter(
       }
 
       const output = outputs[outputName];
-      if (!hasFloatData(output) || output.data.length !== expectedLogits) {
+      const batchSize = input.shape[0];
+      if (
+        !Number.isInteger(batchSize) ||
+        batchSize < 1 ||
+        !hasFloatData(output) ||
+        output.data.length !== expectedLogits * batchSize
+      ) {
         throw modelIncompatible(role);
       }
       return output.data;
     },
   };
-}
-
-async function classifyDetection(
-  frame: RecognitionFrame,
-  detection: RegionDetection,
-  classify: (crop: ClassifierCropImage) => Promise<TileClassification>,
-  platform: RecognitionPipelinePlatform,
-): Promise<TileClassification> {
-  try {
-    return await classify(platform.extractCrop(frame, detection.sourceBox));
-  } catch (error) {
-    if (isRecognitionRuntimeError(error)) {
-      throw error;
-    }
-    throw inferenceFailure('tile-classifier', error);
-  }
 }
 
 function toCaptureRegions(frame: RecognitionFrame): CaptureRegions {
@@ -441,4 +496,22 @@ function inferenceFailure(
 
 function modelIncompatible(model: RecognitionModelRole): RecognitionRuntimeError {
   return { kind: 'model-incompatible', model };
+}
+
+function reportEvaluationTiming(
+  report: ((timing: RecognitionEvaluationTiming) => void) | undefined,
+  timing: RecognitionEvaluationTiming,
+): void {
+  if (report === undefined) {
+    return;
+  }
+  try {
+    report(timing);
+  } catch {
+    // Diagnostics must never change Recognition behavior.
+  }
+}
+
+function monotonicNow(): number {
+  return globalThis.performance?.now() ?? Date.now();
 }

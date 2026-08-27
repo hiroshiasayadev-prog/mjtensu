@@ -1,6 +1,11 @@
 import type { RecognizedStructure } from '@/domain';
 
-import type { RecognitionRuntimeError } from './model-runtime/types';
+import type {
+  ExecutionProvider,
+  RecognitionModelRole,
+  RecognitionModelRuntimeSpec,
+  RecognitionRuntimeError,
+} from './model-runtime/types';
 import type {
   FrameRecognitionSnapshot,
   NormalizedRect,
@@ -24,9 +29,36 @@ export interface RecognitionPipeline {
   dispose(): Promise<void>;
 }
 
+export interface RecognitionEvaluationTiming {
+  readonly totalMs: number;
+  readonly candidateCount: number;
+  readonly redFiveCandidateCount: number;
+  readonly detectorPreprocessingMs: number;
+  readonly detectorInferenceMs: number;
+  readonly detectorPostprocessingMs: number;
+  readonly cropExtractionMs: number;
+  readonly baseClassifierPreprocessingMs: number;
+  readonly baseClassifierInferenceMs: number;
+  readonly redFiveClassifierPreprocessingMs: number;
+  readonly redFiveClassifierInferenceMs: number;
+}
+
+export interface RecognitionRuntimeModelDiagnostic {
+  readonly role: RecognitionModelRole;
+  readonly runtimeSpec: RecognitionModelRuntimeSpec;
+  readonly selectedProvider?: ExecutionProvider;
+  readonly failedProviders: readonly ExecutionProvider[];
+}
+
+export interface RecognitionRuntimeDiagnostics {
+  readonly models: readonly RecognitionRuntimeModelDiagnostic[];
+  readonly recentEvaluations: readonly RecognitionEvaluationTiming[];
+}
+
 export interface RecognitionRuntime {
   initialize(): Promise<void>;
   createPipeline(): RecognitionPipeline;
+  getDiagnostics?(): RecognitionRuntimeDiagnostics;
   dispose(): Promise<void>;
 }
 

@@ -9,6 +9,7 @@ import {
   type BaseClassifierLabel,
 } from '@/recognition/classifier/labels';
 import {
+  makeBaseClassifierBatchTensor,
   makeBaseClassifierTensor,
   preprocessGrayClassifierCrop,
   preprocessRgbClassifierCrop,
@@ -70,6 +71,21 @@ describe('C8 classifier crop preprocessing', () => {
     expect(tensor.data[0]).toBeCloseTo((25 / 255 - 0.5) / 0.25);
     expect(tensor.data[1]).toBeCloseTo((10 / 255 - 0.5) / 0.25);
   });
+
+  it('packs multiple crops into one [N,C,H,W] tensor without changing per-crop normalization', () => {
+    const tensor = makeBaseClassifierBatchTensor(
+      [grayCrop, grayCrop],
+      { mean: [0.5], std: [0.25] },
+      imageSize,
+    );
+
+    expect(tensor.shape).toEqual([2, 1, imageSize, imageSize]);
+    expect(tensor.data).toHaveLength(2 * imageSize * imageSize);
+    expect(tensor.data[0]).toBeCloseTo((25 / 255 - 0.5) / 0.25);
+    expect(tensor.data[imageSize * imageSize]).toBeCloseTo(
+      (25 / 255 - 0.5) / 0.25,
+    );
+  });
 });
 
 describe('C8 base classifier mapping', () => {
@@ -105,6 +121,64 @@ describe('C8 base classifier mapping', () => {
 });
 
 describe('C8 classifier runtime red-five refinement', () => {
+  it('classifies a representative batch with one base inference and one selective red-five inference', async () => {
+    const base = new FakeSession(
+      concatenateLogits(
+        logitsFor('1m'),
+        logitsFor('invalid'),
+        logitsFor('5p'),
+        logitsFor('5s'),
+      ),
+    );
+    const redFive = new FakeSession(new Float32Array([1, 0, 0, 1]));
+    const runtime = createC8ClassifierRuntime({
+      baseClassifier: base,
+      redFiveClassifier: redFive,
+      baseNormalization: { mean: [0], std: [1] },
+      redFiveNormalization: { mean: [0, 0, 0], std: [1, 1, 1] },
+      imageSize,
+    });
+
+    await expect(
+      runtime.classifyBatch([rgbCrop, rgbCrop, rgbCrop, rgbCrop]),
+    ).resolves.toEqual([
+      { kind: 'tile', tile: { kind: '1m', red: false } },
+      { kind: 'invalid' },
+      { kind: 'tile', tile: { kind: '5p', red: false } },
+      { kind: 'tile', tile: { kind: '5s', red: true } },
+    ]);
+    expect(base.inputs).toHaveLength(1);
+    expect(base.inputs[0]?.shape).toEqual([4, 1, imageSize, imageSize]);
+    expect(redFive.inputs).toHaveLength(1);
+    expect(redFive.inputs[0]?.shape).toEqual([2, 3, imageSize, imageSize]);
+    expect(runtime.getLastBatchTiming()).toMatchObject({
+      candidateCount: 4,
+      redFiveCandidateCount: 2,
+    });
+  });
+
+  it('skips red-five inference entirely when a batch has no five candidates', async () => {
+    const base = new FakeSession(
+      concatenateLogits(logitsFor('4m'), logitsFor('invalid'), logitsFor('9s')),
+    );
+    const redFive = new FakeSession([0, 1]);
+    const runtime = createC8ClassifierRuntime({
+      baseClassifier: base,
+      redFiveClassifier: redFive,
+      baseNormalization: { mean: [0], std: [1] },
+      redFiveNormalization: { mean: [0, 0, 0], std: [1, 1, 1] },
+      imageSize,
+    });
+
+    await expect(runtime.classifyBatch([rgbCrop, rgbCrop, rgbCrop])).resolves.toEqual([
+      { kind: 'tile', tile: { kind: '4m', red: false } },
+      { kind: 'invalid' },
+      { kind: 'tile', tile: { kind: '9s', red: false } },
+    ]);
+    expect(base.inputs).toHaveLength(1);
+    expect(redFive.inputs).toHaveLength(0);
+  });
+
   it('does not invoke the red-five specialist for non-five and invalid base results', async () => {
     const base = new FakeSession(logitsFor('4m'), logitsFor('invalid'));
     const redFive = new FakeSession([0, 1]);
@@ -164,6 +238,16 @@ function logitsFor(label: BaseClassifierLabel): Float32Array {
   logits.fill(-1);
   logits[BASE_CLASSIFIER_LABELS.indexOf(label)] = 10;
   return logits;
+}
+
+function concatenateLogits(...parts: readonly Float32Array[]): Float32Array {
+  const output = new Float32Array(parts.reduce((sum, part) => sum + part.length, 0));
+  let offset = 0;
+  for (const part of parts) {
+    output.set(part, offset);
+    offset += part.length;
+  }
+  return output;
 }
 
 class FakeSession implements ClassifierSession {

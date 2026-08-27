@@ -1,4 +1,9 @@
-import type { RecognitionPipeline, RecognitionRuntime } from './contracts';
+import type {
+  RecognitionEvaluationTiming,
+  RecognitionPipeline,
+  RecognitionRuntime,
+  RecognitionRuntimeDiagnostics,
+} from './contracts';
 import {
   createBrowserRecognitionModelAssets,
   type RecognitionModelAssetResolver,
@@ -50,8 +55,16 @@ export function createRecognitionRuntimeComposition(
   options: RecognitionRuntimeCompositionOptions,
 ): RecognitionRuntime {
   const pipelines = new Set<RecognitionPipeline>();
+  const recentEvaluations: RecognitionEvaluationTiming[] = [];
   let disposed = false;
   let disposalInFlight: Promise<void> | null = null;
+
+  const recordEvaluationTiming = (timing: RecognitionEvaluationTiming) => {
+    recentEvaluations.push(timing);
+    if (recentEvaluations.length > 120) {
+      recentEvaluations.shift();
+    }
+  };
 
   return {
     initialize() {
@@ -68,10 +81,21 @@ export function createRecognitionRuntimeComposition(
       const pipeline = createProductionRecognitionPipeline({
         modelRuntime: options.modelRuntime,
         classifierNormalizationOverride: options.classifierNormalizationOverride,
+        onEvaluationTiming: recordEvaluationTiming,
       });
       const tracked = trackPipeline(pipeline, pipelines);
       pipelines.add(tracked);
       return tracked;
+    },
+
+    getDiagnostics(): RecognitionRuntimeDiagnostics {
+      return {
+        models: options.modelRuntime.getDiagnostics().map((diagnostic) => ({
+          ...diagnostic,
+          failedProviders: [...diagnostic.failedProviders],
+        })),
+        recentEvaluations: [...recentEvaluations],
+      };
     },
 
     dispose() {

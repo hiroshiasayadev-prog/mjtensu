@@ -232,17 +232,21 @@ function resizedDimensions(
   ];
 }
 
-function normalizeToTensor(
-  channels: readonly Uint8Array[],
+function normalizeBatchToTensor(
+  samples: readonly (readonly Uint8Array[])[],
+  channelCount: number,
   imageSize: number,
   normalization: ClassifierNormalization,
 ): ClassifierTensor {
+  if (samples.length === 0) {
+    throw new Error('Classifier batch must contain at least one crop');
+  }
   if (
-    normalization.mean.length !== channels.length ||
-    normalization.std.length !== channels.length
+    normalization.mean.length !== channelCount ||
+    normalization.std.length !== channelCount
   ) {
     throw new Error(
-      `Normalization has ${normalization.mean.length}/${normalization.std.length} channels; expected ${channels.length}`,
+      `Normalization has ${normalization.mean.length}/${normalization.std.length} channels; expected ${channelCount}`,
     );
   }
   if (normalization.std.some((value) => value <= 0)) {
@@ -250,21 +254,32 @@ function normalizeToTensor(
   }
 
   const planeLength = imageSize * imageSize;
-  const tensor = new Float32Array(channels.length * planeLength);
+  const sampleLength = channelCount * planeLength;
+  const tensor = new Float32Array(samples.length * sampleLength);
 
-  for (let channelIndex = 0; channelIndex < channels.length; channelIndex += 1) {
-    const channel = channels[channelIndex];
-    const mean = normalization.mean[channelIndex] ?? 0;
-    const std = normalization.std[channelIndex] ?? 1;
-    const channelOffset = channelIndex * planeLength;
-    for (let index = 0; index < planeLength; index += 1) {
-      tensor[channelOffset + index] = ((channel[index] ?? 0) / 255 - mean) / std;
+  for (let sampleIndex = 0; sampleIndex < samples.length; sampleIndex += 1) {
+    const channels = samples[sampleIndex];
+    if (channels === undefined || channels.length !== channelCount) {
+      throw new Error(`Classifier sample ${sampleIndex} has an invalid channel count`);
+    }
+
+    for (let channelIndex = 0; channelIndex < channelCount; channelIndex += 1) {
+      const channel = channels[channelIndex];
+      if (channel === undefined || channel.length !== planeLength) {
+        throw new Error(`Classifier sample ${sampleIndex} has an invalid channel plane`);
+      }
+      const mean = normalization.mean[channelIndex] ?? 0;
+      const std = normalization.std[channelIndex] ?? 1;
+      const channelOffset = sampleIndex * sampleLength + channelIndex * planeLength;
+      for (let index = 0; index < planeLength; index += 1) {
+        tensor[channelOffset + index] = ((channel[index] ?? 0) / 255 - mean) / std;
+      }
     }
   }
 
   return {
     data: tensor,
-    shape: [1, channels.length, imageSize, imageSize],
+    shape: [samples.length, channelCount, imageSize, imageSize],
   };
 }
 
@@ -362,16 +377,52 @@ export function preprocessRgbClassifierCrop(
   return canvas;
 }
 
+export function makeBaseClassifierBatchTensor(
+  crops: readonly ClassifierCropImage[],
+  normalization: ClassifierNormalization,
+  imageSize = CLASSIFIER_IMAGE_SIZE,
+): ClassifierTensor {
+  validateImageSize(imageSize);
+  return normalizeBatchToTensor(
+    crops.map((crop) => [preprocessGrayClassifierCrop(crop, imageSize)]),
+    1,
+    imageSize,
+    normalization,
+  );
+}
+
 export function makeBaseClassifierTensor(
   crop: ClassifierCropImage,
   normalization: ClassifierNormalization,
   imageSize = CLASSIFIER_IMAGE_SIZE,
 ): ClassifierTensor {
-  return normalizeToTensor(
-    [preprocessGrayClassifierCrop(crop, imageSize)],
-    imageSize,
-    normalization,
-  );
+  return makeBaseClassifierBatchTensor([crop], normalization, imageSize);
+}
+
+export function makeRedFiveClassifierBatchTensor(
+  crops: readonly ClassifierCropImage[],
+  normalization: ClassifierNormalization,
+  imageSize = CLASSIFIER_IMAGE_SIZE,
+): ClassifierTensor {
+  validateImageSize(imageSize);
+  const planeLength = imageSize * imageSize;
+  const samples = crops.map((crop) => {
+    const rgb = preprocessRgbClassifierCrop(crop, imageSize);
+    const channels = [
+      new Uint8Array(planeLength),
+      new Uint8Array(planeLength),
+      new Uint8Array(planeLength),
+    ];
+
+    for (let index = 0; index < planeLength; index += 1) {
+      channels[0][index] = rgb[index * 3] ?? 0;
+      channels[1][index] = rgb[index * 3 + 1] ?? 0;
+      channels[2][index] = rgb[index * 3 + 2] ?? 0;
+    }
+    return channels;
+  });
+
+  return normalizeBatchToTensor(samples, 3, imageSize, normalization);
 }
 
 export function makeRedFiveClassifierTensor(
@@ -379,19 +430,5 @@ export function makeRedFiveClassifierTensor(
   normalization: ClassifierNormalization,
   imageSize = CLASSIFIER_IMAGE_SIZE,
 ): ClassifierTensor {
-  const rgb = preprocessRgbClassifierCrop(crop, imageSize);
-  const planeLength = imageSize * imageSize;
-  const channels = [
-    new Uint8Array(planeLength),
-    new Uint8Array(planeLength),
-    new Uint8Array(planeLength),
-  ];
-
-  for (let index = 0; index < planeLength; index += 1) {
-    channels[0][index] = rgb[index * 3] ?? 0;
-    channels[1][index] = rgb[index * 3 + 1] ?? 0;
-    channels[2][index] = rgb[index * 3 + 2] ?? 0;
-  }
-
-  return normalizeToTensor(channels, imageSize, normalization);
+  return makeRedFiveClassifierBatchTensor([crop], normalization, imageSize);
 }

@@ -1,5 +1,6 @@
 import type { TileKind } from '@/domain';
 import type {
+  RecognitionEvaluationTiming,
   RecognitionFrame,
   RecognitionFrameSource,
   RecognitionPipeline,
@@ -33,9 +34,13 @@ describe('production recognition one-frame composition', () => {
       tensorOutput(new Float32Array(1), [1, 1, 1]),
     ]);
     const base = new FakeInferenceSession([
-      classifierOutput(logitsFor('1m')),
-      classifierOutput(logitsFor('invalid')),
-      classifierOutput(logitsFor('5m')),
+      classifierOutput(
+        concatenateFloat32(
+          logitsFor('1m'),
+          logitsFor('invalid'),
+          logitsFor('5m'),
+        ),
+      ),
     ]);
     const redFive = new FakeInferenceSession([
       classifierOutput(new Float32Array([0, 1])),
@@ -45,17 +50,21 @@ describe('production recognition one-frame composition', () => {
       detection('hand-invalid', 'completed_hand', 200, 700),
       detection('hand-red-five', 'completed_hand', 300, 700),
     ];
+    const timings: RecognitionEvaluationTiming[] = [];
     const pipeline = createProductionRecognitionPipeline({
       modelRuntime: fakeModelInspection({ detector, base, redFive }),
       detectorPostprocessor: { process: () => detections },
       platform: fakePipelinePlatform(),
+      onEvaluationTiming: (timing) => timings.push(timing),
     });
 
     const snapshot = await pipeline.evaluate(frame());
 
     expect(detector.runCalls).toHaveLength(1);
-    expect(base.runCalls).toHaveLength(3);
+    expect(base.runCalls).toHaveLength(1);
     expect(redFive.runCalls).toHaveLength(1);
+    expect(tensorDims(base.runCalls[0])).toEqual([3, 1, 64, 64]);
+    expect(tensorDims(redFive.runCalls[0])).toEqual([1, 3, 64, 64]);
     expect(firstTensorValue(base.runCalls[0])).toBeCloseTo(
       (128 / 255 - 0.6815832403977466) / 0.2725553681973969,
     );
@@ -86,6 +95,34 @@ describe('production recognition one-frame composition', () => {
       kind: 'ineligible',
       reason: 'insufficient-visible-tiles',
     });
+    expect(timings).toHaveLength(1);
+    expect(timings[0]).toMatchObject({
+      candidateCount: 3,
+      redFiveCandidateCount: 1,
+    });
+    expect(timings[0]?.cropExtractionMs).toBeGreaterThanOrEqual(0);
+    expect(timings[0]?.baseClassifierPreprocessingMs).toBeGreaterThanOrEqual(0);
+    expect(timings[0]?.baseClassifierInferenceMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('does not invoke either classifier when the detector yields no candidates', async () => {
+    const detector = new FakeInferenceSession([
+      tensorOutput(new Float32Array(1), [1, 1, 1]),
+    ]);
+    const base = new FakeInferenceSession([]);
+    const redFive = new FakeInferenceSession([]);
+    const pipeline = createProductionRecognitionPipeline({
+      modelRuntime: fakeModelInspection({ detector, base, redFive }),
+      classifierNormalizationOverride: testNormalization,
+      detectorPostprocessor: { process: () => [] },
+      platform: fakePipelinePlatform(),
+    });
+
+    const snapshot = await pipeline.evaluate(frame());
+
+    expect(base.runCalls).toHaveLength(0);
+    expect(redFive.runCalls).toHaveLength(0);
+    expect(snapshot.observations).toEqual([]);
   });
 
   it.each([
@@ -148,6 +185,44 @@ describe('production recognition one-frame composition', () => {
 });
 
 describe('recognition runtime lifecycle composition', () => {
+  it('exposes actual selected model providers for target-device diagnostics', () => {
+    const modelRuntime: RecognitionModelRuntime & RecognitionModelRuntimeInspection = {
+      async initialize() {},
+      async dispose() {},
+      getInitializedModel() {
+        throw new Error('not needed');
+      },
+      getDiagnostics() {
+        return [
+          {
+            role: 'detector',
+            runtimeSpec: 'nanodet-plus-m-320-v1',
+            selectedProvider: 'webgl',
+            failedProviders: ['wasm-simd', 'wasm-threaded'],
+          },
+          {
+            role: 'tile-classifier',
+            runtimeSpec: 'c8-tile-35-v1',
+            selectedProvider: 'wasm-simd',
+            failedProviders: [],
+          },
+          {
+            role: 'red-five-classifier',
+            runtimeSpec: 'c8-red-five-v1',
+            selectedProvider: 'wasm-simd',
+            failedProviders: [],
+          },
+        ];
+      },
+    };
+    const runtime = createRecognitionRuntimeComposition({ modelRuntime });
+
+    expect(runtime.getDiagnostics?.()).toEqual({
+      models: modelRuntime.getDiagnostics(),
+      recentEvaluations: [],
+    });
+  });
+
   it('keeps shared model sessions alive when a route-owned pipeline is disposed', async () => {
     let initialized = false;
     let modelDisposeCount = 0;
@@ -456,6 +531,31 @@ function tensorOutput(data: Float32Array, dims: readonly number[]): TensorOutput
 
 function classifierOutput(data: Float32Array) {
   return { data };
+}
+
+function concatenateFloat32(...parts: readonly Float32Array[]): Float32Array {
+  const output = new Float32Array(parts.reduce((sum, part) => sum + part.length, 0));
+  let offset = 0;
+  for (const part of parts) {
+    output.set(part, offset);
+    offset += part.length;
+  }
+  return output;
+}
+
+function tensorDims(
+  feeds: Readonly<Record<string, unknown>> | undefined,
+): readonly number[] {
+  const tensor = feeds?.input;
+  if (
+    typeof tensor !== 'object' ||
+    tensor === null ||
+    !('dims' in tensor) ||
+    !Array.isArray(tensor.dims)
+  ) {
+    throw new Error('Expected fake classifier tensor dimensions');
+  }
+  return tensor.dims as readonly number[];
 }
 
 function firstTensorValue(feeds: Readonly<Record<string, unknown>> | undefined): number {

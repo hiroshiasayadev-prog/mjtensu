@@ -17,11 +17,14 @@ export type {
 } from './detector/types';
 export type { TileClassification } from './classifier/labels';
 export type {
+  RecognitionEvaluationTiming,
   RecognitionFrame,
   RecognitionFrameSource,
   RecognitionPipeline,
   RecognitionRun,
   RecognitionRuntime,
+  RecognitionRuntimeDiagnostics,
+  RecognitionRuntimeModelDiagnostic,
   RealtimeRecognitionListener,
   RealtimeRecognitionUpdate,
   RealtimeRecognizer,
