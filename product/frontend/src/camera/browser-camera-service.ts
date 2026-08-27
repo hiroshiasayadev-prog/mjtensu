@@ -1,6 +1,5 @@
 import type {
   CameraFrame,
-  CameraFrameRotation,
   CameraOpenRequest,
   CameraPreview,
   CameraRuntimeError,
@@ -64,9 +63,7 @@ class BrowserCameraSession implements CameraSession {
     };
   }
 
-  captureLatest(options: {
-    readonly rotation?: CameraFrameRotation;
-  } = {}): CameraFrame | null {
+  captureLatest(): CameraFrame | null {
     const video = this.attachedVideo;
     if (
       this.stopped ||
@@ -78,16 +75,8 @@ class BrowserCameraSession implements CameraSession {
       return null;
     }
 
-    const requestedRotation = options.rotation ?? 0;
-    const rotation = video.videoHeight > video.videoWidth
-      ? requestedRotation
-      : 0;
     const canvas = this.createCanvas();
-    const captureSize = canonicalCaptureSize(
-      video.videoWidth,
-      video.videoHeight,
-      rotation,
-    );
+    const captureSize = canonicalCaptureSize(video.videoWidth);
     canvas.width = captureSize.width;
     canvas.height = captureSize.height;
     const context = canvas.getContext('2d');
@@ -96,6 +85,10 @@ class BrowserCameraSession implements CameraSession {
     }
 
     try {
+      // Recognition always consumes the same 16:9 geometry that the preview
+      // exposes with object-fit: cover. Center-crop the raw MediaStream frame
+      // instead of stretching or rotating it; viewport orientation is a UI
+      // layout concern and must not alter camera coordinates.
       drawCanonicalFrame(
         context,
         video,
@@ -103,7 +96,6 @@ class BrowserCameraSession implements CameraSession {
         video.videoHeight,
         canvas.width,
         canvas.height,
-        rotation,
       );
     } catch (error) {
       if (isTransientVideoFrameError(error)) {
@@ -247,11 +239,8 @@ function normalizeCameraOpenError(cause: unknown): CameraRuntimeError {
 
 function canonicalCaptureSize(
   videoWidth: number,
-  videoHeight: number,
-  rotation: CameraFrameRotation,
 ): { readonly width: number; readonly height: number } {
-  const orientedWidth = rotation === 0 ? videoWidth : videoHeight;
-  const width = Math.max(1, Math.min(1280, Math.round(orientedWidth)));
+  const width = Math.max(1, Math.min(1280, Math.round(videoWidth)));
   return {
     width,
     height: Math.max(1, Math.round(width * 9 / 16)),
@@ -265,34 +254,8 @@ function drawCanonicalFrame(
   sourceHeight: number,
   targetWidth: number,
   targetHeight: number,
-  rotation: CameraFrameRotation,
 ): void {
-  const sourceAspect = rotation === 0 ? 16 / 9 : 9 / 16;
-  const crop = centerCrop(sourceWidth, sourceHeight, sourceAspect);
-
-  if (rotation === 0) {
-    context.drawImage(
-      video,
-      crop.x,
-      crop.y,
-      crop.width,
-      crop.height,
-      0,
-      0,
-      targetWidth,
-      targetHeight,
-    );
-    return;
-  }
-
-  context.save();
-  if (rotation === 90) {
-    context.translate(targetWidth, 0);
-    context.rotate(Math.PI / 2);
-  } else {
-    context.translate(0, targetHeight);
-    context.rotate(-Math.PI / 2);
-  }
+  const crop = centerCrop(sourceWidth, sourceHeight, 16 / 9);
   context.drawImage(
     video,
     crop.x,
@@ -301,10 +264,9 @@ function drawCanonicalFrame(
     crop.height,
     0,
     0,
-    targetHeight,
     targetWidth,
+    targetHeight,
   );
-  context.restore();
 }
 
 function centerCrop(

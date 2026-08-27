@@ -7,8 +7,6 @@ export interface CameraOpenRequest {
   readonly facingMode: 'environment';
 }
 
-export type CameraFrameRotation = 0 | 90 | -90;
-
 export interface CameraFrame {
   readonly image: CanvasImageSource;
   readonly size: Size;
@@ -23,9 +21,7 @@ export interface CameraPreview {
 export interface CameraSession {
   readonly preview: CameraPreview;
 
-  captureLatest(options?: {
-    readonly rotation?: CameraFrameRotation;
-  }): CameraFrame | null;
+  captureLatest(): CameraFrame | null;
   stop(): Promise<void>;
 }
 

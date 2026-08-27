@@ -20,11 +20,7 @@ import {
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import type {
-  CameraFrameRotation,
-  CameraService,
-  CameraSession,
-} from '@/camera';
+import type { CameraService, CameraSession } from '@/camera';
 import type { RecognizedStructure, TileIdentity } from '@/domain';
 import type {
   FrameObservationId,
@@ -125,14 +121,7 @@ export function RecognitionPageView({
   const cameraAttemptRef = useRef(0);
   const runtimeAttemptRef = useRef(0);
   const committedRef = useRef(false);
-  const captureRotationRef = useRef<CameraFrameRotation>(0);
   const isPortraitViewport = usePortraitViewport();
-  const [portraitRotation, setPortraitRotation] = useState<90 | -90>(90);
-  const [videoIsPortrait, setVideoIsPortrait] = useState(false);
-  const cameraCounterRotation: CameraFrameRotation = isPortraitViewport
-    ? portraitRotation === 90 ? -90 : 90
-    : 0;
-  captureRotationRef.current = cameraCounterRotation;
 
   const prepareCamera = useCallback(() => {
     const attempt = ++cameraAttemptRef.current;
@@ -201,20 +190,9 @@ export function RecognitionPageView({
     }
 
     const session = cameraSession;
-    const video = videoRef.current;
-    const updateVideoGeometry = () => {
-      setVideoIsPortrait(video.videoHeight > video.videoWidth);
-    };
-    session.preview.attach(video);
-    updateVideoGeometry();
-    video.addEventListener('loadedmetadata', updateVideoGeometry);
-    video.addEventListener('loadeddata', updateVideoGeometry);
-    video.addEventListener('resize', updateVideoGeometry);
+    session.preview.attach(videoRef.current);
 
     return () => {
-      video.removeEventListener('loadedmetadata', updateVideoGeometry);
-      video.removeEventListener('loadeddata', updateVideoGeometry);
-      video.removeEventListener('resize', updateVideoGeometry);
       session.preview.detach();
       void session.stop();
     };
@@ -254,10 +232,7 @@ export function RecognitionPageView({
 
     try {
       recognizer.reset();
-      const source = createRecognitionFrameSource(
-        cameraSession,
-        () => captureRotationRef.current,
-      );
+      const source = createRecognitionFrameSource(cameraSession);
       const startedRun = recognizer.start(source, {
         onUpdate(update) {
           if (!active || !mountedRef.current || committedRef.current) {
@@ -332,19 +307,10 @@ export function RecognitionPageView({
         data-testid="recognition-capture-surface"
         style={{
           position: 'relative',
-          width: isPortraitViewport
-            ? 'min(100dvh, 177.7778vw)'
-            : 'min(100vw, 177.7778dvh)',
-          height: isPortraitViewport
-            ? 'min(100vw, 56.25dvh)'
-            : 'min(100dvh, 56.25vw)',
+          ...captureSurfaceLayout(isPortraitViewport),
           aspectRatio: '16 / 9',
           overflow: 'hidden',
           background: '#111',
-          transform: isPortraitViewport
-            ? `rotate(${portraitRotation}deg)`
-            : undefined,
-          transformOrigin: 'center',
         }}
       >
         {cameraStatus === 'ready' ? (
@@ -355,17 +321,7 @@ export function RecognitionPageView({
               autoPlay
               muted
               playsInline
-              style={videoIsPortrait && isPortraitViewport ? {
-                position: 'absolute',
-                left: '50%',
-                top: '50%',
-                width: '56.25%',
-                height: '177.7778%',
-                transform: `translate(-50%, -50%) rotate(${cameraCounterRotation}deg)`,
-                transformOrigin: 'center',
-                objectFit: 'cover',
-                pointerEvents: 'none',
-              } : {
+              style={{
                 position: 'absolute',
                 inset: 0,
                 width: '100%',
@@ -417,28 +373,6 @@ export function RecognitionPageView({
           >
             <Text size="sm">{preparationMessage}</Text>
           </Paper>
-        ) : null}
-
-        {isPortraitViewport ? (
-          <Button
-            aria-label="表示方向を反転"
-            size="compact-sm"
-            variant="light"
-            onClick={() =>
-              setPortraitRotation((rotation) => rotation === 90 ? -90 : 90)
-            }
-            style={{
-              position: 'absolute',
-              top: 'max(10px, env(safe-area-inset-top))',
-              left: 'max(10px, env(safe-area-inset-left))',
-              zIndex: 120,
-              pointerEvents: 'auto',
-              touchAction: 'manipulation',
-              background: 'rgba(255,255,255,0.92)',
-            }}
-          >
-            反対向き
-          </Button>
         ) : null}
 
         {cameraStatus === 'failed' || runtimeStatus === 'failed' ? (
@@ -860,11 +794,10 @@ function OwnedRecoveryPanel({
 
 function createRecognitionFrameSource(
   camera: CameraSession,
-  getRotation: () => CameraFrameRotation,
 ): RecognitionFrameSource {
   return {
     captureLatest() {
-      const frame = camera.captureLatest({ rotation: getRotation() });
+      const frame = camera.captureLatest();
       if (frame === null) {
         return null;
       }
@@ -876,6 +809,25 @@ function createRecognitionFrameSource(
       };
     },
   };
+}
+
+const PORTRAIT_CAPTURE_SURFACE_LAYOUT = {
+  width: 'min(100vw, 100dvh)',
+  height: 'min(56.25vw, 56.25dvh)',
+} as const;
+
+const LANDSCAPE_CAPTURE_SURFACE_LAYOUT = {
+  width: 'min(100vw, 100dvh)',
+  height: 'min(56.25vw, 56.25dvh)',
+} as const;
+
+function captureSurfaceLayout(isPortraitViewport: boolean): {
+  readonly width: string;
+  readonly height: string;
+} {
+  return isPortraitViewport
+    ? PORTRAIT_CAPTURE_SURFACE_LAYOUT
+    : LANDSCAPE_CAPTURE_SURFACE_LAYOUT;
 }
 
 function usePortraitViewport(): boolean {

@@ -86,15 +86,11 @@ describe('browser CameraService', () => {
     expect(track.stop).toHaveBeenCalledTimes(1);
   });
 
-  it('rotates a portrait stream into the 16:9 Recognition frame without stretching it', async () => {
+  it('center-crops a portrait stream into the same 16:9 Recognition geometry without stretching it', async () => {
     const stream = {
       getTracks: () => [{ stop: vi.fn() }],
     } as unknown as MediaStream;
     const drawImage = vi.fn();
-    const save = vi.fn();
-    const translate = vi.fn();
-    const rotate = vi.fn();
-    const restore = vi.fn();
     const service = createBrowserCameraService({
       mediaDevices: {
         getUserMedia: vi.fn(async () => stream),
@@ -102,7 +98,7 @@ describe('browser CameraService', () => {
       createCanvas: () => ({
         width: 0,
         height: 0,
-        getContext: () => ({ drawImage, save, translate, rotate, restore }),
+        getContext: () => ({ drawImage }),
       }) as unknown as HTMLCanvasElement,
       now: () => 4321,
     });
@@ -117,24 +113,20 @@ describe('browser CameraService', () => {
     video.pause = vi.fn();
 
     session.preview.attach(video);
-    const frame = session.captureLatest({ rotation: -90 });
+    const frame = session.captureLatest();
 
-    expect(frame?.size).toEqual({ width: 1280, height: 720 });
-    expect(save).toHaveBeenCalledTimes(1);
-    expect(translate).toHaveBeenCalledWith(0, 720);
-    expect(rotate).toHaveBeenCalledWith(-Math.PI / 2);
+    expect(frame?.size).toEqual({ width: 720, height: 405 });
     expect(drawImage).toHaveBeenCalledWith(
       video,
       0,
+      437.5,
+      720,
+      405,
+      0,
       0,
       720,
-      1280,
-      0,
-      0,
-      720,
-      1280,
+      405,
     );
-    expect(restore).toHaveBeenCalledTimes(1);
   });
 
   it('treats a transient first-frame draw failure as camera warmup instead of fatal Recognition failure', async () => {

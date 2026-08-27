@@ -194,8 +194,8 @@ describe('RecognitionPageView preparation and capture surface', () => {
     const captureSurface = screen.getByTestId('recognition-capture-surface');
     expect(viewport.style.position).toBe('fixed');
     expect(viewport.style.inset).toBe('0px');
-    expect(captureSurface.style.width).toBe('min(100vw, 177.7778dvh)');
-    expect(captureSurface.style.height).toBe('min(100dvh, 56.25vw)');
+    expect(captureSurface.style.width).toBe('min(100vw, 100dvh)');
+    expect(captureSurface.style.height).toBe('min(56.25vw, 56.25dvh)');
     expect(screen.getByRole('button', { name: '認識を終了' })).toBeVisible();
   });
 
@@ -274,7 +274,7 @@ describe('RecognitionPageView preparation and capture surface', () => {
     await waitFor(() => expect(recognizer.start).toHaveBeenCalledTimes(1));
   });
 
-  it('starts realtime in a portrait viewport and rotates the complete Recognition surface', async () => {
+  it('starts realtime in a portrait viewport with the same 16:9 camera and bbox geometry', async () => {
     setViewportSize(390, 844);
     const cameraSession = createCameraSession();
     const recognizer = createRecognizerHarness();
@@ -288,54 +288,52 @@ describe('RecognitionPageView preparation and capture surface', () => {
     await waitFor(() => expect(cameraSession.attach).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(recognizer.start).toHaveBeenCalledTimes(1));
 
-    const attachedVideo = cameraSession.attach.mock.calls[0]?.[0];
-    if (!(attachedVideo instanceof HTMLVideoElement)) {
-      throw new Error('expected attached video element');
-    }
-    Object.defineProperties(attachedVideo, {
-      videoWidth: { configurable: true, value: 720 },
-      videoHeight: { configurable: true, value: 1280 },
-    });
-    act(() => {
-      attachedVideo.dispatchEvent(new Event('loadedmetadata'));
-    });
-
     const captureSurface = screen.getByTestId('recognition-capture-surface');
     const preview = screen.getByLabelText('カメラプレビュー');
-    expect(captureSurface.style.width).toBe('min(100dvh, 177.7778vw)');
-    expect(captureSurface.style.height).toBe('min(100vw, 56.25dvh)');
-    expect(captureSurface.style.transform).toBe('rotate(90deg)');
-    expect(preview.style.width).toBe('56.25%');
-    expect(preview.style.height).toBe('177.7778%');
-    expect(preview.style.transform).toBe(
-      'translate(-50%, -50%) rotate(-90deg)',
-    );
+    const handRegion = screen.getByLabelText('手牌認識領域');
+    const portraitHandStyle = {
+      left: handRegion.style.left,
+      top: handRegion.style.top,
+      width: handRegion.style.width,
+      height: handRegion.style.height,
+    };
+
+    expect(captureSurface.style.width).toBe('min(100vw, 100dvh)');
+    expect(captureSurface.style.height).toBe('min(56.25vw, 56.25dvh)');
+    expect(captureSurface.style.aspectRatio).toBe('16 / 9');
+    expect(captureSurface.style.transform).toBe('');
+    expect(preview.style.inset).toBe('0px');
+    expect(preview.style.width).toBe('100%');
+    expect(preview.style.height).toBe('100%');
     expect(preview.style.objectFit).toBe('cover');
+    expect(preview.style.transform).toBe('');
     expect(screen.queryByText(/端末を横向きにしてください/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '表示方向を反転' })).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('認識しています');
 
     recognizer.getSource()?.captureLatest();
-    expect(cameraSession.captureLatest).toHaveBeenLastCalledWith({ rotation: -90 });
-
-    fireEvent.click(screen.getByRole('button', { name: '表示方向を反転' }));
-    expect(captureSurface.style.transform).toBe('rotate(-90deg)');
-    expect(preview.style.transform).toBe(
-      'translate(-50%, -50%) rotate(90deg)',
-    );
-    recognizer.getSource()?.captureLatest();
-    expect(cameraSession.captureLatest).toHaveBeenLastCalledWith({ rotation: 90 });
-    expect(recognizer.start).toHaveBeenCalledTimes(1);
+    expect(cameraSession.captureLatest).toHaveBeenLastCalledWith();
 
     act(() => {
       setViewportSize(844, 390);
       window.dispatchEvent(new Event('resize'));
     });
-    expect(captureSurface.style.transform).toBe('');
-    expect(captureSurface.style.width).toBe('min(100vw, 177.7778dvh)');
-    expect(preview.style.transform).toBe('');
-    recognizer.getSource()?.captureLatest();
-    expect(cameraSession.captureLatest).toHaveBeenLastCalledWith({ rotation: 0 });
-    expect(screen.queryByRole('button', { name: '表示方向を反転' })).not.toBeInTheDocument();
+
+    expect(captureSurface.style.width).toBe('min(100vw, 100dvh)');
+    expect(captureSurface.style.height).toBe('min(56.25vw, 56.25dvh)');
+    expect(captureSurface.style.aspectRatio).toBe('16 / 9');
+    expect(preview.style.inset).toBe('0px');
+    expect(preview.style.width).toBe('100%');
+    expect(preview.style.height).toBe('100%');
+    expect(preview.style.objectFit).toBe('cover');
+    expect({
+      left: handRegion.style.left,
+      top: handRegion.style.top,
+      width: handRegion.style.width,
+      height: handRegion.style.height,
+    }).toEqual(portraitHandStyle);
+    expect(captureSurface.style.width).toBe('min(100vw, 100dvh)');
+    expect(captureSurface.style.height).toBe('min(56.25vw, 56.25dvh)');
     expect(recognizer.start).toHaveBeenCalledTimes(1);
   });
 });
