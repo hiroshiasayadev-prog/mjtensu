@@ -1,6 +1,6 @@
 # PRODUCT-TASK-SYSTEM-002-07: Correct iPhone 13 Recognition acceptance findings
 
-- **status**: done
+- **status**: in_progress
 - **date**: 2026-08-27
 - **work_item**: PRODUCT-WORK-SYSTEM-002
 - **task_type**: correction
@@ -12,7 +12,6 @@
   - PRODUCT-TASK-SYSTEM-002-04/F-MAJ-01
   - PRODUCT-TASK-SYSTEM-002-04/F-MAJ-02
   - PRODUCT-TASK-SYSTEM-002-04/F-MAJ-03
-  - PRODUCT-TASK-SYSTEM-002-04/F-MAJ-05
 - **outputs**:
   - corrected iPhone 13 Recognition startup and capture experience
   - PRODUCT-TASK-SYSTEM-002-07
@@ -30,14 +29,13 @@ Correct the functional and device-layout findings discovered during iPhone 13 Re
 - Keep an accessible abandon/recovery affordance in the viewport-filling Recognition experience; do not rely on an inaccessible off-screen page header.
 - Adjust visible semantic-region placement so completed hand, dora, and meld regions remain contract-correct while being practical to populate simultaneously on the target tabletop/device setup.
 - Preserve required region aspect ratios (`17:4`, `17:4`, `1:1`) and ensure visible frames remain the actual recognition-input boundaries.
-- Preserve outside-region masking and make live candidate state plus meld-group feedback readily distinguishable on the camera surface. Exact colors remain implementation-owned, but an all-white overlay treatment that is difficult to distinguish on the target device is not acceptable.
-- Preserve automatic stabilization transition and empty dora/meld validity.
+- Preserve outside-region masking, live candidate overlays, meld feedback, automatic stabilization transition, and empty dora/meld validity.
 - Add/adjust focused component/browser tests for the corrected startup and layout contracts where deterministic verification is possible.
 - Re-run I04 on the real iPhone 13 after implementation; this Task does not mark I04 PASS by itself.
 
 ## Done condition
 
-F-MAJ-01 through F-MAJ-03 and F-MAJ-05 are corrected in production code, focused automated verification passes, and the build is ready for target-device re-execution of the expanded I04 Recognition acceptance matrix.
+F-MAJ-01 through F-MAJ-03 are corrected in production code, focused automated verification passes, and the build is ready for target-device re-execution of the expanded I04 Recognition acceptance matrix.
 
 ## Verification
 
@@ -63,4 +61,11 @@ F-MAJ-01 through F-MAJ-03 and F-MAJ-05 are corrected in production code, focused
 - Focused tests were added/adjusted for transient first-frame warmup, transient preview-play retry, viewport-filling capture geometry, preserved region aspect ratios, practical dora/hand spacing, and the in-viewport abandon affordance.
 - Automated verification completed on 2026-08-27: `npx vitest run test/camera-service.test.ts test/recognition-page.test.tsx` — **PASS**, 17/17 tests; `npm run typecheck` — **PASS**; `npm run lint` — **PASS**, architecture import boundaries OK across 58 source files; `npm run build` — **PASS**, Vite 8.2.2 production PWA build completed and generated `sw.js` / Workbox assets.
 - Build warnings about future Vite native-config-loader extension requirements and the >500 kB application chunk are non-blocking for this functional correction Task.
-- F-MAJ-01 through F-MAJ-03 are therefore corrected in production code with focused automated verification passing. This Task is complete and the build is ready for target-device I04 re-execution; device PASS remains owned by PRODUCT-TASK-SYSTEM-002-04.
+- The first target-device re-execution showed that the UI/layout changes were loaded, but F-MAJ-01 was **not** corrected: rotating into landscape immediately produced `認識処理を続行できませんでした`, and the recovery actions were not tappable. This invalidates the earlier completion verdict, so the Task returned to `in_progress`.
+- Source inspection identified a concrete orientation-race path consistent with the device failure: semantic-region source rectangles are valid only against a `16:9` Recognition frame, while Safari can still expose portrait-oriented `videoWidth` / `videoHeight` immediately after rotation. Starting realtime on that first landscape boundary can therefore feed portrait frame dimensions into fixed-composite aspect-ratio validation, which is normalized as detector `inference-failure`.
+- The follow-up correction normalizes every camera capture to the same `16:9` geometry used by the visible `object-fit: fill` Recognition surface before semantic regions are applied. This preserves visible/input-boundary correspondence even while the underlying MediaStream dimensions lag orientation.
+- Recovery interaction was hardened independently: preview video and decorative SVG overlays no longer participate in pointer hit-testing, recovery panels explicitly receive pointer events above the capture layers, and the exit control remains above recovery/visual overlays.
+- Recognition recovery now also renders a concise model/kind/cause diagnostic on-device so any remaining target-device failure can be classified from the acceptance screen rather than guessed from the generic message.
+- Follow-up automated verification completed on 2026-08-27: `npx vitest run test/camera-service.test.ts test/recognition-page.test.tsx` — **PASS**, 18/18 tests; `npm run typecheck` — **PASS**; `npm run lint` — **PASS**, architecture import boundaries OK across 58 source files; `npm run build` — **PASS**, Vite 8.2.2 production PWA build completed and generated `sw.js` / Workbox assets. Follow-up application bundle: `assets/index-Dea4oSG0.js`.
+- Vite native-config-loader extension notices and the >500 kB chunk notice remain non-blocking for this functional correction.
+- Another iPhone 13 re-execution is still required before this Task can return to `done`. Confirm both that landscape entry no longer immediately fails and that `再試行` / `トップへ` recovery actions are tappable. If Recognition still fails, record the on-screen `診断:` text verbatim so the remaining runtime failure can be classified without inference.

@@ -231,6 +231,7 @@ describe('RecognitionPageView preparation and capture surface', () => {
     });
 
     await waitFor(() => expect(cameraSession.attach).toHaveBeenCalledTimes(1));
+    expect(screen.getByLabelText('カメラプレビュー').style.pointerEvents).toBe('none');
     expect(screen.getByRole('status')).toHaveTextContent(
       '認識モデルを準備しています',
     );
@@ -545,6 +546,12 @@ describe('RecognitionPageView owner-specific recovery', () => {
     expect(
       await screen.findByText('認識処理を続行できませんでした'),
     ).toBeVisible();
+    expect(screen.getByTestId('recognition-error-diagnostic')).toHaveTextContent(
+      'detector / inference-failure / Error: fixture',
+    );
+    const recovery = screen.getByText('認識処理を続行できませんでした').closest('[data-recovery-owner="recognition"]');
+    expect(recovery).not.toBeNull();
+    expect((recovery as HTMLElement).style.pointerEvents).toBe('auto');
     expect(recognizer.runs[0]?.stop).toHaveBeenCalled();
     expect(cameraSession.detach).not.toHaveBeenCalled();
 

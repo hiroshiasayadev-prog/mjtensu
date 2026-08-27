@@ -76,14 +76,21 @@ class BrowserCameraSession implements CameraSession {
     }
 
     const canvas = this.createCanvas();
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    const captureSize = canonicalCaptureSize(video.videoWidth, video.videoHeight);
+    canvas.width = captureSize.width;
+    canvas.height = captureSize.height;
     const context = canvas.getContext('2d');
     if (context === null) {
       return null;
     }
 
     try {
+      // The visible Recognition surface is always 16:9 and uses object-fit: fill.
+      // Normalize the current MediaStream frame to the same canonical geometry
+      // before semantic regions are applied. In particular, iOS can keep
+      // reporting portrait video dimensions briefly after the device rotates;
+      // passing that raw aspect ratio into fixed-composite validation would
+      // incorrectly fail the first landscape Recognition evaluation.
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
     } catch (error) {
       if (isTransientVideoFrameError(error)) {
@@ -223,6 +230,18 @@ function normalizeCameraOpenError(cause: unknown): CameraRuntimeError {
     default:
       return { kind: 'runtime-failure', cause };
   }
+}
+
+function canonicalCaptureSize(
+  videoWidth: number,
+  videoHeight: number,
+): { readonly width: number; readonly height: number } {
+  const longEdge = Math.max(videoWidth, videoHeight);
+  const width = Math.max(1, Math.min(1280, Math.round(longEdge)));
+  return {
+    width,
+    height: Math.max(1, Math.round(width * 9 / 16)),
+  };
 }
 
 function isTransientVideoFrameError(value: unknown): boolean {

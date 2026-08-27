@@ -76,6 +76,39 @@ describe('browser CameraService', () => {
     expect(track.stop).toHaveBeenCalledTimes(1);
   });
 
+  it('normalizes a portrait-oriented stream frame to the 16:9 Recognition surface', async () => {
+    const stream = {
+      getTracks: () => [{ stop: vi.fn() }],
+    } as unknown as MediaStream;
+    const drawImage = vi.fn();
+    const service = createBrowserCameraService({
+      mediaDevices: {
+        getUserMedia: vi.fn(async () => stream),
+      } as unknown as Pick<MediaDevices, 'getUserMedia'>,
+      createCanvas: () => ({
+        width: 0,
+        height: 0,
+        getContext: () => ({ drawImage }),
+      }) as unknown as HTMLCanvasElement,
+      now: () => 4321,
+    });
+    const session = await service.open({ facingMode: 'environment' });
+    const video = document.createElement('video');
+    Object.defineProperties(video, {
+      readyState: { configurable: true, value: 2 },
+      videoWidth: { configurable: true, value: 720 },
+      videoHeight: { configurable: true, value: 1280 },
+    });
+    video.play = vi.fn(async () => undefined);
+    video.pause = vi.fn();
+
+    session.preview.attach(video);
+    const frame = session.captureLatest();
+
+    expect(frame?.size).toEqual({ width: 1280, height: 720 });
+    expect(drawImage).toHaveBeenCalledWith(video, 0, 0, 1280, 720);
+  });
+
   it('treats a transient first-frame draw failure as camera warmup instead of fatal Recognition failure', async () => {
     const stream = {
       getTracks: () => [{ stop: vi.fn() }],

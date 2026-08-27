@@ -331,6 +331,7 @@ export function RecognitionPageView({
                 width: '100%',
                 height: '100%',
                 objectFit: 'fill',
+                pointerEvents: 'none',
               }}
             />
             <CaptureRegionOverlay snapshot={snapshot} />
@@ -348,7 +349,8 @@ export function RecognitionPageView({
             position: 'absolute',
             top: 'max(10px, env(safe-area-inset-top))',
             right: 'max(10px, env(safe-area-inset-right))',
-            zIndex: 20,
+            zIndex: 40,
+            pointerEvents: 'auto',
             background: 'rgba(255,255,255,0.92)',
           }}
         >
@@ -389,6 +391,7 @@ export function RecognitionPageView({
           <OwnedRecoveryPanel
             owner="recognition"
             message={runtimeErrorMessage(runtimeError)}
+            detail={runtimeErrorDiagnostic(runtimeError)}
             onRetry={prepareRuntime}
             onTop={onAbandon}
           />
@@ -416,6 +419,7 @@ export function RecognitionPageView({
             <OwnedRecoveryPanel
               owner="recognition"
               message={runtimeErrorMessage(runtimeError)}
+              detail={runtimeErrorDiagnostic(runtimeError)}
               onRetry={prepareRuntime}
               onTop={onAbandon}
               inline
@@ -518,7 +522,13 @@ function CaptureRegionOverlay({
         data-testid="recognition-outside-mask"
         viewBox="0 0 1 1"
         preserveAspectRatio="none"
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+        }}
       >
         <defs>
           <mask id={maskId}>
@@ -658,7 +668,13 @@ function MeldGroupOverlay({
         aria-hidden="true"
         viewBox="0 0 1 1"
         preserveAspectRatio="none"
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+        }}
       >
         {groups.flatMap((group) => {
           const members = group.memberObservationIds
@@ -751,12 +767,14 @@ function MeldPreview({
 function OwnedRecoveryPanel({
   owner,
   message,
+  detail,
   onRetry,
   onTop,
   inline = false,
 }: {
   readonly owner: 'camera' | 'recognition';
   readonly message: string;
+  readonly detail?: string | null;
   readonly onRetry: () => void;
   readonly onTop: () => void;
   readonly inline?: boolean;
@@ -768,18 +786,24 @@ function OwnedRecoveryPanel({
       p="md"
       radius="md"
       shadow="md"
-      style={inline ? undefined : {
+      style={inline ? { pointerEvents: 'auto' } : {
         position: 'absolute',
         left: '50%',
         top: '50%',
         width: 'min(90%, 420px)',
         transform: 'translate(-50%, -50%)',
         background: 'rgba(255,255,255,0.96)',
-        zIndex: 10,
+        zIndex: 30,
+        pointerEvents: 'auto',
       }}
     >
       <Stack gap="sm">
         <Text fw={700}>{message}</Text>
+        {detail === null || detail === undefined ? null : (
+          <Text size="xs" c="dimmed" data-testid="recognition-error-diagnostic">
+            診断: {detail}
+          </Text>
+        )}
         <Group gap="xs">
           <Button
             size="xs"
@@ -922,6 +946,41 @@ function runtimeErrorMessage(error: unknown): string {
     default:
       return '認識モデルを準備できませんでした';
   }
+}
+
+function runtimeErrorDiagnostic(error: unknown): string | null {
+  if (
+    typeof error !== 'object' ||
+    error === null ||
+    !('kind' in error) ||
+    !('model' in error) ||
+    typeof error.kind !== 'string' ||
+    typeof error.model !== 'string'
+  ) {
+    return null;
+  }
+
+  const base = `${error.model} / ${error.kind}`;
+  if (!('cause' in error)) {
+    return base;
+  }
+
+  const cause = error.cause;
+  if (cause instanceof Error) {
+    return `${base} / ${cause.name}: ${cause.message}`;
+  }
+  if (
+    typeof cause === 'object' &&
+    cause !== null &&
+    'name' in cause &&
+    typeof cause.name === 'string'
+  ) {
+    const message = 'message' in cause && typeof cause.message === 'string'
+      ? `: ${cause.message}`
+      : '';
+    return `${base} / ${cause.name}${message}`;
+  }
+  return base;
 }
 
 function shouldClearSessionForRecognition(state: unknown): boolean {
