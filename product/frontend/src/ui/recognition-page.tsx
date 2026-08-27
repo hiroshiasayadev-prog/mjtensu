@@ -46,6 +46,7 @@ import {
   navigateAfterRecognitionConfirmed,
   navigateToTop,
 } from './navigation';
+import { TILE_BACK_ASSET_URL, tileAssetUrl } from './tile-assets';
 
 export interface RecognitionPageServices {
   readonly camera: CameraService;
@@ -635,13 +636,15 @@ function ObservationBox({
       }}
     >
       <Box
+        data-testid="recognition-observation-identity"
         style={{
           position: 'absolute',
-          right: -1,
-          top: -1,
+          left: '50%',
+          bottom: 'calc(100% + 2px)',
+          transform: 'translateX(-50%)',
         }}
       >
-        {tile === null ? <UnresolvedTileFace /> : <TileFace tile={tile} compact />}
+        {tile === null ? <UnresolvedTileFace /> : <TileImage tile={tile} />}
       </Box>
     </Box>
   );
@@ -744,8 +747,8 @@ function MeldPreview({
       style={{
         position: 'absolute',
         left: `${center * 100}%`,
-        top: `${Math.max(0.01, minY - 0.085) * 100}%`,
-        transform: 'translateX(-50%)',
+        top: `${minY * 100}%`,
+        transform: 'translate(-50%, calc(-100% - 34px))',
         background: 'rgba(8,68,83,0.92)',
         border: '1px solid #22b8cf',
         boxShadow: '0 1px 5px rgba(0,0,0,0.45)',
@@ -764,44 +767,34 @@ function MeldPreview({
 
 type MeldPreviewFace = TileIdentity | null | 'back';
 
-function TileFace({
+function TileImage({
   tile,
   compact = false,
 }: {
   readonly tile: TileIdentity;
   readonly compact?: boolean;
 }) {
-  const presentation = tilePresentation(tile);
-  const width = compact ? 22 : 26;
-  const height = compact ? 30 : 36;
+  const width = compact ? 18 : 22;
+  const height = compact ? 25 : 30;
 
   return (
-    <Box
+    <img
       aria-hidden="true"
       data-testid="recognition-tile-face"
       data-red-five={tile.red ? 'true' : 'false'}
+      src={tileAssetUrl(tile)}
+      width={width}
+      height={height}
+      alt=""
+      draggable={false}
       style={{
+        display: 'block',
         width,
         height,
-        display: 'grid',
-        placeItems: 'center',
-        alignContent: 'center',
-        border: '1px solid rgba(0,0,0,0.72)',
-        borderRadius: 3,
-        background: '#fffdf4',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.5)',
-        color: tile.red ? '#c92a2a' : '#111',
-        fontWeight: 800,
-        lineHeight: 1,
+        objectFit: 'contain',
+        filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.55))',
       }}
-    >
-      <span style={{ fontSize: compact ? 12 : 14 }}>{presentation.face}</span>
-      {presentation.suit === null ? null : (
-        <span style={{ fontSize: compact ? 8 : 9, marginTop: 1 }}>
-          {presentation.suit}
-        </span>
-      )}
-    </Box>
+    />
   );
 }
 
@@ -833,16 +826,19 @@ function UnresolvedTileFace() {
 function MeldPreviewTileFace({ face }: { readonly face: MeldPreviewFace }) {
   if (face === 'back') {
     return (
-      <Box
+      <img
         aria-hidden="true"
         data-testid="meld-preview-tile-back"
+        src={TILE_BACK_ASSET_URL}
+        width={18}
+        height={25}
+        alt=""
+        draggable={false}
         style={{
+          display: 'block',
           width: 18,
           height: 25,
-          border: '1px solid rgba(255,255,255,0.78)',
-          borderRadius: 2,
-          background: '#1971c2',
-          boxShadow: 'inset 0 0 0 2px rgba(255,255,255,0.16)',
+          objectFit: 'contain',
         }}
       />
     );
@@ -852,34 +848,25 @@ function MeldPreviewTileFace({ face }: { readonly face: MeldPreviewFace }) {
     return <UnresolvedTileFace />;
   }
 
-  return <TileFace tile={face} compact />;
+  return <TileImage tile={face} compact />;
 }
 
-function tilePresentation(tile: TileIdentity): {
-  readonly face: string;
-  readonly suit: string | null;
-  readonly accessibleLabel: string;
-} {
+function tileAccessibleLabel(tile: TileIdentity): string {
   const rank = Number(tile.kind[0]);
   const rankLabel = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'][rank] ?? '？';
   const redPrefix = tile.red ? '赤' : '';
 
   if (tile.kind.endsWith('m')) {
-    return { face: String(rank), suit: '萬', accessibleLabel: `${redPrefix}${rankLabel}萬` };
+    return `${redPrefix}${rankLabel}萬`;
   }
   if (tile.kind.endsWith('p')) {
-    return { face: String(rank), suit: '筒', accessibleLabel: `${redPrefix}${rankLabel}筒` };
+    return `${redPrefix}${rankLabel}筒`;
   }
   if (tile.kind.endsWith('s')) {
-    return { face: String(rank), suit: '索', accessibleLabel: `${redPrefix}${rankLabel}索` };
+    return `${redPrefix}${rankLabel}索`;
   }
 
-  const honor = ['?', '東', '南', '西', '北', '白', '發', '中'][rank] ?? '?';
-  return { face: honor, suit: null, accessibleLabel: honor };
-}
-
-function tileAccessibleLabel(tile: TileIdentity): string {
-  return tilePresentation(tile).accessibleLabel;
+  return ['?', '東', '南', '西', '北', '白', '發', '中'][rank] ?? '?';
 }
 
 function meldPreviewFaceLabel(face: MeldPreviewFace): string {

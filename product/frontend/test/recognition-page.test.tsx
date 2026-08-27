@@ -468,6 +468,20 @@ describe('RecognitionPageView live feedback', () => {
     expect(recognized.style.border).not.toBe(unresolved.style.border);
     expect(screen.getByTestId('recognition-unresolved-face')).toBeVisible();
 
+    const recognizedIdentity = recognized.querySelector<HTMLElement>(
+      '[data-testid="recognition-observation-identity"]',
+    );
+    expect(recognizedIdentity).not.toBeNull();
+    expect(recognizedIdentity?.style.left).toBe('50%');
+    expect(recognizedIdentity?.style.bottom).toBe('calc(100% + 2px)');
+    expect(recognizedIdentity?.style.transform).toBe('translateX(-50%)');
+    const recognizedTileImage = recognized.querySelector<HTMLImageElement>(
+      '[data-testid="recognition-tile-face"]',
+    );
+    expect(recognizedTileImage?.getAttribute('src')).toContain('7z.svg');
+    expect(recognizedTileImage?.width).toBe(22);
+    expect(recognizedTileImage?.height).toBe(30);
+
     const connector = screen.getByTestId('meld-group-connector');
     expect(connector).toHaveAttribute('data-overlay-kind', 'meld-connector');
     expect(connector.getAttribute('stroke')).not.toBe('white');
@@ -476,9 +490,14 @@ describe('RecognitionPageView live feedback', () => {
     );
     expect(meldPreview).toBeVisible();
     expect(meldPreview).toHaveAttribute('data-overlay-kind', 'meld-preview');
-    expect(screen.getAllByTestId('meld-preview-tile-back')).toHaveLength(2);
+    const concealedBacks = screen.getAllByTestId('meld-preview-tile-back');
+    expect(concealedBacks).toHaveLength(2);
+    expect(concealedBacks[0]?.getAttribute('src')).toContain('back.svg');
 
     const tileFaces = screen.getAllByTestId('recognition-tile-face');
+    expect(
+      tileFaces.some((face) => face.getAttribute('src')?.includes('5s-red.svg')),
+    ).toBe(true);
     expect(
       tileFaces.filter((face) => face.getAttribute('data-red-five') === 'true'),
     ).toHaveLength(4);
