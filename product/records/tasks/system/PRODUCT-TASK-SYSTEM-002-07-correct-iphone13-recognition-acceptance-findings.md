@@ -1,6 +1,6 @@
 # PRODUCT-TASK-SYSTEM-002-07: Correct iPhone 13 Recognition acceptance findings
 
-- **status**: in_progress
+- **status**: done
 - **date**: 2026-08-27
 - **work_item**: PRODUCT-WORK-SYSTEM-002
 - **task_type**: correction
@@ -35,7 +35,7 @@ Correct the functional and device-layout findings discovered during iPhone 13 Re
 
 ## Done condition
 
-F-MAJ-01 through F-MAJ-03 are corrected in production code, focused automated verification passes, and the build is ready for target-device re-execution of the expanded I04 Recognition acceptance matrix.
+F-MAJ-01 through F-MAJ-03 are corrected in production code, focused automated verification passes, and target-device re-execution on iPhone 13 confirms the corrected Recognition experience, including orientation-lock compatibility.
 
 ## Verification
 
@@ -103,4 +103,4 @@ F-MAJ-01 through F-MAJ-03 are corrected in production code, focused automated ve
 - `CameraSession.captureLatest()` now accepts both source aspect and optional quarter-turn. Canonical output dimensions swap with the quarter-turn and remain exact ratio multiples, preserving fixed-composite aspect validation. Viewport orientation changes restart only the Recognition run and clear old observations; the healthy camera session/runtime are preserved.
 - Focused tests now require native unrotated `9:16` preview under portrait lock, the single landscape UI surface rotated as one unit with tappable controls, unchanged `17:4`/`1:1` landscape region geometry, inverse `9:16 -> -90deg -> 16:9` Recognition capture, and transition back to untransformed landscape geometry.
 - Automated verification completed on 2026-08-27 for the final orientation-lock implementation: `npx vitest run test/camera-service.test.ts test/recognition-page.test.tsx` — **PASS**, 18/18 tests; `npm run typecheck` — **PASS**; `npm run lint` — **PASS**, architecture import boundaries OK across 58 source files; `npm run build` — **PASS**, Vite 8.2.2 production PWA build completed. Follow-up application bundle: `assets/index-DkhSEK5e.js`.
-- Target-device re-execution remains required before this Task can return to `done`: with iOS orientation lock enabled, physically hold the device in landscape while Safari remains portrait, and verify camera motion stays natural while the complete landscape UI/bboxes/messages/recovery controls appear exactly as in true landscape and remain correctly aligned/tappable.
+- Final iPhone 13 target-device re-execution completed successfully on 2026-08-27. With iOS orientation lock enabled and Safari remaining in a portrait viewport while the device is physically held landscape, camera motion remained natural and the complete landscape Recognition UI, semantic frames/bboxes, status messaging, and controls matched the intended true-landscape presentation. The orientation-lock correction is accepted and this Task is complete.
