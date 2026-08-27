@@ -288,15 +288,42 @@ describe('RecognitionPageView preparation and capture surface', () => {
     await waitFor(() => expect(cameraSession.attach).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(recognizer.start).toHaveBeenCalledTimes(1));
 
+    const attachedVideo = cameraSession.attach.mock.calls[0]?.[0];
+    if (!(attachedVideo instanceof HTMLVideoElement)) {
+      throw new Error('expected attached video element');
+    }
+    Object.defineProperties(attachedVideo, {
+      videoWidth: { configurable: true, value: 720 },
+      videoHeight: { configurable: true, value: 1280 },
+    });
+    act(() => {
+      attachedVideo.dispatchEvent(new Event('loadedmetadata'));
+    });
+
     const captureSurface = screen.getByTestId('recognition-capture-surface');
+    const preview = screen.getByLabelText('カメラプレビュー');
     expect(captureSurface.style.width).toBe('min(100dvh, 177.7778vw)');
     expect(captureSurface.style.height).toBe('min(100vw, 56.25dvh)');
     expect(captureSurface.style.transform).toBe('rotate(90deg)');
+    expect(preview.style.width).toBe('56.25%');
+    expect(preview.style.height).toBe('177.7778%');
+    expect(preview.style.transform).toBe(
+      'translate(-50%, -50%) rotate(-90deg)',
+    );
+    expect(preview.style.objectFit).toBe('cover');
     expect(screen.queryByText(/端末を横向きにしてください/)).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('認識しています');
 
+    recognizer.getSource()?.captureLatest();
+    expect(cameraSession.captureLatest).toHaveBeenLastCalledWith({ rotation: -90 });
+
     fireEvent.click(screen.getByRole('button', { name: '表示方向を反転' }));
     expect(captureSurface.style.transform).toBe('rotate(-90deg)');
+    expect(preview.style.transform).toBe(
+      'translate(-50%, -50%) rotate(90deg)',
+    );
+    recognizer.getSource()?.captureLatest();
+    expect(cameraSession.captureLatest).toHaveBeenLastCalledWith({ rotation: 90 });
     expect(recognizer.start).toHaveBeenCalledTimes(1);
 
     act(() => {
@@ -305,6 +332,9 @@ describe('RecognitionPageView preparation and capture surface', () => {
     });
     expect(captureSurface.style.transform).toBe('');
     expect(captureSurface.style.width).toBe('min(100vw, 177.7778dvh)');
+    expect(preview.style.transform).toBe('');
+    recognizer.getSource()?.captureLatest();
+    expect(cameraSession.captureLatest).toHaveBeenLastCalledWith({ rotation: 0 });
     expect(screen.queryByRole('button', { name: '表示方向を反転' })).not.toBeInTheDocument();
     expect(recognizer.start).toHaveBeenCalledTimes(1);
   });

@@ -1,5 +1,6 @@
 import type {
   CameraFrame,
+  CameraFrameRotation,
   CameraOpenRequest,
   CameraPreview,
   CameraRuntimeError,
@@ -63,7 +64,9 @@ class BrowserCameraSession implements CameraSession {
     };
   }
 
-  captureLatest(): CameraFrame | null {
+  captureLatest(options: {
+    readonly rotation?: CameraFrameRotation;
+  } = {}): CameraFrame | null {
     const video = this.attachedVideo;
     if (
       this.stopped ||
@@ -75,8 +78,16 @@ class BrowserCameraSession implements CameraSession {
       return null;
     }
 
+    const requestedRotation = options.rotation ?? 0;
+    const rotation = video.videoHeight > video.videoWidth
+      ? requestedRotation
+      : 0;
     const canvas = this.createCanvas();
-    const captureSize = canonicalCaptureSize(video.videoWidth, video.videoHeight);
+    const captureSize = canonicalCaptureSize(
+      video.videoWidth,
+      video.videoHeight,
+      rotation,
+    );
     canvas.width = captureSize.width;
     canvas.height = captureSize.height;
     const context = canvas.getContext('2d');
@@ -85,13 +96,15 @@ class BrowserCameraSession implements CameraSession {
     }
 
     try {
-      // The visible Recognition surface is always 16:9 and uses object-fit: fill.
-      // Normalize the current MediaStream frame to the same canonical geometry
-      // before semantic regions are applied. In particular, iOS can keep
-      // reporting portrait video dimensions briefly after the device rotates;
-      // passing that raw aspect ratio into fixed-composite validation would
-      // incorrectly fail the first landscape Recognition evaluation.
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      drawCanonicalFrame(
+        context,
+        video,
+        video.videoWidth,
+        video.videoHeight,
+        canvas.width,
+        canvas.height,
+        rotation,
+      );
     } catch (error) {
       if (isTransientVideoFrameError(error)) {
         // Safari can expose readyState/video dimensions just before the first
@@ -235,12 +248,87 @@ function normalizeCameraOpenError(cause: unknown): CameraRuntimeError {
 function canonicalCaptureSize(
   videoWidth: number,
   videoHeight: number,
+  rotation: CameraFrameRotation,
 ): { readonly width: number; readonly height: number } {
-  const longEdge = Math.max(videoWidth, videoHeight);
-  const width = Math.max(1, Math.min(1280, Math.round(longEdge)));
+  const orientedWidth = rotation === 0 ? videoWidth : videoHeight;
+  const width = Math.max(1, Math.min(1280, Math.round(orientedWidth)));
   return {
     width,
     height: Math.max(1, Math.round(width * 9 / 16)),
+  };
+}
+
+function drawCanonicalFrame(
+  context: CanvasRenderingContext2D,
+  video: HTMLVideoElement,
+  sourceWidth: number,
+  sourceHeight: number,
+  targetWidth: number,
+  targetHeight: number,
+  rotation: CameraFrameRotation,
+): void {
+  const sourceAspect = rotation === 0 ? 16 / 9 : 9 / 16;
+  const crop = centerCrop(sourceWidth, sourceHeight, sourceAspect);
+
+  if (rotation === 0) {
+    context.drawImage(
+      video,
+      crop.x,
+      crop.y,
+      crop.width,
+      crop.height,
+      0,
+      0,
+      targetWidth,
+      targetHeight,
+    );
+    return;
+  }
+
+  context.save();
+  if (rotation === 90) {
+    context.translate(targetWidth, 0);
+    context.rotate(Math.PI / 2);
+  } else {
+    context.translate(0, targetHeight);
+    context.rotate(-Math.PI / 2);
+  }
+  context.drawImage(
+    video,
+    crop.x,
+    crop.y,
+    crop.width,
+    crop.height,
+    0,
+    0,
+    targetHeight,
+    targetWidth,
+  );
+  context.restore();
+}
+
+function centerCrop(
+  width: number,
+  height: number,
+  targetAspect: number,
+): { readonly x: number; readonly y: number; readonly width: number; readonly height: number } {
+  const sourceAspect = width / height;
+  if (sourceAspect > targetAspect) {
+    const cropWidth = height * targetAspect;
+    return {
+      x: (width - cropWidth) / 2,
+      y: 0,
+      width: cropWidth,
+      height,
+    };
+  }
+
+  const cropHeight = width / targetAspect;
+  return {
+    x: 0,
+    y: (height - cropHeight) / 2,
+    width,
+    height: cropHeight,
   };
 }
 

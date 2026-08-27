@@ -20,7 +20,11 @@ import {
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import type { CameraService, CameraSession } from '@/camera';
+import type {
+  CameraFrameRotation,
+  CameraService,
+  CameraSession,
+} from '@/camera';
 import type { RecognizedStructure, TileIdentity } from '@/domain';
 import type {
   FrameObservationId,
@@ -121,8 +125,14 @@ export function RecognitionPageView({
   const cameraAttemptRef = useRef(0);
   const runtimeAttemptRef = useRef(0);
   const committedRef = useRef(false);
+  const captureRotationRef = useRef<CameraFrameRotation>(0);
   const isPortraitViewport = usePortraitViewport();
   const [portraitRotation, setPortraitRotation] = useState<90 | -90>(90);
+  const [videoIsPortrait, setVideoIsPortrait] = useState(false);
+  const cameraCounterRotation: CameraFrameRotation = isPortraitViewport
+    ? portraitRotation === 90 ? -90 : 90
+    : 0;
+  captureRotationRef.current = cameraCounterRotation;
 
   const prepareCamera = useCallback(() => {
     const attempt = ++cameraAttemptRef.current;
@@ -191,9 +201,20 @@ export function RecognitionPageView({
     }
 
     const session = cameraSession;
-    session.preview.attach(videoRef.current);
+    const video = videoRef.current;
+    const updateVideoGeometry = () => {
+      setVideoIsPortrait(video.videoHeight > video.videoWidth);
+    };
+    session.preview.attach(video);
+    updateVideoGeometry();
+    video.addEventListener('loadedmetadata', updateVideoGeometry);
+    video.addEventListener('loadeddata', updateVideoGeometry);
+    video.addEventListener('resize', updateVideoGeometry);
 
     return () => {
+      video.removeEventListener('loadedmetadata', updateVideoGeometry);
+      video.removeEventListener('loadeddata', updateVideoGeometry);
+      video.removeEventListener('resize', updateVideoGeometry);
       session.preview.detach();
       void session.stop();
     };
@@ -233,7 +254,10 @@ export function RecognitionPageView({
 
     try {
       recognizer.reset();
-      const source = createRecognitionFrameSource(cameraSession);
+      const source = createRecognitionFrameSource(
+        cameraSession,
+        () => captureRotationRef.current,
+      );
       const startedRun = recognizer.start(source, {
         onUpdate(update) {
           if (!active || !mountedRef.current || committedRef.current) {
@@ -331,12 +355,22 @@ export function RecognitionPageView({
               autoPlay
               muted
               playsInline
-              style={{
+              style={videoIsPortrait && isPortraitViewport ? {
+                position: 'absolute',
+                left: '50%',
+                top: '50%',
+                width: '56.25%',
+                height: '177.7778%',
+                transform: `translate(-50%, -50%) rotate(${cameraCounterRotation}deg)`,
+                transformOrigin: 'center',
+                objectFit: 'cover',
+                pointerEvents: 'none',
+              } : {
                 position: 'absolute',
                 inset: 0,
                 width: '100%',
                 height: '100%',
-                objectFit: 'fill',
+                objectFit: 'cover',
                 pointerEvents: 'none',
               }}
             />
@@ -826,10 +860,11 @@ function OwnedRecoveryPanel({
 
 function createRecognitionFrameSource(
   camera: CameraSession,
+  getRotation: () => CameraFrameRotation,
 ): RecognitionFrameSource {
   return {
     captureLatest() {
-      const frame = camera.captureLatest();
+      const frame = camera.captureLatest({ rotation: getRotation() });
       if (frame === null) {
         return null;
       }

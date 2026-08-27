@@ -68,7 +68,17 @@ describe('browser CameraService', () => {
       size: { width: 640, height: 360 },
       capturedAtMs: 1234,
     });
-    expect(drawImage).toHaveBeenCalledWith(video, 0, 0, 640, 360);
+    expect(drawImage).toHaveBeenCalledWith(
+      video,
+      0,
+      0,
+      640,
+      360,
+      0,
+      0,
+      640,
+      360,
+    );
 
     await session.stop();
     expect(video.srcObject).toBeNull();
@@ -76,11 +86,15 @@ describe('browser CameraService', () => {
     expect(track.stop).toHaveBeenCalledTimes(1);
   });
 
-  it('normalizes a portrait-oriented stream frame to the 16:9 Recognition surface', async () => {
+  it('rotates a portrait stream into the 16:9 Recognition frame without stretching it', async () => {
     const stream = {
       getTracks: () => [{ stop: vi.fn() }],
     } as unknown as MediaStream;
     const drawImage = vi.fn();
+    const save = vi.fn();
+    const translate = vi.fn();
+    const rotate = vi.fn();
+    const restore = vi.fn();
     const service = createBrowserCameraService({
       mediaDevices: {
         getUserMedia: vi.fn(async () => stream),
@@ -88,7 +102,7 @@ describe('browser CameraService', () => {
       createCanvas: () => ({
         width: 0,
         height: 0,
-        getContext: () => ({ drawImage }),
+        getContext: () => ({ drawImage, save, translate, rotate, restore }),
       }) as unknown as HTMLCanvasElement,
       now: () => 4321,
     });
@@ -103,10 +117,24 @@ describe('browser CameraService', () => {
     video.pause = vi.fn();
 
     session.preview.attach(video);
-    const frame = session.captureLatest();
+    const frame = session.captureLatest({ rotation: -90 });
 
     expect(frame?.size).toEqual({ width: 1280, height: 720 });
-    expect(drawImage).toHaveBeenCalledWith(video, 0, 0, 1280, 720);
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(translate).toHaveBeenCalledWith(0, 720);
+    expect(rotate).toHaveBeenCalledWith(-Math.PI / 2);
+    expect(drawImage).toHaveBeenCalledWith(
+      video,
+      0,
+      0,
+      720,
+      1280,
+      0,
+      0,
+      720,
+      1280,
+    );
+    expect(restore).toHaveBeenCalledTimes(1);
   });
 
   it('treats a transient first-frame draw failure as camera warmup instead of fatal Recognition failure', async () => {
