@@ -70,3 +70,5 @@ F-MAJ-05 and F-MAJ-06 are corrected in production code, focused automated verifi
 - Follow-up verification application bundle: `assets/index-CfVFofJl.js`.
 - Vite native-config-loader extension notices and the >500 kB application chunk notice remain non-blocking for this overlay correction Task.
 - F-MAJ-05 and F-MAJ-06 are corrected with the final SVG tile treatment; target-device visual acceptance remains owned by PRODUCT-TASK-SYSTEM-002-04.
+- A follow-up orientation regression was corrected after the exit control disappeared when the camera view changed to landscape: the `認識を終了` control now lives directly under `recognition-viewport`, outside the rotated/clipped landscape recognition surface, while retaining safe-area positioning and a higher overlay z-index.
+- Regression verification on 2026-08-28: `npx vitest run test/recognition-page.test.tsx` — **PASS**, 11/11 tests; `npm run typecheck` — **PASS**. The focused viewport/orientation test now asserts that the global exit control remains viewport-owned and visible across portrait-to-landscape changes.

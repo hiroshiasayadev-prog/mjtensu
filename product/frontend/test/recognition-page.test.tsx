@@ -216,7 +216,11 @@ describe('RecognitionPageView preparation and capture surface', () => {
     expect(viewport.style.inset).toBe('0px');
     expect(captureSurface.style.width).toBe('min(100vw, 177.7778dvh)');
     expect(captureSurface.style.height).toBe('min(100dvh, 56.25vw)');
-    expect(screen.getByRole('button', { name: '認識を終了' })).toBeVisible();
+    const exitButton = screen.getByRole('button', { name: '認識を終了' });
+    expect(exitButton).toBeVisible();
+    expect(exitButton.parentElement).toBe(viewport);
+    expect(exitButton.style.position).toBe('absolute');
+    expect(exitButton.style.zIndex).toBe('200');
   });
 
   it('opens camera and runtime in parallel, exposes preview first, then starts realtime only when both are ready', async () => {
@@ -344,6 +348,8 @@ describe('RecognitionPageView preparation and capture surface', () => {
     ).toBeCloseTo(1, 8);
     expect(screen.queryByText(/端末を横向きにしてください/)).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('認識しています');
+    const globalExit = screen.getByTestId('recognition-global-exit');
+    expect(globalExit.parentElement).toBe(screen.getByTestId('recognition-viewport'));
 
     expect(recognizer.getSource()?.captureLatest()).toEqual({
       source: cameraSession.portraitLockedFrame.image,
@@ -371,6 +377,8 @@ describe('RecognitionPageView preparation and capture surface', () => {
     expect(landscapeUi.style.width).toBe('100%');
     expect(landscapeUi.style.height).toBe('100%');
     expect(landscapeUi.style.transform).toBe('');
+    expect(globalExit).toBeVisible();
+    expect(globalExit.parentElement).toBe(screen.getByTestId('recognition-viewport'));
     expect(handRegion.style.left).toBe('4%');
     expect(handRegion.style.top).toBe('50%');
     expect(handRegion.style.width).toBe('62%');
