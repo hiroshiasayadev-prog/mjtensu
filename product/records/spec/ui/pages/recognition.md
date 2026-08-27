@@ -2,12 +2,14 @@
 
 - **id**: `spec:product.ui.pages.recognition`
 - **status**: draft
-- **date**: 2026-08-26
+- **date**: 2026-08-27
 - **parent**: `spec:product.ui.pages`
 
 ## What this is
 
-Landscape live-camera surface that guides the user to place score-relevant tiles inside the fixed semantic regions and leaves automatically when recognition becomes stable.
+Logical-landscape live-camera surface that guides the user to place score-relevant tiles inside the fixed semantic regions and leaves automatically when recognition becomes stable.
+
+The Recognition coordinate system and application-owned overlay/UI surface are always landscape `16:9`. Browser viewport orientation is not itself an active-recognition gate.
 
 ## Required composition
 
@@ -80,9 +82,12 @@ Camera and model/runtime failures are presented according to the failing owner r
 - If both sides fail independently, each owned resource may be retried without requiring the other healthy side to be torn down first.
 - A fatal inference failure after recognition has started uses the same recognition-runtime recovery surface: stop the current realtime run, preserve a healthy camera session where possible, and allow runtime retry or return to Top.
 
-The UI branches on the normalized camera/recognition error categories from `spec:product.system.contracts.runtime_errors`; browser exception names, HTTP status codes, model filenames, and execution-provider details are not user-facing recovery inputs.
+The UI branches on the normalized camera/recognition error categories from `spec:product.system.contracts.runtime_errors`; browser exception names, HTTP status codes, model identifiers, and execution-provider details must not control recovery branching or the primary recovery message. A recognition-runtime failure may additionally expose concise model/kind/cause diagnostic detail for on-device troubleshooting, but that detail is secondary evidence only and must not become an application decision input.
 
-- The page requires landscape orientation for active recognition.
+- Recognition remains active when the browser viewport is portrait because device/browser orientation lock prevents the viewport from rotating while the user physically holds the phone landscape.
+- In a landscape viewport, the camera and Recognition UI use the ordinary `16:9` presentation.
+- In a portrait-locked viewport, the camera presentation follows the portrait viewport while the application-owned Recognition UI remains the same logical `16:9` surface, centered and quarter-turned for the user. The recognition input applies the inverse generic capture transform so the unchanged fixed Recognition regions continue to address the same logical landscape coordinates.
+- A viewport-orientation change may restart only the current realtime Recognition run and clear transient Recognition observations as needed; an otherwise healthy camera session and initialized model runtime are retained.
 - Recognition runs continuously without a shutter button.
 - The page overlays current tile detections and region-local feedback from `spec:product.recognition.pipeline`.
 - Each retained detector candidate is shown with its bounding box; when a tile identity is available, a small recognized-tile icon is shown over or adjacent to that box.
@@ -103,7 +108,7 @@ The primary realtime feedback is visual recognition overlay on the camera previe
 - For a concealed kan inferred from two matching face-up observations, the meld preview shows the two recognized tiles with face-down tiles at both ends so the user can see that the two detector boxes were reconstructed as one concealed kan.
 - Exact overlay colors are not fixed, but detector boxes and meld-group connectors must be visually distinguishable.
 - The page must not present raw recognized-tile count as progress toward a fixed `14`-tile target because valid physical layouts, including concealed kan presentation, can produce a different number of visible recognized tile faces.
-- Device orientation may be called out explicitly when active recognition requires landscape.
+- Device/browser orientation lock must not force the user through an orientation error or prevent realtime recognition merely because the viewport remains portrait.
 
 Detailed recognition-cause messages are optional rather than the primary recovery mechanism. The overlay should let the user see missing or misrecognized tiles directly while adjusting the physical layout.
 Model names, raw classifier labels, confidence thresholds, and inference-provider details are not required user-facing concepts in the production UI.
@@ -125,7 +130,7 @@ An unused dora or meld region is simply left empty and remains a valid recogniti
 - Manual tile correction.
 - Score conditions.
 - Score calculation.
-- Training/debug telemetry in the production surface.
+- Always-on training/performance/debug telemetry in the production surface; concise failure-only diagnostic detail is permitted by the recovery contract above.
 - Pixel-perfect overlay styling.
 
 ## Boundary

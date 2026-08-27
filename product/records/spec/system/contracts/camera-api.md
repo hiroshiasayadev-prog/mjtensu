@@ -2,7 +2,7 @@
 
 - **id**: `spec:product.system.contracts.camera_api`
 - **status**: draft
-- **date**: 2026-08-26
+- **date**: 2026-08-27
 - **parent**: `spec:product.system`
 
 ## What this is
@@ -22,10 +22,16 @@ export interface CameraOpenRequest {
   readonly facingMode: 'environment';
 }
 
+export type CameraFrameAspect = '16:9' | '9:16';
+export type CameraFrameRotation = 0 | 90 | -90;
+
 export interface CameraSession {
   readonly preview: CameraPreview;
 
-  captureLatest(): CameraFrame | null;
+  captureLatest(options?: {
+    readonly aspectRatio?: CameraFrameAspect;
+    readonly rotation?: CameraFrameRotation;
+  }): CameraFrame | null;
   stop(): Promise<void>;
 }
 
@@ -75,9 +81,11 @@ The initial browser capture request uses an implementation preference equivalent
 `1280 x 720` is an **ideal capture preference**, not a hard camera contract.
 A browser/device may provide a different resolution and the session remains valid when the returned stream is otherwise usable.
 
-The actual source size is reported by each `CameraFrame.size` and must not be inferred from the requested ideal constraint.
+The browser/device may expose a camera-stream resolution different from the requested ideal constraint. That native stream resolution is an implementation input to snapshot acquisition and must not be assumed by recognition or UI consumers.
 
-The system does not require the camera source itself to be `320 x 320`. Recognition owns normalization into the fixed detector composite.
+`CameraFrame.size` reports the coordinate space of the image returned by `captureLatest()`, after any requested generic aspect crop and quarter-turn. It therefore must not be interpreted as the raw browser video-track resolution.
+
+The system does not require either the camera stream or the returned camera frame to be `320 x 320`. Recognition owns normalization from the returned frame into the fixed detector composite.
 
 ## Why camera resolution is not fixed
 
@@ -100,41 +108,51 @@ Requirements:
 
 ## Latest-frame acquisition
 
-`CameraSession.captureLatest()` returns the latest currently usable camera image or `null` when no usable frame is currently available.
+`CameraSession.captureLatest(options?)` returns the latest currently usable camera image or `null` when no usable frame is currently available.
+
+Capture options are generic camera-image geometry, not Recognition semantics:
+
+- `aspectRatio` requests a centered crop in the native camera orientation before rotation;
+- `rotation` requests a quarter-turn of that cropped snapshot into the returned frame coordinate system;
+- omitted `aspectRatio` defaults to `16:9`;
+- omitted `rotation` defaults to `0`.
+
+This generic transform supports, among other consumers, the Recognition page when browser/device orientation lock leaves the viewport portrait while the logical Recognition coordinate system remains landscape. The camera module still does not know which semantic Recognition regions will consume the returned frame.
 
 Requirements:
 
 - the call does not queue frames;
 - the call does not wait for a future frame;
-- returned `size` describes the source coordinate space of `image`;
+- aspect cropping is centered and does not depend on tile/region semantics;
+- rotation is limited to the declared `0`, `90`, and `-90` quarter-turn values;
+- returned `size` describes the coordinate space of the returned `image` after the requested crop/rotation;
 - `capturedAtMs` is the capture/snapshot timestamp used by the recognition frame boundary;
 - the returned image must behave as one logical frame for the consumer's evaluation and must not expose a partially updated backing image during one `RecognitionPipeline.evaluate()` call.
 
-The concrete snapshot/copy mechanism is implementation-owned so long as this logical-frame guarantee holds.
+The concrete snapshot/copy mechanism and exact retained pixel dimensions are implementation-owned so long as the requested aspect/rotation geometry and logical-frame guarantee hold.
 
 ## Recognition adapter
 
 The camera module does not add recognition-region semantics to `CameraFrame`.
 
-The recognition-facing adapter combines the raw camera frame with the current fixed recognition-region layout:
+The recognition-facing adapter chooses the generic camera-frame geometry required by the current Recognition presentation and combines the returned camera frame with the fixed recognition-region layout:
 
 ```ts
-export class CameraRecognitionFrameSource
-  implements RecognitionFrameSource {
-  constructor(
-    camera: CameraSession,
-    regions: RecognitionRegionProvider,
-  );
-
-  captureLatest(): RecognitionFrame | null;
-}
+function createRecognitionFrameSource(
+  camera: CameraSession,
+  aspectRatio: CameraFrameAspect,
+  rotation: CameraFrameRotation,
+): RecognitionFrameSource;
 ```
 
-The exact concrete class name is not part of the public camera API, but the dependency boundary is normative:
+The exact concrete function/class name is not part of the public camera API, but the dependency boundary is normative:
 
 ```text
-CameraSession
-    │ raw CameraFrame
+Recognition presentation/orientation
+    │ chooses generic aspectRatio / rotation
+    ▼
+CameraSession.captureLatest(...)
+    │ CameraFrame in requested image coordinates
     ▼
 recognition-side frame-source adapter
     │ + RecognitionRegion layout
@@ -144,7 +162,7 @@ RecognitionFrameSource
 RealtimeRecognizer
 ```
 
-Camera itself must not know the meanings `completed-hand`, `dora-indicators`, or `melds`.
+Camera itself must not know the meanings `completed-hand`, `dora-indicators`, or `melds`, and it must not choose Recognition regions. Aspect crop and quarter-turn are generic image-acquisition operations only.
 
 ## Session lifetime
 
@@ -216,9 +234,11 @@ The contract must permit:
 | concern | owner |
 |---|---|
 | Browser camera stream and preview lifetime | Camera module / this contract. |
-| Actual capture resolution | Browser/device, reported through `CameraFrame.size`. |
+| Native browser camera-stream resolution | Browser/device; implementation input, not exposed as Recognition geometry. |
+| Returned frame aspect crop / quarter-turn | Camera module, requested through generic `captureLatest()` options. |
+| Returned frame coordinate size | Camera module, reported through `CameraFrame.size`. |
 | Default `1280 x 720` ideal request | Camera implementation constrained by this contract. |
-| Recognition semantic regions | Recognition system/product specs. |
+| Recognition semantic regions and choice of capture geometry for the Recognition presentation | Recognition system/product specs. |
 | Fixed `320 x 320` detector composite | Recognition pipeline. |
 | Realtime 100 ms scheduling/backpressure | `spec:product.system.contracts.recognition_api`. |
 | Recognition-page overlays and masks | UI product specs. |

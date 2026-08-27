@@ -2,7 +2,7 @@
 
 - **id**: `spec:product.system.contracts.model_runtime`
 - **status**: draft
-- **date**: 2026-08-26
+- **date**: 2026-08-27
 - **parent**: `spec:product.system`
 
 ## What this is
@@ -28,8 +28,8 @@ Current responsibilities are:
 | role | responsibility |
 |---|---|
 | `detector` | Detect tile candidate regions from the fixed `320 x 320` composite. |
-| `tile-classifier` | Classify one crop into the 34 base riichi tile identities or invalid/background. |
-| `red-five-classifier` | Refine base `5m`, `5p`, or `5s` into ordinary-five versus red-five identity. |
+| `tile-classifier` | Classify candidate crops independently into the 34 base riichi tile identities or invalid/background; the runtime may evaluate multiple crops in one bounded batch. |
+| `red-five-classifier` | Refine base `5m`, `5p`, or `5s` candidates independently into ordinary-five versus red-five identity; the runtime may evaluate multiple applicable crops in one bounded batch. |
 
 ## Model-set manifest
 
@@ -72,7 +72,7 @@ The runtime must reject an unknown `runtimeSpec` rather than guessing input/outp
 A `RecognitionModelRuntimeSpec` identifies a known code-owned model contract.
 The implementation behind each spec owns the exact runtime behavior required for that artifact, including where applicable:
 
-- tensor input name, shape, and dtype;
+- tensor input name, shape, batch-axis behavior, and dtype;
 - preprocessing and normalization;
 - semantic class/output ordering;
 - detector decoding and post-processing;
@@ -113,9 +113,36 @@ The concrete browser/PWA cache mechanism is implementation-owned. Cache correctn
 Inference sessions are created lazily when Recognition is first needed and are retained for the application lifetime.
 
 ```ts
+export interface RecognitionEvaluationTiming {
+  readonly totalMs: number;
+  readonly candidateCount: number;
+  readonly redFiveCandidateCount: number;
+  readonly detectorPreprocessingMs: number;
+  readonly detectorInferenceMs: number;
+  readonly detectorPostprocessingMs: number;
+  readonly cropExtractionMs: number;
+  readonly baseClassifierPreprocessingMs: number;
+  readonly baseClassifierInferenceMs: number;
+  readonly redFiveClassifierPreprocessingMs: number;
+  readonly redFiveClassifierInferenceMs: number;
+}
+
+export interface RecognitionRuntimeModelDiagnostic {
+  readonly role: RecognitionModelRole;
+  readonly runtimeSpec: RecognitionModelRuntimeSpec;
+  readonly selectedProvider?: ExecutionProvider;
+  readonly failedProviders: readonly ExecutionProvider[];
+}
+
+export interface RecognitionRuntimeDiagnostics {
+  readonly models: readonly RecognitionRuntimeModelDiagnostic[];
+  readonly recentEvaluations: readonly RecognitionEvaluationTiming[];
+}
+
 export interface RecognitionRuntime {
   initialize(): Promise<void>;
   createPipeline(): RecognitionPipeline;
+  getDiagnostics?(): RecognitionRuntimeDiagnostics;
   dispose(): Promise<void>;
 }
 ```
@@ -156,6 +183,8 @@ RecognitionRuntime.dispose()
 - after a failed initialization attempt, permits a later `initialize()` call to retry acquisition/session construction rather than permanently caching the rejected initialization promise.
 
 `createPipeline()` may succeed only after runtime initialization is ready. Each created pipeline uses the runtime-owned model sessions rather than loading its own copies of the models.
+
+`getDiagnostics?()` is an optional inspection surface for development, acceptance, and performance investigation. When implemented, it may report selected/failed providers and recent stage timings, including bounded classifier batch work. It is not required for recognition correctness and must not be used as an application/UI decision input.
 
 ## Session ownership
 
@@ -206,7 +235,7 @@ Unavailable provider prerequisites are not a reason to reject the entire runtime
 
 ## Provider diagnostics
 
-The runtime may expose/log implementation diagnostics identifying the selected provider and failed provider attempts for development/performance investigation.
+The runtime may expose/log implementation diagnostics identifying the selected provider and failed provider attempts for development/performance investigation. The optional public `RecognitionRuntime.getDiagnostics()` inspection surface may carry these provider diagnostics together with recent evaluation timings.
 These diagnostics are not recognition semantics and must not become UI/application decision inputs.
 
 A development-only explicit provider override may be retained for benchmarking, but production automatic selection follows the manifest order.
