@@ -113,12 +113,18 @@ describe('production shell routing', () => {
     expect(screen.getByRole('heading', { name: heading })).toBeVisible();
   });
 
-  it('replaces the generic production header with the Conditions mobile app bar', () => {
-    renderRoute('/conditions', createActiveApplicationStore('mobile-shell'));
+  it.each([
+    ['/conditions', '条件入力'],
+    ['/result', '結果'],
+  ])(
+    'replaces the generic production header with the %s mobile app bar',
+    (route, title) => {
+      renderRoute(route, createActiveApplicationStore('mobile-shell'));
 
-    expect(screen.getByTestId('mobile-scoring-app-bar')).toHaveTextContent('条件入力');
-    expect(screen.queryByRole('link', { name: 'mjtensu' })).not.toBeInTheDocument();
-  });
+      expect(screen.getByTestId('mobile-scoring-app-bar')).toHaveTextContent(title);
+      expect(screen.queryByRole('link', { name: 'mjtensu' })).not.toBeInTheDocument();
+    },
+  );
 
   it.each([
     ['/conditions', '条件入力'],
@@ -157,8 +163,13 @@ describe('production shell routing', () => {
     },
   );
 
-  it('routes an unscored Result back to non-cancellable Conditions', () => {
+  it('routes an unscored Result back to non-cancellable Conditions without exposing internal tile ids', () => {
     renderRoute('/result', createActiveApplicationStore('unscored'));
+
+    expect(screen.getByTestId('mobile-scoring-app-bar')).toHaveTextContent('結果');
+    expect(screen.getByText('計算結果がまだありません。')).toBeVisible();
+    expect(screen.queryByText(/現在の和了牌:/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'mjtensu' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '条件入力へ戻る' }));
 

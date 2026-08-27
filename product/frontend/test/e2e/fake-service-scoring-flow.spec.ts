@@ -231,9 +231,12 @@ test.describe('fake-service scoring flow acceptance', () => {
     await expect(page.getByRole('heading', { name: 'mjtensu' })).toBeVisible();
   });
 
-  test('Help round-trip preserves the active scoring session', async ({ page }) => {
+  test('Help round-trip preserves the active scoring session without the legacy Result header', async ({ page }) => {
     await reachResult(page);
-    await page.getByRole('link', { name: 'mjtensu' }).click();
+    await expect(page.getByRole('link', { name: 'mjtensu' })).toHaveCount(0);
+
+    await navigateWithinHarness(page, '/');
+    await expect(page.getByRole('heading', { name: 'mjtensu' })).toBeVisible();
     await page.getByRole('button', { name: '使い方' }).click();
     await expect(page).toHaveURL('/help');
     await expect(page.getByRole('heading', { name: '使い方' })).toBeVisible();
@@ -241,10 +244,8 @@ test.describe('fake-service scoring flow acceptance', () => {
     await page.getByRole('button', { name: 'トップへ戻る' }).click();
     await expect(page).toHaveURL('/');
 
-    await page.goBack();
-    await page.goBack();
-    await page.goBack();
-    await expect(page).toHaveURL('/result');
+    await navigateWithinHarness(page, '/result');
+    await expect(page.getByRole('heading', { name: '結果' })).toBeVisible();
     await expect(page.getByText('6,000点', { exact: true })).toBeVisible();
   });
 });
@@ -279,6 +280,14 @@ async function replaceFirstCorrectionTile(page: Page, tile: string): Promise<voi
   const selector = page.getByRole('dialog', { name: '牌を選択' });
   await expect(selector).toBeVisible();
   await selector.getByRole('button', { name: tile, exact: true }).click();
+}
+
+async function navigateWithinHarness(page: Page, route: string): Promise<void> {
+  await page.evaluate((destination) => {
+    window.history.pushState(null, '', destination);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, route);
+  await expect(page).toHaveURL(route);
 }
 
 async function expectDiagnostics(

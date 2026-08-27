@@ -48,7 +48,9 @@ import { TileCorrectionEditor } from './tile-correction-editor';
 
 export function ProductionShell() {
   const location = useLocation();
-  const usesMobileScoringShell = location.pathname === appRoutePaths.conditions;
+  const usesMobileScoringShell =
+    location.pathname === appRoutePaths.conditions ||
+    location.pathname === appRoutePaths.result;
 
   return (
     <AppShell
@@ -313,17 +315,17 @@ export function ResultPage() {
 
   if (activeScoringSession?.latestResult === null) {
     return (
-      <Stack gap="md" py="xl">
-        <Title order={1}>結果</Title>
-        <Text>現在の和了牌: {activeScoringSession.winningTileId}</Text>
-        <Text c="dimmed">計算結果がまだありません。</Text>
-        <Button
-          variant="light"
-          onClick={() => navigateToUnscoredConditions(navigate)}
-        >
-          条件入力へ戻る
-        </Button>
-      </Stack>
+      <MobileScoringPageShell bottomClearancePx={24} title="結果">
+        <Stack gap="md">
+          <Text c="dimmed">計算結果がまだありません。</Text>
+          <Button
+            variant="light"
+            onClick={() => navigateToUnscoredConditions(navigate)}
+          >
+            条件入力へ戻る
+          </Button>
+        </Stack>
+      </MobileScoringPageShell>
     );
   }
 

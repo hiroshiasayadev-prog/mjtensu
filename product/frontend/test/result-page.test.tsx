@@ -180,6 +180,7 @@ describe('result page presentation', () => {
     renderResult(calculation());
 
     expect(screen.getByRole('heading', { name: '結果' })).toBeVisible();
+    expect(screen.queryByRole('link', { name: 'mjtensu' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('ドラ表示牌')).toBeVisible();
     expect(screen.getByLabelText('完成手牌')).toBeVisible();
     expect(screen.getByLabelText('副露')).toBeVisible();
