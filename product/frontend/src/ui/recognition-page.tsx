@@ -30,12 +30,14 @@ import type { RecognizedStructure, TileIdentity } from '@/domain';
 import type {
   FrameObservationId,
   FrameRecognitionSnapshot,
+  RecognitionDebugCapture,
   MeldGroupObservation,
   NormalizedRect,
   RecognitionFrameSource,
   RecognitionRegion,
   RecognitionRun,
   RecognitionRuntime,
+  RecognitionRuntimeDiagnostics,
   RealtimeRecognizer,
   TileObservation,
 } from '@/recognition';
@@ -122,6 +124,10 @@ export function RecognitionPageView({
   const [recognitionProgress, setRecognitionProgress] = useState<
     'scanning' | 'stabilizing' | null
   >(null);
+  const [debugCaptureStatus, setDebugCaptureStatus] = useState<
+    'idle' | 'capturing' | 'ready' | 'failed'
+  >('idle');
+  const [debugCaptureFile, setDebugCaptureFile] = useState<File | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mountedRef = useRef(false);
   const cameraAttemptRef = useRef(0);
@@ -299,6 +305,48 @@ export function RecognitionPageView({
     runtimeStatus,
   ]);
 
+  const handleDebugCapture = useCallback(() => {
+    if (debugCaptureFile !== null) {
+      shareOrDownloadRecognitionDebugFile(debugCaptureFile, () => {
+        if (!mountedRef.current) {
+          return;
+        }
+        setDebugCaptureFile(null);
+        setDebugCaptureStatus('idle');
+      });
+      return;
+    }
+
+    if (runtime.requestDebugCapture === undefined) {
+      return;
+    }
+
+    setDebugCaptureStatus('capturing');
+    void runtime.requestDebugCapture().then(
+      (capture) => {
+        if (!mountedRef.current) {
+          return;
+        }
+        try {
+          setDebugCaptureFile(
+            createRecognitionDebugFile(capture, runtime.getDiagnostics?.() ?? null),
+          );
+          setDebugCaptureStatus('ready');
+        } catch {
+          setDebugCaptureFile(null);
+          setDebugCaptureStatus('failed');
+        }
+      },
+      () => {
+        if (!mountedRef.current) {
+          return;
+        }
+        setDebugCaptureFile(null);
+        setDebugCaptureStatus('failed');
+      },
+    );
+  }, [debugCaptureFile, runtime]);
+
   const preparationMessage = getPreparationMessage(
     cameraStatus,
     runtimeStatus,
@@ -320,6 +368,49 @@ export function RecognitionPageView({
         background: '#000',
       }}
     >
+      {runtime.requestDebugCapture === undefined ? null : (
+        <Button
+          aria-label={
+            debugCaptureFile === null ? '認識デバッグを採取' : '認識デバッグを保存'
+          }
+          data-testid="recognition-debug-capture"
+          size="compact-sm"
+          variant="light"
+          disabled={debugCaptureStatus === 'capturing'}
+          onClick={handleDebugCapture}
+          style={{
+            position: 'absolute',
+            top: 'max(10px, env(safe-area-inset-top))',
+            left: 'max(10px, env(safe-area-inset-left))',
+            zIndex: 200,
+            pointerEvents: 'auto',
+            touchAction: 'manipulation',
+            background: 'rgba(255,255,255,0.92)',
+          }}
+        >
+          {debugCaptureButtonLabel(debugCaptureStatus)}
+        </Button>
+      )}
+
+      <Button
+        aria-label="認識を終了"
+        data-testid="recognition-global-exit"
+        size="compact-sm"
+        variant="light"
+        onClick={onAbandon}
+        style={{
+          position: 'absolute',
+          top: 'max(10px, env(safe-area-inset-top))',
+          right: 'max(10px, env(safe-area-inset-right))',
+          zIndex: 200,
+          pointerEvents: 'auto',
+          touchAction: 'manipulation',
+          background: 'rgba(255,255,255,0.92)',
+        }}
+      >
+        終了
+      </Button>
+
       <Box
         data-testid="recognition-capture-surface"
         style={{
@@ -361,24 +452,6 @@ export function RecognitionPageView({
             snapshot={snapshot}
             regions={RECOGNITION_CAPTURE_REGIONS}
           />
-
-          <Button
-          aria-label="認識を終了"
-          size="compact-sm"
-          variant="light"
-          onClick={onAbandon}
-          style={{
-            position: 'absolute',
-            top: 'max(10px, env(safe-area-inset-top))',
-            right: 'max(10px, env(safe-area-inset-right))',
-            zIndex: 120,
-            pointerEvents: 'auto',
-            touchAction: 'manipulation',
-            background: 'rgba(255,255,255,0.92)',
-          }}
-        >
-          終了
-          </Button>
 
           {cameraStatus !== 'failed' && runtimeStatus !== 'failed' ? (
           <Paper
@@ -1021,6 +1094,107 @@ function viewportIsPortrait(): boolean {
     return false;
   }
   return window.innerHeight > window.innerWidth;
+}
+
+function debugCaptureButtonLabel(
+  status: 'idle' | 'capturing' | 'ready' | 'failed',
+): string {
+  switch (status) {
+    case 'capturing':
+      return '採取中…';
+    case 'ready':
+      return 'デバッグ保存';
+    case 'failed':
+      return '再採取';
+    case 'idle':
+      return 'デバッグ採取';
+  }
+}
+
+function createRecognitionDebugFile(
+  capture: RecognitionDebugCapture,
+  runtimeDiagnostics: RecognitionRuntimeDiagnostics | null,
+): File {
+  const payload = {
+    schemaVersion: 1,
+    capture,
+    runtimeDiagnostics,
+    environment: {
+      userAgent: navigator.userAgent,
+      viewport: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        devicePixelRatio: window.devicePixelRatio,
+      },
+      screen: {
+        width: window.screen.width,
+        height: window.screen.height,
+        orientationType: window.screen.orientation?.type ?? null,
+        orientationAngle: window.screen.orientation?.angle ?? null,
+      },
+    },
+  } as const;
+  const timestamp = capture.createdAtIso.replaceAll(':', '-').replaceAll('.', '-');
+  return new File(
+    [JSON.stringify(payload)],
+    `mjtensu-recognition-debug-${timestamp}.json`,
+    { type: 'application/json' },
+  );
+}
+
+function shareOrDownloadRecognitionDebugFile(
+  file: File,
+  onCompleted: () => void,
+): void {
+  const shareNavigator = navigator as Navigator & {
+    readonly canShare?: (data: { files?: File[] }) => boolean;
+    readonly share?: (data: { files?: File[]; title?: string }) => Promise<void>;
+  };
+
+  let canShareFile = false;
+  try {
+    canShareFile =
+      shareNavigator.share !== undefined &&
+      shareNavigator.canShare?.({ files: [file] }) === true;
+  } catch {
+    canShareFile = false;
+  }
+
+  if (canShareFile && shareNavigator.share !== undefined) {
+    void shareNavigator.share({
+      files: [file],
+      title: 'mjtensu recognition debug',
+    }).then(
+      onCompleted,
+      (error: unknown) => {
+        if (isAbortError(error)) {
+          return;
+        }
+        downloadRecognitionDebugFile(file);
+        onCompleted();
+      },
+    );
+    return;
+  }
+
+  downloadRecognitionDebugFile(file);
+  onCompleted();
+}
+
+function downloadRecognitionDebugFile(file: File): void {
+  const url = URL.createObjectURL(file);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = file.name;
+  anchor.style.display = 'none';
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
 }
 
 function getPreparationMessage(

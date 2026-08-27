@@ -55,10 +55,56 @@ export interface RecognitionRuntimeDiagnostics {
   readonly recentEvaluations: readonly RecognitionEvaluationTiming[];
 }
 
+export interface RecognitionDebugRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+export interface RecognitionDebugDetection {
+  readonly id: string;
+  readonly detectionIndex: number;
+  readonly confidence: number;
+  readonly region: RecognitionRegion;
+  readonly compositeBox: RecognitionDebugRect;
+  readonly sourceBox: RecognitionDebugRect;
+  readonly classification: FrameRecognitionSnapshot['observations'][number]['classification'];
+}
+
+export interface RecognitionDebugCapture {
+  readonly schemaVersion: 1;
+  readonly createdAtIso: string;
+  readonly capturedAtMs: number;
+  readonly modelSetVersion?: string;
+  readonly sourceSize: Size;
+  readonly regions: Readonly<Record<RecognitionRegion, NormalizedRect>>;
+  readonly sourceRegionRects: Readonly<Record<RecognitionRegion, RecognitionDebugRect>>;
+  readonly images: {
+    readonly sourcePngDataUrl: string;
+    readonly compositePngDataUrl: string;
+    readonly regionPngDataUrls: Readonly<Record<RecognitionRegion, string>>;
+  };
+  readonly detectorInput: {
+    readonly shape: readonly [1, 3, 320, 320];
+    readonly encoding: 'base64-f32-le';
+    readonly data: string;
+  };
+  readonly detectorOutput: {
+    readonly dims: readonly number[];
+    readonly type: string;
+    readonly encoding: 'base64-f32-le';
+    readonly data: string;
+  };
+  readonly detections: readonly RecognitionDebugDetection[];
+  readonly snapshot: FrameRecognitionSnapshot;
+}
+
 export interface RecognitionRuntime {
   initialize(): Promise<void>;
   createPipeline(): RecognitionPipeline;
   getDiagnostics?(): RecognitionRuntimeDiagnostics;
+  requestDebugCapture?(): Promise<RecognitionDebugCapture>;
   dispose(): Promise<void>;
 }
 

@@ -25,6 +25,7 @@ import type {
   TensorOutput,
 } from './detector/types';
 import type {
+  RecognitionDebugCapture,
   RecognitionEvaluationTiming,
   RecognitionFrame,
   RecognitionPipeline,
@@ -59,6 +60,22 @@ export interface RecognitionPipelinePlatform {
   extractCrop(frame: RecognitionFrame, box: Rect): ClassifierCropImage;
 }
 
+export interface RecognitionDebugCaptureBuilderInput {
+  readonly frame: RecognitionFrame;
+  readonly composite: HTMLCanvasElement;
+  readonly captureRegions: CaptureRegions;
+  readonly detectorInput: Float32Array;
+  readonly detectorOutput: TensorOutput;
+  readonly detections: readonly RegionDetection[];
+  readonly classifications: readonly TileClassification[];
+  readonly snapshot: FrameRecognitionSnapshot;
+  readonly modelSetVersion?: string;
+}
+
+export type RecognitionDebugCaptureBuilder = (
+  input: RecognitionDebugCaptureBuilderInput,
+) => RecognitionDebugCapture;
+
 export interface ProductionRecognitionPipelineDependencies {
   readonly modelRuntime: RecognitionModelRuntimeInspection;
   /** Test-only/internal seam. Production composition resolves this from runtimeSpec. */
@@ -67,6 +84,11 @@ export interface ProductionRecognitionPipelineDependencies {
   readonly platform?: RecognitionPipelinePlatform;
   readonly now?: () => number;
   readonly onEvaluationTiming?: (timing: RecognitionEvaluationTiming) => void;
+  readonly modelSetVersion?: string;
+  readonly claimDebugCapture?: () => boolean;
+  readonly onDebugCapture?: (capture: RecognitionDebugCapture) => void;
+  readonly onDebugCaptureFailure?: (error: unknown) => void;
+  readonly debugCaptureBuilder?: RecognitionDebugCaptureBuilder;
 }
 
 export function createProductionRecognitionPipeline(
@@ -90,6 +112,8 @@ export function createProductionRecognitionPipeline(
     dependencies.detectorPostprocessor ?? createProductionNanoDetPostprocessor();
   const platform = dependencies.platform ?? browserPipelinePlatform;
   const now = dependencies.now ?? monotonicNow;
+  const debugCaptureBuilder =
+    dependencies.debugCaptureBuilder ?? buildBrowserRecognitionDebugCapture;
   const classifier = createC8ClassifierRuntime({
     baseClassifier: createClassifierSessionAdapter(
       baseClassifier,
@@ -112,6 +136,7 @@ export function createProductionRecognitionPipeline(
 
   const evaluateFrame = async (
     frame: RecognitionFrame,
+    debugRequested: boolean,
   ): Promise<FrameRecognitionSnapshot> => {
     validateFrame(frame);
     const evaluationStartedAt = now();
@@ -119,8 +144,9 @@ export function createProductionRecognitionPipeline(
     const captureRegions = toCaptureRegions(frame);
     const detectorPreprocessingStartedAt = now();
     let detectorInput: Float32Array;
+    let composite: HTMLCanvasElement;
     try {
-      const composite = platform.buildComposite(frame, captureRegions);
+      composite = platform.buildComposite(frame, captureRegions);
       detectorInput = platform.preprocessComposite(composite);
     } catch (error) {
       if (isRecognitionRuntimeError(error)) {
@@ -213,6 +239,28 @@ export function createProductionRecognitionPipeline(
       });
     }
 
+    if (debugRequested) {
+      try {
+        dependencies.onDebugCapture?.(
+          debugCaptureBuilder({
+            frame,
+            composite,
+            captureRegions,
+            detectorInput,
+            detectorOutput,
+            detections,
+            classifications,
+            snapshot,
+            ...(dependencies.modelSetVersion === undefined
+              ? {}
+              : { modelSetVersion: dependencies.modelSetVersion }),
+          }),
+        );
+      } catch (error) {
+        dependencies.onDebugCaptureFailure?.(error);
+      }
+    }
+
     return snapshot;
   };
 
@@ -221,11 +269,17 @@ export function createProductionRecognitionPipeline(
       if (disposalRequested) {
         return Promise.reject(new Error('Recognition pipeline has been disposed.'));
       }
-      const evaluation = evaluateFrame(frame);
+      const debugRequested = dependencies.claimDebugCapture?.() === true;
+      const evaluation = evaluateFrame(frame, debugRequested);
       inFlight.add(evaluation);
       void evaluation.then(
         () => inFlight.delete(evaluation),
-        () => inFlight.delete(evaluation),
+        (error: unknown) => {
+          inFlight.delete(evaluation);
+          if (debugRequested) {
+            dependencies.onDebugCaptureFailure?.(error);
+          }
+        },
       );
       return evaluation;
     },
@@ -282,6 +336,133 @@ const browserPipelinePlatform: RecognitionPipelinePlatform = {
     };
   },
 };
+
+function buildBrowserRecognitionDebugCapture(
+  input: RecognitionDebugCaptureBuilderInput,
+): RecognitionDebugCapture {
+  const sourceRect: Rect = {
+    x: 0,
+    y: 0,
+    width: input.frame.sourceSize.width,
+    height: input.frame.sourceSize.height,
+  };
+  const sourceCanvas = drawSourceRect(input.frame.source, sourceRect);
+  const completedHand = input.captureRegions.completed_hand.sourceRect;
+  const doraIndicators = input.captureRegions.dora_indicators.sourceRect;
+  const melds = input.captureRegions.melds.sourceRect;
+
+  return {
+    schemaVersion: 1,
+    createdAtIso: new Date().toISOString(),
+    capturedAtMs: input.frame.capturedAtMs,
+    ...(input.modelSetVersion === undefined
+      ? {}
+      : { modelSetVersion: input.modelSetVersion }),
+    sourceSize: { ...input.frame.sourceSize },
+    regions: {
+      'completed-hand': { ...input.frame.regions['completed-hand'] },
+      'dora-indicators': { ...input.frame.regions['dora-indicators'] },
+      melds: { ...input.frame.regions.melds },
+    },
+    sourceRegionRects: {
+      'completed-hand': { ...completedHand },
+      'dora-indicators': { ...doraIndicators },
+      melds: { ...melds },
+    },
+    images: {
+      sourcePngDataUrl: sourceCanvas.toDataURL('image/png'),
+      compositePngDataUrl: input.composite.toDataURL('image/png'),
+      regionPngDataUrls: {
+        'completed-hand': drawSourceRect(
+          input.frame.source,
+          completedHand,
+        ).toDataURL('image/png'),
+        'dora-indicators': drawSourceRect(
+          input.frame.source,
+          doraIndicators,
+        ).toDataURL('image/png'),
+        melds: drawSourceRect(input.frame.source, melds).toDataURL('image/png'),
+      },
+    },
+    detectorInput: {
+      shape: [1, 3, 320, 320],
+      encoding: 'base64-f32-le',
+      data: float32ToBase64(input.detectorInput),
+    },
+    detectorOutput: {
+      dims: [...input.detectorOutput.dims],
+      type: input.detectorOutput.type,
+      encoding: 'base64-f32-le',
+      data: float32ToBase64(requireFloat32TensorData(input.detectorOutput)),
+    },
+    detections: input.detections.map((detection, index) => {
+      const classification = input.classifications[index];
+      if (classification === undefined) {
+        throw modelIncompatible('tile-classifier');
+      }
+      return {
+        id: detection.id,
+        detectionIndex: detection.detectionIndex,
+        confidence: detection.confidence,
+        region: toRecognitionRegion(detection.region),
+        compositeBox: { ...detection.box },
+        sourceBox: { ...detection.sourceBox },
+        classification,
+      };
+    }),
+    snapshot: input.snapshot,
+  };
+}
+
+function drawSourceRect(source: CanvasImageSource, rect: Rect): HTMLCanvasElement {
+  const width = Math.max(1, Math.round(rect.width));
+  const height = Math.max(1, Math.round(rect.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d', { alpha: false });
+  if (context === null) {
+    throw new Error('Recognition debug 2D context is unavailable.');
+  }
+  context.drawImage(
+    source,
+    rect.x,
+    rect.y,
+    rect.width,
+    rect.height,
+    0,
+    0,
+    width,
+    height,
+  );
+  return canvas;
+}
+
+function requireFloat32TensorData(output: TensorOutput): Float32Array {
+  if (!(output.data instanceof Float32Array)) {
+    throw new Error('Recognition debug detector output is not Float32Array.');
+  }
+  return output.data;
+}
+
+function float32ToBase64(values: Float32Array): string {
+  const bytes = new Uint8Array(
+    values.buffer,
+    values.byteOffset,
+    values.byteLength,
+  );
+  const chunkSize = 0x8000;
+  const chunks: string[] = [];
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length));
+    let binary = '';
+    for (let index = 0; index < chunk.length; index += 1) {
+      binary += String.fromCharCode(chunk[index] ?? 0);
+    }
+    chunks.push(binary);
+  }
+  return btoa(chunks.join(''));
+}
 
 async function runDetector(
   session: RecognitionInferenceSession,

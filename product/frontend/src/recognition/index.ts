@@ -17,6 +17,9 @@ export type {
 } from './detector/types';
 export type { TileClassification } from './classifier/labels';
 export type {
+  RecognitionDebugCapture,
+  RecognitionDebugDetection,
+  RecognitionDebugRect,
   RecognitionEvaluationTiming,
   RecognitionFrame,
   RecognitionFrameSource,

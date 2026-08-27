@@ -1,5 +1,6 @@
 import type { TileKind } from '@/domain';
 import type {
+  RecognitionDebugCapture,
   RecognitionEvaluationTiming,
   RecognitionFrame,
   RecognitionFrameSource,
@@ -123,6 +124,36 @@ describe('production recognition one-frame composition', () => {
     expect(base.runCalls).toHaveLength(0);
     expect(redFive.runCalls).toHaveLength(0);
     expect(snapshot.observations).toEqual([]);
+  });
+
+  it('captures the exact claimed detector input and output through the debug seam', async () => {
+    const detectorOutput = tensorOutput(new Float32Array([0.25]), [1, 1, 1]);
+    const detector = new FakeInferenceSession([detectorOutput]);
+    const base = new FakeInferenceSession([]);
+    const redFive = new FakeInferenceSession([]);
+    const captured: RecognitionDebugCapture[] = [];
+    const debugCapture = { schemaVersion: 1 } as RecognitionDebugCapture;
+    const inputFrame = frame(42);
+    const pipeline = createProductionRecognitionPipeline({
+      modelRuntime: fakeModelInspection({ detector, base, redFive }),
+      classifierNormalizationOverride: testNormalization,
+      detectorPostprocessor: { process: () => [] },
+      platform: fakePipelinePlatform(),
+      modelSetVersion: 'fixture-model-set',
+      claimDebugCapture: () => true,
+      debugCaptureBuilder: (input) => {
+        expect(input.frame).toBe(inputFrame);
+        expect(input.detectorInput).toHaveLength(3 * 320 * 320);
+        expect(input.detectorOutput).toBe(detectorOutput);
+        expect(input.modelSetVersion).toBe('fixture-model-set');
+        return debugCapture;
+      },
+      onDebugCapture: (capture) => captured.push(capture),
+    });
+
+    await pipeline.evaluate(inputFrame);
+
+    expect(captured).toEqual([debugCapture]);
   });
 
   it.each([
