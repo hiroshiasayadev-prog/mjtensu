@@ -20,7 +20,12 @@ import {
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import type { CameraService, CameraSession } from '@/camera';
+import type {
+  CameraFrameAspect,
+  CameraFrameRotation,
+  CameraService,
+  CameraSession,
+} from '@/camera';
 import type { RecognizedStructure, TileIdentity } from '@/domain';
 import type {
   FrameObservationId,
@@ -122,6 +127,10 @@ export function RecognitionPageView({
   const runtimeAttemptRef = useRef(0);
   const committedRef = useRef(false);
   const isPortraitViewport = usePortraitViewport();
+  const captureAspectRatio: CameraFrameAspect = isPortraitViewport
+    ? '9:16'
+    : '16:9';
+  const captureRotation: CameraFrameRotation = isPortraitViewport ? -90 : 0;
 
   const prepareCamera = useCallback(() => {
     const attempt = ++cameraAttemptRef.current;
@@ -231,8 +240,14 @@ export function RecognitionPageView({
     };
 
     try {
+      setSnapshot(null);
+      setRecognitionProgress(null);
       recognizer.reset();
-      const source = createRecognitionFrameSource(cameraSession);
+      const source = createRecognitionFrameSource(
+        cameraSession,
+        captureAspectRatio,
+        captureRotation,
+      );
       const startedRun = recognizer.start(source, {
         onUpdate(update) {
           if (!active || !mountedRef.current || committedRef.current) {
@@ -277,6 +292,7 @@ export function RecognitionPageView({
     cameraSession,
     cameraStatus,
     handleRuntimeFailure,
+    isPortraitViewport,
     onConfirmed,
     recognizer,
     runtimeStatus,
@@ -308,35 +324,44 @@ export function RecognitionPageView({
         style={{
           position: 'relative',
           ...captureSurfaceLayout(isPortraitViewport),
-          aspectRatio: '16 / 9',
+          aspectRatio: isPortraitViewport ? '9 / 16' : '16 / 9',
           overflow: 'hidden',
           background: '#111',
         }}
       >
         {cameraStatus === 'ready' ? (
-          <>
-            <video
-              ref={videoRef}
-              aria-label="カメラプレビュー"
-              autoPlay
-              muted
-              playsInline
-              style={{
-                position: 'absolute',
-                inset: 0,
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                pointerEvents: 'none',
-              }}
-            />
-            <CaptureRegionOverlay snapshot={snapshot} />
-          </>
-        ) : (
-          <CaptureRegionOverlay snapshot={null} />
-        )}
+          <video
+            ref={videoRef}
+            aria-label="カメラプレビュー"
+            autoPlay
+            muted
+            playsInline
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              pointerEvents: 'none',
+            }}
+          />
+        ) : null}
 
-        <Button
+        <Box
+          data-testid="recognition-landscape-ui-surface"
+          style={{
+            ...landscapeUiSurfaceLayout(isPortraitViewport),
+            aspectRatio: '16 / 9',
+            overflow: 'hidden',
+            pointerEvents: 'auto',
+          }}
+        >
+          <CaptureRegionOverlay
+            snapshot={snapshot}
+            regions={RECOGNITION_CAPTURE_REGIONS}
+          />
+
+          <Button
           aria-label="認識を終了"
           size="compact-sm"
           variant="light"
@@ -352,9 +377,9 @@ export function RecognitionPageView({
           }}
         >
           終了
-        </Button>
+          </Button>
 
-        {cameraStatus !== 'failed' && runtimeStatus !== 'failed' ? (
+          {cameraStatus !== 'failed' && runtimeStatus !== 'failed' ? (
           <Paper
             role="status"
             px="sm"
@@ -373,9 +398,9 @@ export function RecognitionPageView({
           >
             <Text size="sm">{preparationMessage}</Text>
           </Paper>
-        ) : null}
+          ) : null}
 
-        {cameraStatus === 'failed' || runtimeStatus === 'failed' ? (
+          {cameraStatus === 'failed' || runtimeStatus === 'failed' ? (
           <Box
             data-testid="recognition-recovery-layer"
             style={{
@@ -411,7 +436,8 @@ export function RecognitionPageView({
               ) : null}
             </Stack>
           </Box>
-        ) : null}
+          ) : null}
+        </Box>
       </Box>
     </Box>
   );
@@ -470,8 +496,10 @@ export function RecognitionPage() {
 
 function CaptureRegionOverlay({
   snapshot,
+  regions,
 }: {
   readonly snapshot: FrameRecognitionSnapshot | null;
+  readonly regions: Readonly<Record<RecognitionRegion, NormalizedRect>>;
 }) {
   const maskId = useId().replaceAll(':', '');
   const observationsById = useMemo(
@@ -499,7 +527,7 @@ function CaptureRegionOverlay({
         <defs>
           <mask id={maskId}>
             <rect x="0" y="0" width="1" height="1" fill="white" />
-            {Object.values(RECOGNITION_CAPTURE_REGIONS).map((rect, index) => (
+            {Object.values(regions).map((rect, index) => (
               <rect
                 key={index}
                 x={rect.x}
@@ -521,9 +549,9 @@ function CaptureRegionOverlay({
         />
       </svg>
 
-      <CaptureFrame region="dora-indicators" label="ドラ" />
-      <CaptureFrame region="completed-hand" label="手牌" />
-      <CaptureFrame region="melds" label="副露" />
+      <CaptureFrame region="dora-indicators" label="ドラ" regions={regions} />
+      <CaptureFrame region="completed-hand" label="手牌" regions={regions} />
+      <CaptureFrame region="melds" label="副露" regions={regions} />
 
       {snapshot?.observations.map((observation) => (
         <ObservationBox key={observation.id} observation={observation} />
@@ -542,11 +570,13 @@ function CaptureRegionOverlay({
 function CaptureFrame({
   region,
   label,
+  regions,
 }: {
   readonly region: RecognitionRegion;
   readonly label: string;
+  readonly regions: Readonly<Record<RecognitionRegion, NormalizedRect>>;
 }) {
-  const rect = RECOGNITION_CAPTURE_REGIONS[region];
+  const rect = regions[region];
 
   return (
     <Box
@@ -794,10 +824,12 @@ function OwnedRecoveryPanel({
 
 function createRecognitionFrameSource(
   camera: CameraSession,
+  aspectRatio: CameraFrameAspect,
+  rotation: CameraFrameRotation,
 ): RecognitionFrameSource {
   return {
     captureLatest() {
-      const frame = camera.captureLatest();
+      const frame = camera.captureLatest({ aspectRatio, rotation });
       if (frame === null) {
         return null;
       }
@@ -812,13 +844,30 @@ function createRecognitionFrameSource(
 }
 
 const PORTRAIT_CAPTURE_SURFACE_LAYOUT = {
-  width: '100vw',
-  height: '56.25vw',
+  width: 'min(100vw, 56.25dvh)',
+  height: 'min(100dvh, 177.7778vw)',
 } as const;
 
 const LANDSCAPE_CAPTURE_SURFACE_LAYOUT = {
   width: 'min(100vw, 177.7778dvh)',
   height: 'min(100dvh, 56.25vw)',
+} as const;
+
+const PORTRAIT_LANDSCAPE_UI_SURFACE_LAYOUT = {
+  position: 'absolute',
+  left: '50%',
+  top: '50%',
+  width: '177.7778%',
+  height: '56.25%',
+  transform: 'translate(-50%, -50%) rotate(90deg)',
+  transformOrigin: 'center',
+} as const;
+
+const LANDSCAPE_UI_SURFACE_LAYOUT = {
+  position: 'absolute',
+  inset: 0,
+  width: '100%',
+  height: '100%',
 } as const;
 
 function captureSurfaceLayout(isPortraitViewport: boolean): {
@@ -828,6 +877,12 @@ function captureSurfaceLayout(isPortraitViewport: boolean): {
   return isPortraitViewport
     ? PORTRAIT_CAPTURE_SURFACE_LAYOUT
     : LANDSCAPE_CAPTURE_SURFACE_LAYOUT;
+}
+
+function landscapeUiSurfaceLayout(isPortraitViewport: boolean) {
+  return isPortraitViewport
+    ? PORTRAIT_LANDSCAPE_UI_SURFACE_LAYOUT
+    : LANDSCAPE_UI_SURFACE_LAYOUT;
 }
 
 function usePortraitViewport(): boolean {

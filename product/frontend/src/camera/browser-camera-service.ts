@@ -1,5 +1,7 @@
 import type {
   CameraFrame,
+  CameraFrameAspect,
+  CameraFrameRotation,
   CameraOpenRequest,
   CameraPreview,
   CameraRuntimeError,
@@ -63,7 +65,10 @@ class BrowserCameraSession implements CameraSession {
     };
   }
 
-  captureLatest(): CameraFrame | null {
+  captureLatest(options: {
+    readonly aspectRatio?: CameraFrameAspect;
+    readonly rotation?: CameraFrameRotation;
+  } = {}): CameraFrame | null {
     const video = this.attachedVideo;
     if (
       this.stopped ||
@@ -75,8 +80,16 @@ class BrowserCameraSession implements CameraSession {
       return null;
     }
 
+    const aspectRatio = options.aspectRatio ?? '16:9';
+    const rotation = options.rotation ?? 0;
+    const sourceAspect = aspectRatio === '16:9' ? 16 / 9 : 9 / 16;
     const canvas = this.createCanvas();
-    const captureSize = canonicalCaptureSize(video.videoWidth);
+    const captureSize = canonicalCaptureSize(
+      video.videoWidth,
+      video.videoHeight,
+      aspectRatio,
+      rotation,
+    );
     canvas.width = captureSize.width;
     canvas.height = captureSize.height;
     const context = canvas.getContext('2d');
@@ -85,10 +98,10 @@ class BrowserCameraSession implements CameraSession {
     }
 
     try {
-      // Recognition always consumes the same 16:9 geometry that the preview
-      // exposes with object-fit: cover. Center-crop the raw MediaStream frame
-      // instead of stretching or rotating it; viewport orientation is a UI
-      // layout concern and must not alter camera coordinates.
+      // Crop in the native camera orientation, then optionally quarter-turn
+      // into the logical Recognition coordinate system. This lets a portrait-
+      // locked browser expose a natural 9:16 preview while Recognition still
+      // consumes the same 16:9 geometry used by the landscape UI.
       drawCanonicalFrame(
         context,
         video,
@@ -96,6 +109,8 @@ class BrowserCameraSession implements CameraSession {
         video.videoHeight,
         canvas.width,
         canvas.height,
+        sourceAspect,
+        rotation,
       );
     } catch (error) {
       if (isTransientVideoFrameError(error)) {
@@ -239,11 +254,30 @@ function normalizeCameraOpenError(cause: unknown): CameraRuntimeError {
 
 function canonicalCaptureSize(
   videoWidth: number,
+  videoHeight: number,
+  aspectRatio: CameraFrameAspect,
+  rotation: CameraFrameRotation,
 ): { readonly width: number; readonly height: number } {
-  const width = Math.max(1, Math.min(1280, Math.round(videoWidth)));
+  const crop = centerCrop(
+    videoWidth,
+    videoHeight,
+    aspectRatio === '16:9' ? 16 / 9 : 9 / 16,
+  );
+  const sourceUnitWidth = aspectRatio === '16:9' ? 16 : 9;
+  const sourceUnitHeight = aspectRatio === '16:9' ? 9 : 16;
+  const outputUnitWidth = rotation === 0 ? sourceUnitWidth : sourceUnitHeight;
+  const outputUnitHeight = rotation === 0 ? sourceUnitHeight : sourceUnitWidth;
+  const units = Math.max(
+    1,
+    Math.floor(Math.min(
+      crop.width / sourceUnitWidth,
+      crop.height / sourceUnitHeight,
+      1280 / Math.max(outputUnitWidth, outputUnitHeight),
+    )),
+  );
   return {
-    width,
-    height: Math.max(1, Math.round(width * 9 / 16)),
+    width: units * outputUnitWidth,
+    height: units * outputUnitHeight,
   };
 }
 
@@ -254,8 +288,33 @@ function drawCanonicalFrame(
   sourceHeight: number,
   targetWidth: number,
   targetHeight: number,
+  sourceAspect: number,
+  rotation: CameraFrameRotation,
 ): void {
-  const crop = centerCrop(sourceWidth, sourceHeight, 16 / 9);
+  const crop = centerCrop(sourceWidth, sourceHeight, sourceAspect);
+  if (rotation === 0) {
+    context.drawImage(
+      video,
+      crop.x,
+      crop.y,
+      crop.width,
+      crop.height,
+      0,
+      0,
+      targetWidth,
+      targetHeight,
+    );
+    return;
+  }
+
+  context.save();
+  if (rotation === 90) {
+    context.translate(targetWidth, 0);
+    context.rotate(Math.PI / 2);
+  } else {
+    context.translate(0, targetHeight);
+    context.rotate(-Math.PI / 2);
+  }
   context.drawImage(
     video,
     crop.x,
@@ -264,9 +323,10 @@ function drawCanonicalFrame(
     crop.height,
     0,
     0,
-    targetWidth,
     targetHeight,
+    targetWidth,
   );
+  context.restore();
 }
 
 function centerCrop(

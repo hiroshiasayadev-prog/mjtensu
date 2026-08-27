@@ -65,14 +65,34 @@ function createCameraSession() {
     size: { width: 1280, height: 720 },
     capturedAtMs: 123,
   };
-  const captureLatest = vi.fn(() => frame);
+  const portraitLockedFrame = {
+    image: document.createElement('canvas'),
+    size: { width: 1280, height: 720 },
+    capturedAtMs: 124,
+  };
+  const captureLatest = vi.fn((options?: {
+    readonly aspectRatio?: '16:9' | '9:16';
+    readonly rotation?: 0 | 90 | -90;
+  }) =>
+    options?.aspectRatio === '9:16' && options.rotation === -90
+      ? portraitLockedFrame
+      : frame,
+  );
   const session: CameraSession = {
     preview: { attach, detach },
     captureLatest,
     stop,
   };
 
-  return { session, attach, detach, stop, captureLatest, frame };
+  return {
+    session,
+    attach,
+    detach,
+    stop,
+    captureLatest,
+    frame,
+    portraitLockedFrame,
+  };
 }
 
 function createRecognizerHarness() {
@@ -274,7 +294,7 @@ describe('RecognitionPageView preparation and capture surface', () => {
     await waitFor(() => expect(recognizer.start).toHaveBeenCalledTimes(1));
   });
 
-  it('starts realtime in a portrait viewport with the same 16:9 camera and bbox geometry', async () => {
+  it('presents the same landscape UI in a portrait-locked viewport', async () => {
     setViewportSize(390, 844);
     const cameraSession = createCameraSession();
     const recognizer = createRecognizerHarness();
@@ -289,52 +309,82 @@ describe('RecognitionPageView preparation and capture surface', () => {
     await waitFor(() => expect(recognizer.start).toHaveBeenCalledTimes(1));
 
     const captureSurface = screen.getByTestId('recognition-capture-surface');
+    const landscapeUi = screen.getByTestId('recognition-landscape-ui-surface');
     const preview = screen.getByLabelText('カメラプレビュー');
     const handRegion = screen.getByLabelText('手牌認識領域');
-    const portraitHandStyle = {
-      left: handRegion.style.left,
-      top: handRegion.style.top,
-      width: handRegion.style.width,
-      height: handRegion.style.height,
-    };
 
-    expect(captureSurface.style.width).toBe('100vw');
-    expect(captureSurface.style.height).toBe('56.25vw');
-    expect(captureSurface.style.aspectRatio).toBe('16 / 9');
-    expect(captureSurface.style.transform).toBe('');
+    expect(captureSurface.style.width).toBe('min(100vw, 56.25dvh)');
+    expect(captureSurface.style.height).toBe('min(100dvh, 177.7778vw)');
+    expect(captureSurface.style.aspectRatio).toBe('9 / 16');
     expect(preview.style.inset).toBe('0px');
     expect(preview.style.width).toBe('100%');
     expect(preview.style.height).toBe('100%');
     expect(preview.style.objectFit).toBe('cover');
     expect(preview.style.transform).toBe('');
+
+    expect(landscapeUi.style.width).toBe('177.7778%');
+    expect(landscapeUi.style.height).toBe('56.25%');
+    expect(landscapeUi.style.aspectRatio).toBe('16 / 9');
+    expect(landscapeUi.style.transform).toBe(
+      'translate(-50%, -50%) rotate(90deg)',
+    );
+    expect(landscapeUi.style.pointerEvents).toBe('auto');
+    expect(handRegion.style.left).toBe('4%');
+    expect(handRegion.style.top).toBe('50%');
+    expect(handRegion.style.width).toBe('62%');
+    expect(
+      (RECOGNITION_CAPTURE_REGIONS['completed-hand'].width /
+        RECOGNITION_CAPTURE_REGIONS['completed-hand'].height) *
+        (16 / 9),
+    ).toBeCloseTo(17 / 4, 8);
+    expect(
+      (RECOGNITION_CAPTURE_REGIONS.melds.width /
+        RECOGNITION_CAPTURE_REGIONS.melds.height) *
+        (16 / 9),
+    ).toBeCloseTo(1, 8);
     expect(screen.queryByText(/端末を横向きにしてください/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '表示方向を反転' })).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('認識しています');
 
-    recognizer.getSource()?.captureLatest();
-    expect(cameraSession.captureLatest).toHaveBeenLastCalledWith();
+    expect(recognizer.getSource()?.captureLatest()).toEqual({
+      source: cameraSession.portraitLockedFrame.image,
+      sourceSize: cameraSession.portraitLockedFrame.size,
+      regions: RECOGNITION_CAPTURE_REGIONS,
+      capturedAtMs: cameraSession.portraitLockedFrame.capturedAtMs,
+    });
+    expect(cameraSession.captureLatest).toHaveBeenLastCalledWith({
+      aspectRatio: '9:16',
+      rotation: -90,
+    });
 
     act(() => {
       setViewportSize(844, 390);
       window.dispatchEvent(new Event('resize'));
     });
 
+    await waitFor(() => expect(recognizer.start).toHaveBeenCalledTimes(2));
+    expect(recognizer.runs[0]?.stop).toHaveBeenCalled();
+    expect(cameraSession.attach).toHaveBeenCalledTimes(1);
     expect(captureSurface.style.width).toBe('min(100vw, 177.7778dvh)');
     expect(captureSurface.style.height).toBe('min(100dvh, 56.25vw)');
     expect(captureSurface.style.aspectRatio).toBe('16 / 9');
-    expect(preview.style.inset).toBe('0px');
-    expect(preview.style.width).toBe('100%');
-    expect(preview.style.height).toBe('100%');
-    expect(preview.style.objectFit).toBe('cover');
-    expect({
-      left: handRegion.style.left,
-      top: handRegion.style.top,
-      width: handRegion.style.width,
-      height: handRegion.style.height,
-    }).toEqual(portraitHandStyle);
-    expect(captureSurface.style.width).toBe('min(100vw, 177.7778dvh)');
-    expect(captureSurface.style.height).toBe('min(100dvh, 56.25vw)');
-    expect(recognizer.start).toHaveBeenCalledTimes(1);
+    expect(landscapeUi.style.inset).toBe('0px');
+    expect(landscapeUi.style.width).toBe('100%');
+    expect(landscapeUi.style.height).toBe('100%');
+    expect(landscapeUi.style.transform).toBe('');
+    expect(handRegion.style.left).toBe('4%');
+    expect(handRegion.style.top).toBe('50%');
+    expect(handRegion.style.width).toBe('62%');
+
+    expect(recognizer.getSource()?.captureLatest()).toEqual({
+      source: cameraSession.frame.image,
+      sourceSize: cameraSession.frame.size,
+      regions: RECOGNITION_CAPTURE_REGIONS,
+      capturedAtMs: cameraSession.frame.capturedAtMs,
+    });
+    expect(cameraSession.captureLatest).toHaveBeenLastCalledWith({
+      aspectRatio: '16:9',
+      rotation: 0,
+    });
   });
 });
 
