@@ -16,55 +16,23 @@ export function suppressDetectorDuplicates(
 
   const winners: RegionDetection[] = [];
   for (const group of byRegion.values()) {
-    const adjacency = group.map(() => new Set<number>());
-    for (let leftIndex = 0; leftIndex < group.length; leftIndex += 1) {
-      const left = group[leftIndex];
-      if (left === undefined) {
-        continue;
-      }
-      for (let rightIndex = leftIndex + 1; rightIndex < group.length; rightIndex += 1) {
-        const right = group[rightIndex];
-        if (
-          right !== undefined &&
-          overlapOverSmallerBox(left.sourceBox, right.sourceBox) >= overlapThreshold
-        ) {
-          adjacency[leftIndex]?.add(rightIndex);
-          adjacency[rightIndex]?.add(leftIndex);
-        }
+    const candidates = group.filter(
+      (candidate, candidateIndex) =>
+        !isMergedBridgeCandidate(candidate, candidateIndex, group, overlapThreshold),
+    );
+    candidates.sort(compareWinnerPriority);
+
+    const kept: RegionDetection[] = [];
+    for (const candidate of candidates) {
+      const duplicatesKeptCandidate = kept.some(
+        (winner) =>
+          overlapOverSmallerBox(candidate.sourceBox, winner.sourceBox) >= overlapThreshold,
+      );
+      if (!duplicatesKeptCandidate) {
+        kept.push(candidate);
       }
     }
-
-    const visited = new Set<number>();
-    for (let start = 0; start < group.length; start += 1) {
-      if (visited.has(start)) {
-        continue;
-      }
-      const component: RegionDetection[] = [];
-      const stack = [start];
-      visited.add(start);
-      while (stack.length > 0) {
-        const current = stack.pop();
-        if (current === undefined) {
-          continue;
-        }
-        const detection = group[current];
-        if (detection !== undefined) {
-          component.push(detection);
-        }
-        for (const neighbor of adjacency[current] ?? []) {
-          if (!visited.has(neighbor)) {
-            visited.add(neighbor);
-            stack.push(neighbor);
-          }
-        }
-      }
-
-      component.sort(compareWinnerPriority);
-      const winner = component[0];
-      if (winner !== undefined) {
-        winners.push(winner);
-      }
-    }
+    winners.push(...kept);
   }
 
   return winners.sort(
@@ -74,8 +42,8 @@ export function suppressDetectorDuplicates(
 }
 
 export function overlapOverSmallerBox(left: Rect, right: Rect): number {
-  const leftArea = Math.max(0, left.width) * Math.max(0, left.height);
-  const rightArea = Math.max(0, right.width) * Math.max(0, right.height);
+  const leftArea = rectArea(left);
+  const rightArea = rectArea(right);
   const smallerArea = Math.min(leftArea, rightArea);
   if (smallerArea <= 0) {
     return 0;
@@ -89,6 +57,50 @@ export function overlapOverSmallerBox(left: Rect, right: Rect): number {
     Math.min(left.y + left.height, right.y + right.height) - Math.max(left.y, right.y),
   );
   return (intersectionWidth * intersectionHeight) / smallerArea;
+}
+
+function isMergedBridgeCandidate(
+  candidate: RegionDetection,
+  candidateIndex: number,
+  group: readonly RegionDetection[],
+  overlapThreshold: number,
+): boolean {
+  const candidateArea = rectArea(candidate.sourceBox);
+  if (candidateArea <= 0) {
+    return false;
+  }
+
+  const coveredSmallerCandidates = group.filter((other, otherIndex) => {
+    if (otherIndex === candidateIndex || rectArea(other.sourceBox) >= candidateArea) {
+      return false;
+    }
+    return overlapOverSmallerBox(candidate.sourceBox, other.sourceBox) >= overlapThreshold;
+  });
+
+  for (let leftIndex = 0; leftIndex < coveredSmallerCandidates.length; leftIndex += 1) {
+    const left = coveredSmallerCandidates[leftIndex];
+    if (left === undefined) {
+      continue;
+    }
+    for (
+      let rightIndex = leftIndex + 1;
+      rightIndex < coveredSmallerCandidates.length;
+      rightIndex += 1
+    ) {
+      const right = coveredSmallerCandidates[rightIndex];
+      if (
+        right !== undefined &&
+        overlapOverSmallerBox(left.sourceBox, right.sourceBox) < overlapThreshold
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function rectArea(rect: Rect): number {
+  return Math.max(0, rect.width) * Math.max(0, rect.height);
 }
 
 function compareWinnerPriority(left: RegionDetection, right: RegionDetection): number {

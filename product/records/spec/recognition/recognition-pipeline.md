@@ -2,7 +2,7 @@
 
 - **id**: `spec:product.recognition.pipeline`
 - **status**: draft
-- **date**: 2026-08-26
+- **date**: 2026-08-28
 - **parent**: `spec:product.recognition`
 
 ## What this is
@@ -36,6 +36,28 @@ There is no separate invalid/background classifier stage. The selected grayscale
 Candidates classified as invalid/background do not become recognized tiles.
 
 The red-five specialist runs only after the base classifier identifies `5m`, `5p`, or `5s`. It refines that base identity to ordinary-five or red-five identity.
+
+## Detector duplicate resolution
+
+Duplicate resolution operates independently inside each semantic region after ordinary detector NMS and before crop classification.
+It must preserve separate tile candidates when a larger detector failure overlaps several otherwise distinct detections.
+
+For duplicate-resolution geometry, define the pair overlap as:
+
+```text
+overlap(A, B) = intersection_area(A, B) / min(area(A), area(B))
+```
+
+The concrete overlap threshold is implementation-owned. The current production value is `0.80`.
+
+Resolution has two ordered steps:
+
+1. **Reject merged bridge boxes before confidence selection.** A candidate `M` is a merged bridge when `M` has greater area than at least two smaller candidates `A` and `B`, both `overlap(M, A)` and `overlap(M, B)` reach the duplicate-overlap threshold, and `overlap(A, B)` does not reach that threshold. `M` is removed regardless of detector confidence. The distinct smaller candidates remain eligible for later duplicate resolution.
+2. **Resolve remaining pairwise duplicates greedily.** Process remaining candidates from highest detector confidence to lowest, using detector order and then frame-local detector identity as deterministic tie-breakers. Keep a candidate unless it reaches the duplicate-overlap threshold with a candidate already kept. Do not collapse a transitive connected component merely because an intermediate candidate overlaps two candidates that do not overlap each other at the threshold.
+
+Therefore, for distinct candidates `A` and `B` that barely overlap one another but are both substantially covered by one larger merged candidate `M`, the required result is to remove `M` and preserve `A` and `B` for classification. Detector confidence chooses among actual duplicate alternatives; it does not allow a high-confidence merged box to erase several spatially distinct tile candidates.
+
+This policy addresses detector localization failures only. A retained crop may still be classified as `invalid/background` by the 35-class base classifier.
 
 ## Per-frame observation output
 
@@ -92,7 +114,7 @@ Scoring validity is not a stabilization criterion.
 
 ## Non-goals
 
-- Exact confidence thresholds, NMS parameters, or crop-padding constants.
+- Exact detector confidence thresholds, ordinary IoU NMS parameters, duplicate-overlap threshold tuning beyond the currently recorded production value, or crop-padding constants.
 - Exact ONNX/runtime provider configuration.
 - Training procedure or dataset composition.
 - Bounding-box visual styling.

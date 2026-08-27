@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "modelSetVersion": "recognition-v1-2026-08-27",
+  "modelSetVersion": "recognition-v2-2026-08-28",
   "models": {
     "detector": {
       "role": "detector",
-      "url": "nanodet-plus-m-320-composite-augmented.onnx?sha256=4768daa5cb44e7bee37fbb69c36063800164d9e9e8c852e5b3c77bc88ce9ac76",
-      "sha256": "4768daa5cb44e7bee37fbb69c36063800164d9e9e8c852e5b3c77bc88ce9ac76",
+      "url": "nanodet-plus-m-320-real-capture-ft10-l10.onnx?sha256=9587a02dd1bbccfc14a925dc69c66b3c4a34ab628552b840ec113f7899dbf883",
+      "sha256": "9587a02dd1bbccfc14a925dc69c66b3c4a34ab628552b840ec113f7899dbf883",
       "runtimeSpec": "nanodet-plus-m-320-v1",
       "providerPreference": [
         "wasm-simd",

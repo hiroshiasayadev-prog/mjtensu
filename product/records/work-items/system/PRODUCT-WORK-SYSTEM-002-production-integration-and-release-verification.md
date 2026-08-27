@@ -18,6 +18,13 @@
   - PRODUCT-TASK-SYSTEM-002-04
   - PRODUCT-TASK-SYSTEM-002-05
   - PRODUCT-TASK-SYSTEM-002-06
+  - PRODUCT-TASK-SYSTEM-002-07
+  - PRODUCT-TASK-SYSTEM-002-08
+  - PRODUCT-TASK-SYSTEM-002-09
+  - PRODUCT-TASK-SYSTEM-002-10
+  - PRODUCT-TASK-SYSTEM-002-11
+  - PRODUCT-TASK-SYSTEM-002-12
+  - PRODUCT-TASK-SYSTEM-002-13
 
 ## Goal
 
@@ -53,7 +60,15 @@ UI W001 review PASS
 
 I01 + I02 -> I03 real-service browser/PWA integration verification
 I01 + I02 -> I04 target-device functional acceptance
-I03 + I04 -> I05 target-device complete-pipeline performance/release gate
+I04 findings -> I07 correct target-device Recognition startup/layout findings
+I04 overlay findings -> I09 correct target-device Recognition overlay/tile feedback
+I09 -> I10 correct mobile Conditions information architecture
+I09 -> I11 correct mobile Result information architecture
+I07 + I09 + I10 + I11 -> continue/reverify I04
+I04 duplicate-suppression finding -> I12 correct merged-bridge duplicate resolution
+I04 detector-artifact finding + I12 corrected postprocess -> I13 promote real-capture detector -> continue/reverify I04
+I04 performance finding -> I08 optimize production Recognition throughput
+I03 + I04 + I08 -> I05 target-device complete-pipeline performance/release gate
 I05 -> I06 independent integrated release review
 ```
 
@@ -69,6 +84,13 @@ Real-device functional and browser/PWA verification may proceed in parallel once
 | PRODUCT-TASK-SYSTEM-002-04 | verification | Execute iPhone 13 real-camera/full-flow functional acceptance. | I01, I02 |
 | PRODUCT-TASK-SYSTEM-002-05 | verification | Measure the complete production recognition pipeline on iPhone 13 and decide the accepted release performance gate without inventing a new latency threshold. | I03, I04 |
 | PRODUCT-TASK-SYSTEM-002-06 | review | Independently review the integrated production release state and all required release Evidence. | I05 |
+| PRODUCT-TASK-SYSTEM-002-07 | correction | Correct iPhone 13 Recognition first-use startup failure and target-device capture-surface/region-layout findings, then return to I04. | I04 findings |
+| PRODUCT-TASK-SYSTEM-002-08 | correction | Batch production tile-classifier/red-five inference and remove the target-device sequential throughput bottleneck before I05 measurement. | I04 F-MAJ-04 |
+| PRODUCT-TASK-SYSTEM-002-09 | correction | Correct target-device live Recognition overlay differentiation and replace internal tile codes with lightweight user-facing tile identity, then return to I04. | I04 F-MAJ-05, F-MAJ-06; I07 done |
+| PRODUCT-TASK-SYSTEM-002-10 | correction | Rework the Conditions mobile information architecture around tile-face winning-tile selection, clear section hierarchy, navigation, and persistent current-yaku/calculation feedback. | I04 F-MAJ-07; I09 |
+| PRODUCT-TASK-SYSTEM-002-11 | correction | Rework Result into compact tile/yaku/score cards with han-band feedback, dominant final points, on-demand fu detail, and persistent correction/restart actions. | I04 F-MAJ-08; I09 |
+| PRODUCT-TASK-SYSTEM-002-12 | correction | Correct detector duplicate suppression so a large merged bridge cannot transitively collapse multiple spatially distinct tile detections to one confidence winner. | I04 F-MAJ-09 |
+| PRODUCT-TASK-SYSTEM-002-13 | correction | Promote the real-capture fine-tuned detector after exact-runtime validation shows substantially better real meld recall with no held-out composite meld regression. | I04 F-MAJ-10; I12 |
 
 ## Completion Condition
 

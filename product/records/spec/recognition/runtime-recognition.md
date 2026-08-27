@@ -2,7 +2,7 @@
 
 - **id**: `spec:product.recognition.runtime_recognition`
 - **status**: draft
-- **date**: 2026-08-26
+- **date**: 2026-08-28
 - **parent**: `spec:product.recognition`
 
 ## What this is
@@ -94,7 +94,7 @@ Recognition post-processing removes candidates that must not become recognized t
 
 - the base classifier's invalid/background outcome;
 - detections assigned only to padding or separators;
-- detector duplicates removed by the current duplicate-resolution policy;
+- detector duplicates removed by `spec:product.recognition.pipeline`, including merged bridge boxes that overlap multiple otherwise distinct candidates and ordinary pairwise duplicate losers;
 - candidates outside the three semantic capture regions.
 
 Removing one of these candidates does not imply that the remaining recognized structure is a valid winning mahjong hand. Winning-shape and yaku validity are downstream concerns.

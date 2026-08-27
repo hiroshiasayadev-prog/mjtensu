@@ -202,4 +202,27 @@ The production implementation of this ADR is pinned to the composite-format dete
 
 Its recorded artifact identity is SHA-256 `4768daa5cb44e7bee37fbb69c36063800164d9e9e8c852e5b3c77bc88ce9ac76`, 5,597,449 bytes, with input shape `[1, 3, 320, 320]` and output shape `[1, 2125, 33]`. The production runtime contract remains `nanodet-plus-m-320-v1`.
 
-A later real-capture fine-tune remains evaluation evidence rather than the production artifact: it reduced false positives in the recorded comparisons but did not uniformly improve AP, and no accepted decision superseded the composite-augmented model. Production therefore does not silently switch detector identity during the R06 acceptance gate.
+A later real-capture fine-tune remained evaluation evidence during the original R06 acceptance gate: it reduced false positives in the recorded comparisons but did not uniformly improve aggregate AP, and no accepted decision had yet superseded the composite-augmented model. Production therefore did not silently switch detector identity during that gate.
+
+### Production detector artifact amendment: 2026-08-28
+
+Target-device acceptance subsequently exposed a domain-specific meld-localization failure in the pinned composite-augmented detector. An exact iPhone debug capture preserved the production `320 x 320` composite, detector input tensor, raw detector output, post-processed boxes, and runtime provider identity. Desktop CPU inference on the same tensor matched the captured iPhone WASM raw output within `1.0251998901367188e-05` maximum absolute error, so the observed failure is not attributable to an iPhone execution-provider divergence.
+
+After correcting the separate duplicate-suppression defect, the composite-augmented detector still retained only four meld candidates on the recorded target frame and one retained localization remained an oversized `108.98 x 50.13` merged box. The real-capture fine-tune produced seven tile-scale meld candidates on the same exact detector input.
+
+The detector selection was therefore rerun at the deployed runtime operating point: confidence threshold `0.35`, IoU NMS `0.60`, fixed semantic-region assignment, merged-bridge rejection, and greedy pairwise duplicate suppression.
+
+- Held-out real captures: composite-augmented baseline `TP=124 / FP=3 / FN=4 / F1=0.9725`, meld F1 `0.7273`; real-capture fine-tune `TP=128 / FP=3 / FN=0 / F1=0.9884`, meld F1 `0.9600`.
+- Held-out composite validation: composite-augmented baseline `TP=1044 / FP=28 / FN=8 / F1=0.9831`, meld F1 `0.9968`; real-capture fine-tune `TP=1045 / FP=23 / FN=7 / F1=0.9858`, meld F1 `0.9968`.
+
+The real-capture fine-tune is therefore accepted as the production detector candidate. It materially improves target-domain meld recall, removes all held-out real-capture false negatives, preserves held-out composite meld performance, and slightly improves the composite-set runtime F1. The earlier aggregate-AP ambiguity no longer governs deployment selection because it does not reflect the exact deployed operating point and post-processing policy.
+
+The selected run is:
+
+```text
+.local/recognition/nanodet_runs/
+  E1_plus_m_320_real_capture_ft10_l10_seed42/
+    model_best/nanodet-plus-m-320-real-capture-ft10-l10.onnx
+```
+
+PRODUCT-TASK-SYSTEM-002-13 owns the mechanical artifact promotion, production build verification, and iPhone re-verification. The promoted production detector is `nanodet-plus-m-320-real-capture-ft10-l10.onnx`, SHA-256 `9587a02dd1bbccfc14a925dc69c66b3c4a34ab628552b840ec113f7899dbf883`, `5,597,449` bytes, pinned by model set `recognition-v2-2026-08-28`. The fixed composite geometry and `nanodet-plus-m-320-v1` runtime contract remain unchanged by this artifact amendment.

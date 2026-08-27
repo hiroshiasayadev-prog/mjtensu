@@ -1,15 +1,59 @@
 {
   "schemaVersion": 1,
-  "modelSetVersion": "recognition-v1-2026-08-27",
+  "modelSetVersion": "recognition-v2-2026-08-28",
   "models": {
     "detector": {
-      "artifact": "nanodet-plus-m-320-composite-augmented.onnx",
-      "sourceRun": ".local/recognition/nanodet_runs/E1_plus_m_320_composite_augmented_amp40_seed42/model_best",
-      "sha256": "4768daa5cb44e7bee37fbb69c36063800164d9e9e8c852e5b3c77bc88ce9ac76",
+      "artifact": "nanodet-plus-m-320-real-capture-ft10-l10.onnx",
+      "sourceRun": ".local/recognition/nanodet_runs/E1_plus_m_320_real_capture_ft10_l10_seed42/model_best",
+      "sha256": "9587a02dd1bbccfc14a925dc69c66b3c4a34ab628552b840ec113f7899dbf883",
       "bytes": 5597449,
       "runtimeSpec": "nanodet-plus-m-320-v1",
-      "inputShape": [1, 3, 320, 320],
-      "outputShape": [1, 2125, 33]
+      "inputShape": [
+        1,
+        3,
+        320,
+        320
+      ],
+      "outputShape": [
+        1,
+        2125,
+        33
+      ],
+      "selectionEvidence": {
+        "runtimeThreshold": 0.35,
+        "realVal": {
+          "productionBaseline": {
+            "truePositives": 124,
+            "falsePositives": 3,
+            "falseNegatives": 4,
+            "f1": 0.9725,
+            "meldF1": 0.7273
+          },
+          "selectedFineTune": {
+            "truePositives": 128,
+            "falsePositives": 3,
+            "falseNegatives": 0,
+            "f1": 0.9884,
+            "meldF1": 0.96
+          }
+        },
+        "compositeVal": {
+          "productionBaseline": {
+            "truePositives": 1044,
+            "falsePositives": 28,
+            "falseNegatives": 8,
+            "f1": 0.9831,
+            "meldF1": 0.9968
+          },
+          "selectedFineTune": {
+            "truePositives": 1045,
+            "falsePositives": 23,
+            "falseNegatives": 7,
+            "f1": 0.9858,
+            "meldF1": 0.9968
+          }
+        }
+      }
     },
     "tile-classifier": {
       "artifact": "tile-c8-gray35-v3-jp189.onnx",
@@ -20,11 +64,23 @@
       "sha256": "b8a8fa3ff6c6d1e944a7593fa0afc947e0cd2513fb79ca46e5f8fcd6e19c97d0",
       "bytes": 6261185,
       "runtimeSpec": "c8-tile-35-v1",
-      "inputShape": ["batch", 1, 64, 64],
-      "outputShape": ["batch", 35],
+      "inputShape": [
+        "batch",
+        1,
+        64,
+        64
+      ],
+      "outputShape": [
+        "batch",
+        35
+      ],
       "normalization": {
-        "mean": [0.6815832403977466],
-        "std": [0.2725553681973969]
+        "mean": [
+          0.6815832403977466
+        ],
+        "std": [
+          0.2725553681973969
+        ]
       }
     },
     "red-five-classifier": {
@@ -36,11 +92,27 @@
       "sha256": "c2b780f682d84bf186db90290050f8b05016c3e8058de559eea679a28eeb80c6",
       "bytes": 6256955,
       "runtimeSpec": "c8-red-five-v1",
-      "inputShape": ["batch", 3, 64, 64],
-      "outputShape": ["batch", 2],
+      "inputShape": [
+        "batch",
+        3,
+        64,
+        64
+      ],
+      "outputShape": [
+        "batch",
+        2
+      ],
       "normalization": {
-        "mean": [0.6602509360622993, 0.6917274426386547, 0.6489080530422624],
-        "std": [0.30491469480493394, 0.24924454491506576, 0.2710702582444575]
+        "mean": [
+          0.6602509360622993,
+          0.6917274426386547,
+          0.6489080530422624
+        ],
+        "std": [
+          0.30491469480493394,
+          0.24924454491506576,
+          0.2710702582444575
+        ]
       }
     }
   }
