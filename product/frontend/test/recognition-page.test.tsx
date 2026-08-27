@@ -194,8 +194,8 @@ describe('RecognitionPageView preparation and capture surface', () => {
     const captureSurface = screen.getByTestId('recognition-capture-surface');
     expect(viewport.style.position).toBe('fixed');
     expect(viewport.style.inset).toBe('0px');
-    expect(captureSurface.style.width).toBe('min(100vw, 100dvh)');
-    expect(captureSurface.style.height).toBe('min(56.25vw, 56.25dvh)');
+    expect(captureSurface.style.width).toBe('min(100vw, 177.7778dvh)');
+    expect(captureSurface.style.height).toBe('min(100dvh, 56.25vw)');
     expect(screen.getByRole('button', { name: '認識を終了' })).toBeVisible();
   });
 
@@ -298,8 +298,8 @@ describe('RecognitionPageView preparation and capture surface', () => {
       height: handRegion.style.height,
     };
 
-    expect(captureSurface.style.width).toBe('min(100vw, 100dvh)');
-    expect(captureSurface.style.height).toBe('min(56.25vw, 56.25dvh)');
+    expect(captureSurface.style.width).toBe('100vw');
+    expect(captureSurface.style.height).toBe('56.25vw');
     expect(captureSurface.style.aspectRatio).toBe('16 / 9');
     expect(captureSurface.style.transform).toBe('');
     expect(preview.style.inset).toBe('0px');
@@ -319,8 +319,8 @@ describe('RecognitionPageView preparation and capture surface', () => {
       window.dispatchEvent(new Event('resize'));
     });
 
-    expect(captureSurface.style.width).toBe('min(100vw, 100dvh)');
-    expect(captureSurface.style.height).toBe('min(56.25vw, 56.25dvh)');
+    expect(captureSurface.style.width).toBe('min(100vw, 177.7778dvh)');
+    expect(captureSurface.style.height).toBe('min(100dvh, 56.25vw)');
     expect(captureSurface.style.aspectRatio).toBe('16 / 9');
     expect(preview.style.inset).toBe('0px');
     expect(preview.style.width).toBe('100%');
@@ -332,8 +332,8 @@ describe('RecognitionPageView preparation and capture surface', () => {
       width: handRegion.style.width,
       height: handRegion.style.height,
     }).toEqual(portraitHandStyle);
-    expect(captureSurface.style.width).toBe('min(100vw, 100dvh)');
-    expect(captureSurface.style.height).toBe('min(56.25vw, 56.25dvh)');
+    expect(captureSurface.style.width).toBe('min(100vw, 177.7778dvh)');
+    expect(captureSurface.style.height).toBe('min(100dvh, 56.25vw)');
     expect(recognizer.start).toHaveBeenCalledTimes(1);
   });
 });

@@ -812,13 +812,13 @@ function createRecognitionFrameSource(
 }
 
 const PORTRAIT_CAPTURE_SURFACE_LAYOUT = {
-  width: 'min(100vw, 100dvh)',
-  height: 'min(56.25vw, 56.25dvh)',
+  width: '100vw',
+  height: '56.25vw',
 } as const;
 
 const LANDSCAPE_CAPTURE_SURFACE_LAYOUT = {
-  width: 'min(100vw, 100dvh)',
-  height: 'min(56.25vw, 56.25dvh)',
+  width: 'min(100vw, 177.7778dvh)',
+  height: 'min(100dvh, 56.25vw)',
 } as const;
 
 function captureSurfaceLayout(isPortraitViewport: boolean): {
