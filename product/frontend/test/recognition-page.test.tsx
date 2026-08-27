@@ -297,6 +297,7 @@ describe('RecognitionPageView preparation and capture surface', () => {
 
     await waitFor(() => expect(cameraSession.attach).toHaveBeenCalledTimes(1));
     expect(screen.getByText('認識を開始するには端末を横向きにしてください。')).toBeVisible();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(recognizer.start).not.toHaveBeenCalled();
   });
 });
@@ -549,6 +550,9 @@ describe('RecognitionPageView owner-specific recovery', () => {
     expect(screen.getByTestId('recognition-error-diagnostic')).toHaveTextContent(
       'detector / inference-failure / Error: fixture',
     );
+    const recoveryLayer = screen.getByTestId('recognition-recovery-layer');
+    expect(recoveryLayer.style.pointerEvents).toBe('auto');
+    expect(recoveryLayer.style.touchAction).toBe('manipulation');
     const recovery = screen.getByText('認識処理を続行できませんでした').closest('[data-recovery-owner="recognition"]');
     expect(recovery).not.toBeNull();
     expect((recovery as HTMLElement).style.pointerEvents).toBe('auto');

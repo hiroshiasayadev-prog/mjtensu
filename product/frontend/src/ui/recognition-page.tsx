@@ -349,15 +349,16 @@ export function RecognitionPageView({
             position: 'absolute',
             top: 'max(10px, env(safe-area-inset-top))',
             right: 'max(10px, env(safe-area-inset-right))',
-            zIndex: 40,
+            zIndex: 120,
             pointerEvents: 'auto',
+            touchAction: 'manipulation',
             background: 'rgba(255,255,255,0.92)',
           }}
         >
           終了
         </Button>
 
-        {cameraStatus !== 'failed' && runtimeStatus !== 'failed' ? (
+        {cameraStatus !== 'failed' && runtimeStatus !== 'failed' && isLandscape ? (
           <Paper
             role="status"
             px="sm"
@@ -378,53 +379,42 @@ export function RecognitionPageView({
           </Paper>
         ) : null}
 
-        {cameraStatus === 'failed' && runtimeStatus !== 'failed' ? (
-          <OwnedRecoveryPanel
-            owner="camera"
-            message={cameraErrorMessage(cameraError)}
-            onRetry={prepareCamera}
-            onTop={onAbandon}
-          />
-        ) : null}
-
-        {cameraStatus !== 'failed' && runtimeStatus === 'failed' ? (
-          <OwnedRecoveryPanel
-            owner="recognition"
-            message={runtimeErrorMessage(runtimeError)}
-            detail={runtimeErrorDiagnostic(runtimeError)}
-            onRetry={prepareRuntime}
-            onTop={onAbandon}
-          />
-        ) : null}
-
-        {cameraStatus === 'failed' && runtimeStatus === 'failed' ? (
-          <Stack
-            gap="sm"
+        {cameraStatus === 'failed' || runtimeStatus === 'failed' ? (
+          <Box
+            data-testid="recognition-recovery-layer"
             style={{
               position: 'absolute',
-              left: '50%',
-              top: '50%',
-              width: 'min(90%, 420px)',
-              transform: 'translate(-50%, -50%)',
-              zIndex: 20,
+              inset: 0,
+              zIndex: 100,
+              display: 'grid',
+              placeItems: 'center',
+              padding: 12,
+              pointerEvents: 'auto',
+              touchAction: 'manipulation',
             }}
           >
-            <OwnedRecoveryPanel
-              owner="camera"
-              message={cameraErrorMessage(cameraError)}
-              onRetry={prepareCamera}
-              onTop={onAbandon}
-              inline
-            />
-            <OwnedRecoveryPanel
-              owner="recognition"
-              message={runtimeErrorMessage(runtimeError)}
-              detail={runtimeErrorDiagnostic(runtimeError)}
-              onRetry={prepareRuntime}
-              onTop={onAbandon}
-              inline
-            />
-          </Stack>
+            <Stack gap="sm" style={{ width: 'min(90%, 420px)' }}>
+              {cameraStatus === 'failed' ? (
+                <OwnedRecoveryPanel
+                  owner="camera"
+                  message={cameraErrorMessage(cameraError)}
+                  onRetry={prepareCamera}
+                  onTop={onAbandon}
+                  inline
+                />
+              ) : null}
+              {runtimeStatus === 'failed' ? (
+                <OwnedRecoveryPanel
+                  owner="recognition"
+                  message={runtimeErrorMessage(runtimeError)}
+                  detail={runtimeErrorDiagnostic(runtimeError)}
+                  onRetry={prepareRuntime}
+                  onTop={onAbandon}
+                  inline
+                />
+              ) : null}
+            </Stack>
+          </Box>
         ) : null}
 
         {!isLandscape ? (
