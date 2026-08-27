@@ -121,7 +121,8 @@ export function RecognitionPageView({
   const cameraAttemptRef = useRef(0);
   const runtimeAttemptRef = useRef(0);
   const committedRef = useRef(false);
-  const isLandscape = useLandscapeOrientation();
+  const isPortraitViewport = usePortraitViewport();
+  const [portraitRotation, setPortraitRotation] = useState<90 | -90>(90);
 
   const prepareCamera = useCallback(() => {
     const attempt = ++cameraAttemptRef.current;
@@ -213,7 +214,6 @@ export function RecognitionPageView({
       cameraSession === null ||
       cameraStatus !== 'ready' ||
       runtimeStatus !== 'ready' ||
-      !isLandscape ||
       committedRef.current
     ) {
       return undefined;
@@ -278,7 +278,6 @@ export function RecognitionPageView({
     cameraSession,
     cameraStatus,
     handleRuntimeFailure,
-    isLandscape,
     onConfirmed,
     recognizer,
     runtimeStatus,
@@ -287,7 +286,6 @@ export function RecognitionPageView({
   const preparationMessage = getPreparationMessage(
     cameraStatus,
     runtimeStatus,
-    isLandscape,
     recognitionProgress,
     snapshot,
   );
@@ -310,11 +308,19 @@ export function RecognitionPageView({
         data-testid="recognition-capture-surface"
         style={{
           position: 'relative',
-          width: 'min(100vw, 177.7778dvh)',
-          height: 'min(100dvh, 56.25vw)',
+          width: isPortraitViewport
+            ? 'min(100dvh, 177.7778vw)'
+            : 'min(100vw, 177.7778dvh)',
+          height: isPortraitViewport
+            ? 'min(100vw, 56.25dvh)'
+            : 'min(100dvh, 56.25vw)',
           aspectRatio: '16 / 9',
           overflow: 'hidden',
           background: '#111',
+          transform: isPortraitViewport
+            ? `rotate(${portraitRotation}deg)`
+            : undefined,
+          transformOrigin: 'center',
         }}
       >
         {cameraStatus === 'ready' ? (
@@ -358,7 +364,7 @@ export function RecognitionPageView({
           終了
         </Button>
 
-        {cameraStatus !== 'failed' && runtimeStatus !== 'failed' && isLandscape ? (
+        {cameraStatus !== 'failed' && runtimeStatus !== 'failed' ? (
           <Paper
             role="status"
             px="sm"
@@ -377,6 +383,28 @@ export function RecognitionPageView({
           >
             <Text size="sm">{preparationMessage}</Text>
           </Paper>
+        ) : null}
+
+        {isPortraitViewport ? (
+          <Button
+            aria-label="表示方向を反転"
+            size="compact-sm"
+            variant="light"
+            onClick={() =>
+              setPortraitRotation((rotation) => rotation === 90 ? -90 : 90)
+            }
+            style={{
+              position: 'absolute',
+              top: 'max(10px, env(safe-area-inset-top))',
+              left: 'max(10px, env(safe-area-inset-left))',
+              zIndex: 120,
+              pointerEvents: 'auto',
+              touchAction: 'manipulation',
+              background: 'rgba(255,255,255,0.92)',
+            }}
+          >
+            反対向き
+          </Button>
         ) : null}
 
         {cameraStatus === 'failed' || runtimeStatus === 'failed' ? (
@@ -415,26 +443,6 @@ export function RecognitionPageView({
               ) : null}
             </Stack>
           </Box>
-        ) : null}
-
-        {!isLandscape ? (
-          <Paper
-            role="note"
-            px="sm"
-            py={6}
-            radius="md"
-            style={{
-              position: 'absolute',
-              left: '50%',
-              top: '50%',
-              transform: 'translate(-50%, -50%)',
-              whiteSpace: 'nowrap',
-              background: 'rgba(255,255,255,0.92)',
-              zIndex: 20,
-            }}
-          >
-            <Text size="sm">認識を開始するには端末を横向きにしてください。</Text>
-          </Paper>
         ) : null}
       </Box>
     </Box>
@@ -835,33 +843,28 @@ function createRecognitionFrameSource(
   };
 }
 
-function useLandscapeOrientation(): boolean {
-  const query = '(orientation: landscape)';
-  const [isLandscape, setIsLandscape] = useState(() => {
-    if (typeof window === 'undefined' || window.matchMedia === undefined) {
-      return true;
-    }
-    return window.matchMedia(query).matches;
-  });
+function usePortraitViewport(): boolean {
+  const [isPortrait, setIsPortrait] = useState(() => viewportIsPortrait());
 
   useEffect(() => {
-    if (window.matchMedia === undefined) {
-      return undefined;
-    }
-    const media = window.matchMedia(query);
-    const update = () => setIsLandscape(media.matches);
-    update();
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
+    const update = () => setIsPortrait(viewportIsPortrait());
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
   }, []);
 
-  return isLandscape;
+  return isPortrait;
+}
+
+function viewportIsPortrait(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return window.innerHeight > window.innerWidth;
 }
 
 function getPreparationMessage(
   cameraStatus: PreparationStatus,
   runtimeStatus: PreparationStatus,
-  isLandscape: boolean,
   recognitionProgress: 'scanning' | 'stabilizing' | null,
   snapshot: FrameRecognitionSnapshot | null,
 ): string {
@@ -870,9 +873,6 @@ function getPreparationMessage(
   }
   if (runtimeStatus !== 'ready') {
     return '認識モデルを準備しています';
-  }
-  if (!isLandscape) {
-    return '端末を横向きにしてください';
   }
   if (recognitionProgress === 'stabilizing') {
     return '認識結果を安定確認しています';

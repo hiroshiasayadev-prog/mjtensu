@@ -42,26 +42,18 @@ import {
 import { createDeferred, createFakeService } from './support';
 
 beforeEach(() => {
-  vi.spyOn(window, 'matchMedia').mockImplementation((query) =>
-    mediaQueryList(query, query === '(orientation: landscape)'),
-  );
+  setViewportSize(844, 390);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function mediaQueryList(query: string, matches: boolean): MediaQueryList {
-  return {
-    matches,
-    media: query,
-    onchange: null,
-    addListener: () => undefined,
-    removeListener: () => undefined,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-    dispatchEvent: () => false,
-  };
+function setViewportSize(width: number, height: number): void {
+  Object.defineProperties(window, {
+    innerWidth: { configurable: true, value: width },
+    innerHeight: { configurable: true, value: height },
+  });
 }
 
 function createCameraSession() {
@@ -282,10 +274,8 @@ describe('RecognitionPageView preparation and capture surface', () => {
     await waitFor(() => expect(recognizer.start).toHaveBeenCalledTimes(1));
   });
 
-  it('does not start realtime in portrait even when camera and runtime are ready', async () => {
-    vi.mocked(window.matchMedia).mockImplementation((query) =>
-      mediaQueryList(query, false),
-    );
+  it('starts realtime in a portrait viewport and rotates the complete Recognition surface', async () => {
+    setViewportSize(390, 844);
     const cameraSession = createCameraSession();
     const recognizer = createRecognizerHarness();
 
@@ -296,9 +286,27 @@ describe('RecognitionPageView preparation and capture surface', () => {
     });
 
     await waitFor(() => expect(cameraSession.attach).toHaveBeenCalledTimes(1));
-    expect(screen.getByText('認識を開始するには端末を横向きにしてください。')).toBeVisible();
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
-    expect(recognizer.start).not.toHaveBeenCalled();
+    await waitFor(() => expect(recognizer.start).toHaveBeenCalledTimes(1));
+
+    const captureSurface = screen.getByTestId('recognition-capture-surface');
+    expect(captureSurface.style.width).toBe('min(100dvh, 177.7778vw)');
+    expect(captureSurface.style.height).toBe('min(100vw, 56.25dvh)');
+    expect(captureSurface.style.transform).toBe('rotate(90deg)');
+    expect(screen.queryByText(/端末を横向きにしてください/)).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('認識しています');
+
+    fireEvent.click(screen.getByRole('button', { name: '表示方向を反転' }));
+    expect(captureSurface.style.transform).toBe('rotate(-90deg)');
+    expect(recognizer.start).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      setViewportSize(844, 390);
+      window.dispatchEvent(new Event('resize'));
+    });
+    expect(captureSurface.style.transform).toBe('');
+    expect(captureSurface.style.width).toBe('min(100vw, 177.7778dvh)');
+    expect(screen.queryByRole('button', { name: '表示方向を反転' })).not.toBeInTheDocument();
+    expect(recognizer.start).toHaveBeenCalledTimes(1);
   });
 });
 
