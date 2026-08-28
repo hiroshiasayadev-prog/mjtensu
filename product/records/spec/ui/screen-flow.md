@@ -2,7 +2,7 @@
 
 - **id**: `spec:product.ui.screen_flow`
 - **status**: draft
-- **date**: 2026-08-26
+- **date**: 2026-08-29
 - **parent**: `spec:product.ui`
 
 ## What this is
@@ -50,13 +50,16 @@ Result
 - New recognition discards the current scoring session before live recognition starts.
 - A failed recalculation must not return to Result with stale point information shown as current.
 
-## Help flow
+## Help and debug flow
 
 ```text
 Top <--> Help
+  \
+   +----> Debug ----> Top
 ```
 
 Help explains the capture layout and ordinary operation without being part of the required scoring path.
+Debug is likewise outside the scoring path: it reuses live recognition for diagnostics, does not create a scoring session, and returns to Top through its `終了` action.
 
 ## Recognition transition
 
@@ -78,6 +81,7 @@ Back behavior must not silently create a second scoring session or apply stale r
 At minimum:
 
 - Help -> Top returns without creating a scoring session.
+- Debug -> Top returns without creating a scoring session; stable recognition on Debug does not transition to Conditions.
 - Recognition -> Top may abandon the current recognition attempt.
 - Automatic Recognition -> Conditions navigation replaces the transient Recognition history entry. Normal back navigation from initial Conditions returns to Top rather than implicitly reopening the completed camera run; starting Recognition again is an explicit new-recognition action.
 - Conditions reached directly from Result for condition correction may cancel edits and return to the unchanged Result state. Conditions reached after a confirmed recognition correction must not restore the stale pre-correction Result.

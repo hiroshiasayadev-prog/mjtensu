@@ -130,10 +130,12 @@ function renderView({
   camera,
   runtime,
   recognizer,
+  mode = 'production',
 }: {
   readonly camera: CameraService;
   readonly runtime: RecognitionRuntime;
   readonly recognizer: RealtimeRecognizer;
+  readonly mode?: 'production' | 'debug';
 }) {
   const onAbandon = vi.fn();
   const onConfirmed = vi.fn();
@@ -146,6 +148,7 @@ function renderView({
         recognizer={recognizer}
         onAbandon={onAbandon}
         onConfirmed={onConfirmed}
+        mode={mode}
       />
     </MantineProvider>,
   );
@@ -407,7 +410,7 @@ describe('RecognitionPageView preparation and capture surface', () => {
     });
   });
 
-  it('keeps global controls in normal flow on the logical landscape surface across viewport rotation', async () => {
+  it('keeps only the production exit control on the logical landscape surface across viewport rotation', async () => {
     setViewportSize(390, 844);
     const cameraSession = createCameraSession();
     const recognizer = createRecognizerHarness();
@@ -429,17 +432,14 @@ describe('RecognitionPageView preparation and capture surface', () => {
     const landscapeUi = screen.getByTestId('recognition-landscape-ui-surface');
     const controlsLayer = screen.getByTestId('recognition-global-controls-layer');
     const exit = screen.getByTestId('recognition-global-exit');
-    const debug = screen.getByTestId('recognition-debug-capture');
     expect(exit).toBeVisible();
-    expect(debug).toBeVisible();
+    expect(screen.queryByTestId('recognition-debug-capture')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('recognition-debug-timings')).not.toBeInTheDocument();
     expect(controlsLayer.parentElement).toBe(landscapeUi);
     expect(controlsLayer.style.position).toBe('');
     expect(exit.parentElement).toBe(controlsLayer);
-    expect(debug.parentElement).toBe(controlsLayer);
     expect(exit.style.position).toBe('');
-    expect(debug.style.position).toBe('');
     expect(exit.style.transform).toBe('');
-    expect(debug.style.transform).toBe('');
 
     act(() => {
       setViewportSize(844, 390);
@@ -449,13 +449,98 @@ describe('RecognitionPageView preparation and capture surface', () => {
     await waitFor(() => expect(recognizer.start).toHaveBeenCalledTimes(2));
     expect(landscapeUi.style.transform).toBe('');
     expect(exit).toBeVisible();
-    expect(debug).toBeVisible();
     expect(exit.parentElement).toBe(controlsLayer);
-    expect(debug.parentElement).toBe(controlsLayer);
     expect(exit.style.position).toBe('');
-    expect(debug.style.position).toBe('');
     expect(exit.style.transform).toBe('');
-    expect(debug.style.transform).toBe('');
+  });
+
+  it('forces the portrait capture layout in debug mode and shows the latest evaluation timings below exit', async () => {
+    setViewportSize(844, 390);
+    const cameraSession = createCameraSession();
+    const recognizer = createRecognizerHarness();
+    const timing = {
+      totalMs: 42.1,
+      candidateCount: 12,
+      redFiveCandidateCount: 2,
+      detectorPreprocessingMs: 1.1,
+      detectorInferenceMs: 2.2,
+      detectorPostprocessingMs: 3.3,
+      cropExtractionMs: 4.4,
+      baseClassifierPreprocessingMs: 5.5,
+      baseClassifierInferenceMs: 6.6,
+      redFiveClassifierPreprocessingMs: 7.7,
+      redFiveClassifierInferenceMs: 8.8,
+    };
+    const runtime: RecognitionRuntime = {
+      ...createRuntime(),
+      getDiagnostics: () => ({ models: [], recentEvaluations: [timing] }),
+      requestDebugCapture: vi.fn(async () => {
+        throw new Error('not used');
+      }),
+    };
+
+    const callbacks = renderView({
+      camera: { open: async () => cameraSession.session },
+      runtime,
+      recognizer: recognizer.recognizer,
+      mode: 'debug',
+    });
+
+    await waitFor(() => expect(recognizer.start).toHaveBeenCalledTimes(1));
+
+    const captureSurface = screen.getByTestId('recognition-capture-surface');
+    const debugControls = screen.getByTestId('recognition-debug-controls');
+    const debugExit = screen.getByTestId('recognition-debug-exit');
+    const timings = screen.getByTestId('recognition-debug-timings');
+    expect(captureSurface.style.width).toBe('min(100vw, 56.25dvh)');
+    expect(captureSurface.style.height).toBe('min(100dvh, 177.7778vw)');
+    expect(captureSurface.style.aspectRatio).toBe('9 / 16');
+    expect(screen.queryByTestId('recognition-global-controls-layer')).not.toBeInTheDocument();
+    expect(debugExit.parentElement).toBe(debugControls);
+    expect(timings.parentElement).toBe(debugControls);
+    expect(screen.getByTestId('recognition-debug-capture')).toHaveTextContent(
+      '診断JSON採取',
+    );
+    expect(timings).toHaveTextContent('detector preprocessing: --- ms');
+
+    expect(recognizer.getSource()?.captureLatest()).toEqual({
+      source: cameraSession.portraitLockedFrame.image,
+      sourceSize: cameraSession.portraitLockedFrame.size,
+      regions: RECOGNITION_CAPTURE_REGIONS,
+      capturedAtMs: cameraSession.portraitLockedFrame.capturedAtMs,
+    });
+    expect(cameraSession.captureLatest).toHaveBeenLastCalledWith({
+      aspectRatio: '9:16',
+      rotation: -90,
+    });
+
+    act(() => {
+      recognizer.getListener()?.onUpdate({
+        kind: 'scanning',
+        snapshot: tiltSnapshot(0),
+      });
+    });
+
+    expect(timings).toHaveTextContent('detector preprocessing: 1.1 ms');
+    expect(timings).toHaveTextContent('detector inference: 2.2 ms');
+    expect(timings).toHaveTextContent('postprocess: 3.3 ms');
+    expect(timings).toHaveTextContent('crop extraction: 4.4 ms');
+    expect(timings).toHaveTextContent('base preprocessing: 5.5 ms');
+    expect(timings).toHaveTextContent('base inference: 6.6 ms');
+    expect(timings).toHaveTextContent('red5 preprocessing: 7.7 ms');
+    expect(timings).toHaveTextContent('red5 inference: 8.8 ms');
+    expect(timings).toHaveTextContent('total: 42.1 ms');
+
+    act(() => {
+      recognizer.getListener()?.onUpdate({
+        kind: 'confirmed',
+        result: recognizedStructure(),
+      });
+    });
+
+    expect(recognizer.reset).toHaveBeenCalledTimes(2);
+    expect(callbacks.onConfirmed).not.toHaveBeenCalled();
+    expect(screen.getByTestId('recognition-debug-timings')).toBeVisible();
   });
 });
 

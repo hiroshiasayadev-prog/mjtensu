@@ -2,7 +2,7 @@
 
 - **id**: `spec:product.ui.pages`
 - **status**: draft
-- **date**: 2026-08-19
+- **date**: 2026-08-29
 - **parent**: `spec:product.ui`
 
 ## What this is
@@ -15,7 +15,8 @@ They do not prescribe one concrete frontend component tree.
 
 | page | ref | responsibility |
 |---|---|---|
-| Top | `spec:product.ui.pages.top` | Entry to scoring and help. |
+| Top | `spec:product.ui.pages.top` | Entry to scoring, help, and low-prominence debug access. |
+| Debug | `spec:product.ui.pages.debug` | Portrait recognition diagnostics, evaluation timings, and diagnostic JSON capture. |
 | Recognition | `spec:product.ui.pages.recognition` | Landscape live camera, fixed semantic regions, and live recognition feedback. |
 | Conditions | `spec:product.ui.pages.conditions` | Winning-tile selection and non-image scoring conditions. |
 | Result | `spec:product.ui.pages.result` | Recognized hand evidence, yaku/han/fu, payment, point result, and correction actions. |

@@ -2,7 +2,7 @@
 
 - **id**: `spec:product.ui.pages.recognition`
 - **status**: draft
-- **date**: 2026-08-27
+- **date**: 2026-08-29
 - **parent**: `spec:product.ui.pages`
 
 ## What this is
@@ -124,6 +124,7 @@ An unused dora or meld region is simply left empty and remains a valid recogniti
 ## Actions
 
 - The page provides a way to abandon recognition and return to Top, including while model/runtime preparation is still in progress.
+- The production Recognition surface does not expose diagnostic JSON capture/save or continuous per-stage inference timings; those belong to `spec:product.ui.pages.debug`.
 - Leaving Recognition stops/releases the page-owned camera session and realtime run when present. App-owned model asset acquisition and app-lifetime recognition-runtime initialization are not cancelled merely because the Recognition route is left.
 - The primary successful transition is automatic stabilization, not a capture action.
 

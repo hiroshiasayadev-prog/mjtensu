@@ -118,6 +118,22 @@ export function TopPage() {
           使い方
         </Button>
       </Stack>
+
+      <Text
+        component={RouterLink}
+        to={appRoutePaths.debug}
+        c="dimmed"
+        size="xs"
+        style={{
+          position: 'fixed',
+          right: 'max(10px, env(safe-area-inset-right))',
+          bottom: 'max(8px, env(safe-area-inset-bottom))',
+          fontSize: 10,
+          textDecoration: 'none',
+        }}
+      >
+        debug
+      </Text>
     </Stack>
   );
 }

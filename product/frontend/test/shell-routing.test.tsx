@@ -66,6 +66,11 @@ describe('production shell routing', () => {
         requiresActiveScoringSession: false,
       },
       {
+        name: 'debug',
+        path: '/debug',
+        requiresActiveScoringSession: false,
+      },
+      {
         name: 'recognition',
         path: '/recognition',
         requiresActiveScoringSession: false,
@@ -95,6 +100,7 @@ describe('production shell routing', () => {
 
   it.each([
     ['/', 'mjtensu'],
+    ['/debug', 'debug'],
     ['/recognition', '認識'],
     ['/help', '使い方'],
   ])('renders the %s page boundary', (route, heading) => {
@@ -176,6 +182,17 @@ describe('production shell routing', () => {
     expect(screen.getByRole('heading', { name: '条件入力' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'キャンセル' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '戻る' })).toBeVisible();
+  });
+
+  it('exposes the debug route as a small link from the bottom-right of Top', () => {
+    renderRoute('/');
+
+    const debugLink = screen.getByRole('link', { name: 'debug' });
+    expect(debugLink).toBeVisible();
+    expect(debugLink).toHaveAttribute('href', '/debug');
+    expect(debugLink.style.position).toBe('fixed');
+    expect(debugLink.style.right).not.toBe('');
+    expect(debugLink.style.bottom).not.toBe('');
   });
 
   it('keeps Top Help round-trip navigation from creating a scoring session', () => {

@@ -30,9 +30,10 @@ import type { RecognizedStructure, TileIdentity } from '@/domain';
 import type {
   FrameObservationId,
   FrameRecognitionSnapshot,
-  RecognitionDebugCapture,
   MeldGroupObservation,
   NormalizedRect,
+  RecognitionDebugCapture,
+  RecognitionEvaluationTiming,
   RecognitionFrameSource,
   RecognitionRegion,
   RecognitionRun,
@@ -102,6 +103,7 @@ export interface RecognitionPageViewProps {
   readonly recognizer: RealtimeRecognizer;
   readonly onAbandon: () => void;
   readonly onConfirmed: (result: RecognizedStructure) => void;
+  readonly mode?: 'production' | 'debug';
 }
 
 type PreparationStatus = 'preparing' | 'ready' | 'failed';
@@ -122,6 +124,7 @@ export function RecognitionPageView({
   recognizer,
   onAbandon,
   onConfirmed,
+  mode = 'production',
 }: RecognitionPageViewProps) {
   const [cameraStatus, setCameraStatus] =
     useState<PreparationStatus>('preparing');
@@ -135,6 +138,8 @@ export function RecognitionPageView({
     'scanning' | 'stabilizing' | null
   >(null);
   const [meldTiltWarningVisible, setMeldTiltWarningVisible] = useState(false);
+  const [latestEvaluationTiming, setLatestEvaluationTiming] =
+    useState<RecognitionEvaluationTiming | null>(null);
   const [debugCaptureStatus, setDebugCaptureStatus] = useState<
     'idle' | 'capturing' | 'ready' | 'failed'
   >('idle');
@@ -147,7 +152,9 @@ export function RecognitionPageView({
   const meldTiltWarningStateRef = useRef<MeldTiltWarningState>(
     initialMeldTiltWarningState(),
   );
-  const isPortraitViewport = usePortraitViewport();
+  const responsivePortraitViewport = usePortraitViewport();
+  const debugMode = mode === 'debug';
+  const isPortraitViewport = debugMode || responsivePortraitViewport;
   const captureAspectRatio: CameraFrameAspect = isPortraitViewport
     ? '9:16'
     : '16:9';
@@ -198,6 +205,7 @@ export function RecognitionPageView({
     setRuntimeError(null);
     setSnapshot(null);
     setRecognitionProgress(null);
+    setLatestEvaluationTiming(null);
     resetMeldTiltWarning();
 
     void runtime.initialize().then(
@@ -292,7 +300,16 @@ export function RecognitionPageView({
             return;
           }
 
+          if (debugMode) {
+            setLatestEvaluationTiming(readLatestEvaluationTiming(runtime));
+          }
+
           if (update.kind === 'confirmed') {
+            if (debugMode) {
+              recognizer.reset();
+              setRecognitionProgress('scanning');
+              return;
+            }
             committedRef.current = true;
             active = false;
             stopRun();
@@ -330,16 +347,21 @@ export function RecognitionPageView({
   }, [
     cameraSession,
     cameraStatus,
+    debugMode,
     handleRuntimeFailure,
     isPortraitViewport,
     observeMeldTilt,
     onConfirmed,
     recognizer,
     resetMeldTiltWarning,
+    runtime,
     runtimeStatus,
   ]);
 
   const handleDebugCapture = useCallback(() => {
+    if (!debugMode) {
+      return;
+    }
     if (debugCaptureFile !== null) {
       shareOrDownloadRecognitionDebugFile(debugCaptureFile, () => {
         if (!mountedRef.current) {
@@ -350,7 +372,6 @@ export function RecognitionPageView({
       });
       return;
     }
-
     if (runtime.requestDebugCapture === undefined) {
       return;
     }
@@ -379,7 +400,7 @@ export function RecognitionPageView({
         setDebugCaptureStatus('failed');
       },
     );
-  }, [debugCaptureFile, runtime]);
+  }, [debugCaptureFile, debugMode, runtime]);
 
   const preparationMessage = getPreparationMessage(
     cameraStatus,
@@ -440,48 +461,31 @@ export function RecognitionPageView({
             pointerEvents: 'auto',
           }}
         >
-          <Box
-            data-testid="recognition-global-controls-layer"
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'flex-start',
-              width: '100%',
-              boxSizing: 'border-box',
-              padding: 10,
-              pointerEvents: 'none',
-              zIndex: 200,
-            }}
-          >
-            {runtime.requestDebugCapture === undefined ? (
-              <span aria-hidden="true" />
-            ) : (
+          {debugMode ? null : (
+            <Box
+              data-testid="recognition-global-controls-layer"
+              style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                alignItems: 'flex-start',
+                width: '100%',
+                boxSizing: 'border-box',
+                padding: 10,
+                pointerEvents: 'none',
+                zIndex: 200,
+              }}
+            >
               <button
-                aria-label={
-                  debugCaptureFile === null
-                    ? '認識デバッグを採取'
-                    : '認識デバッグを保存'
-                }
-                data-testid="recognition-debug-capture"
-                disabled={debugCaptureStatus === 'capturing'}
-                onClick={handleDebugCapture}
+                aria-label="認識を終了"
+                data-testid="recognition-global-exit"
+                onClick={onAbandon}
                 style={RECOGNITION_GLOBAL_CONTROL_STYLE}
                 type="button"
               >
-                {debugCaptureButtonLabel(debugCaptureStatus)}
+                終了
               </button>
-            )}
-
-            <button
-              aria-label="認識を終了"
-              data-testid="recognition-global-exit"
-              onClick={onAbandon}
-              style={RECOGNITION_GLOBAL_CONTROL_STYLE}
-              type="button"
-            >
-              終了
-            </button>
-          </Box>
+            </Box>
+          )}
 
           <CaptureRegionOverlay
             snapshot={snapshot}
@@ -547,6 +551,16 @@ export function RecognitionPageView({
           </Box>
           ) : null}
         </Box>
+
+        {debugMode ? (
+          <RecognitionDebugControls
+            captureAvailable={runtime.requestDebugCapture !== undefined}
+            captureStatus={debugCaptureStatus}
+            onCapture={handleDebugCapture}
+            onExit={onAbandon}
+            timing={latestEvaluationTiming}
+          />
+        ) : null}
       </Box>
     </Box>
   );
@@ -600,6 +614,107 @@ export function RecognitionPage() {
       onAbandon={() => navigateToTop(navigate)}
       onConfirmed={handleConfirmed}
     />
+  );
+}
+
+export function RecognitionDebugPage() {
+  const services = useContext(RecognitionPageServicesContext);
+  const navigate = useNavigate();
+
+  if (services === null) {
+    return (
+      <Stack gap="md" py="xl">
+        <Title order={1}>debug</Title>
+        <Text role="status">認識サービスを準備しています。</Text>
+        <Button variant="light" onClick={() => navigateToTop(navigate)}>
+          トップへ戻る
+        </Button>
+      </Stack>
+    );
+  }
+
+  return (
+    <RecognitionPageView
+      camera={services.camera}
+      runtime={services.runtime}
+      recognizer={services.recognizer}
+      mode="debug"
+      onAbandon={() => navigateToTop(navigate)}
+      onConfirmed={() => undefined}
+    />
+  );
+}
+
+function RecognitionDebugControls({
+  captureAvailable,
+  captureStatus,
+  onCapture,
+  onExit,
+  timing,
+}: {
+  readonly captureAvailable: boolean;
+  readonly captureStatus: 'idle' | 'capturing' | 'ready' | 'failed';
+  readonly onCapture: () => void;
+  readonly onExit: () => void;
+  readonly timing: RecognitionEvaluationTiming | null;
+}) {
+  return (
+    <Box
+      data-testid="recognition-debug-controls"
+      style={{
+        position: 'absolute',
+        top: 'max(10px, env(safe-area-inset-top))',
+        right: 'max(10px, env(safe-area-inset-right))',
+        zIndex: 300,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-end',
+        gap: 8,
+        pointerEvents: 'none',
+      }}
+    >
+      <button
+        aria-label="認識を終了"
+        data-testid="recognition-debug-exit"
+        onClick={onExit}
+        style={RECOGNITION_GLOBAL_CONTROL_STYLE}
+        type="button"
+      >
+        終了
+      </button>
+      <pre
+        data-testid="recognition-debug-timings"
+        style={{
+          margin: 0,
+          padding: '7px 8px',
+          borderRadius: 5,
+          background: 'rgba(0,0,0,0.68)',
+          color: '#fff',
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+          fontSize: 10,
+          lineHeight: 1.4,
+          textAlign: 'left',
+          whiteSpace: 'pre',
+          pointerEvents: 'none',
+        }}
+      >
+        {formatRecognitionTiming(timing)}
+      </pre>
+      {captureAvailable ? (
+        <button
+          aria-label={
+            captureStatus === 'ready' ? '診断JSONを保存' : '診断JSONを採取'
+          }
+          data-testid="recognition-debug-capture"
+          disabled={captureStatus === 'capturing'}
+          onClick={onCapture}
+          style={RECOGNITION_GLOBAL_CONTROL_STYLE}
+          type="button"
+        >
+          {debugCaptureButtonLabel(captureStatus)}
+        </button>
+      ) : null}
+    </Box>
   );
 }
 
@@ -1154,11 +1269,11 @@ function debugCaptureButtonLabel(
     case 'capturing':
       return '採取中…';
     case 'ready':
-      return 'デバッグ保存';
+      return '診断JSON保存';
     case 'failed':
-      return '再採取';
+      return '診断JSON再採取';
     case 'idle':
-      return 'デバッグ採取';
+      return '診断JSON採取';
   }
 }
 
@@ -1246,6 +1361,38 @@ function downloadRecognitionDebugFile(file: File): void {
 
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError';
+}
+
+function readLatestEvaluationTiming(
+  runtime: RecognitionRuntime,
+): RecognitionEvaluationTiming | null {
+  try {
+    const evaluations = runtime.getDiagnostics?.().recentEvaluations ?? [];
+    return evaluations[evaluations.length - 1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function formatRecognitionTiming(
+  timing: RecognitionEvaluationTiming | null,
+): string {
+  const value = (milliseconds: number | undefined) =>
+    milliseconds === undefined ? '--- ms' : `${milliseconds.toFixed(1)} ms`;
+  const line = (label: string, milliseconds: number | undefined) =>
+    `${`${label}:`.padEnd(24, ' ')}${value(milliseconds)}`;
+
+  return [
+    line('detector preprocessing', timing?.detectorPreprocessingMs),
+    line('detector inference', timing?.detectorInferenceMs),
+    line('postprocess', timing?.detectorPostprocessingMs),
+    line('crop extraction', timing?.cropExtractionMs),
+    line('base preprocessing', timing?.baseClassifierPreprocessingMs),
+    line('base inference', timing?.baseClassifierInferenceMs),
+    line('red5 preprocessing', timing?.redFiveClassifierPreprocessingMs),
+    line('red5 inference', timing?.redFiveClassifierInferenceMs),
+    line('total', timing?.totalMs),
+  ].join('\n');
 }
 
 function getPreparationMessage(

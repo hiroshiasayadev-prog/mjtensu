@@ -1,5 +1,6 @@
 export const appRoutePaths = {
   top: '/',
+  debug: '/debug',
   recognition: '/recognition',
   recognitionCorrection: '/recognition/correction',
   conditions: '/conditions',

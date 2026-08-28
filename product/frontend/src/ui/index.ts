@@ -50,6 +50,7 @@ export {
 } from './pages';
 export {
   RECOGNITION_CAPTURE_REGIONS,
+  RecognitionDebugPage,
   RecognitionPage,
   RecognitionPageServicesProvider,
   RecognitionPageView,
