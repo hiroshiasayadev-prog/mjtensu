@@ -333,6 +333,7 @@ describe('RecognitionPageView preparation and capture surface', () => {
     expect(landscapeUi.style.transform).toBe(
       'translate(-50%, -50%) rotate(90deg)',
     );
+    expect(landscapeUi.style.overflow).not.toBe('hidden');
     expect(landscapeUi.style.pointerEvents).toBe('auto');
     expect(handRegion.style.left).toBe('4%');
     expect(handRegion.style.top).toBe('50%');

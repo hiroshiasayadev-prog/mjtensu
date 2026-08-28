@@ -401,7 +401,6 @@ export function RecognitionPageView({
           style={{
             ...landscapeUiSurfaceLayout(isPortraitViewport),
             aspectRatio: '16 / 9',
-            overflow: 'hidden',
             pointerEvents: 'auto',
           }}
         >
