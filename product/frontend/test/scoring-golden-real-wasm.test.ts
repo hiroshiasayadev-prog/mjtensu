@@ -63,7 +63,7 @@ describe('scoring golden corpus against committed real Agari WASM', () => {
         expectedCalculationWithoutYaku,
       );
       expect(actualYaku).toHaveLength(expectedYaku.length);
-      expect(actualYaku).toEqual(expect.arrayContaining(expectedYaku));
+      expect(actualYaku).toEqual(expect.arrayContaining([...expectedYaku]));
     });
   }
 });
