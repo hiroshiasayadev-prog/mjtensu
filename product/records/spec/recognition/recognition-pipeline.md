@@ -87,8 +87,8 @@ A two-member group containing the same base tile identity is interpreted as the 
 
 For a three- or four-member group, chi/pon/open-kan interpretation may be attached when it follows unambiguously from the observed identities. A geometrically reconstructed group is not rejected merely because its current tile identities do not form a legal scoring meld; correction and scoring validity belong downstream.
 
-The common meld-row tilt supported by grouping is `±22.5°` from horizontal as defined by `spec:product.recognition.runtime_recognition`.
-That support bound applies to the common row-direction/search behavior; it does not require rejecting an otherwise stable reconstructed row solely because bbox-center jitter makes that short row's fitted angle exceed `±22.5°`.
+The common meld-row tilt supported by grouping is `±45°` from horizontal as defined by `spec:product.recognition.runtime_recognition`.
+That support bound applies to common row-direction search; an otherwise stable reconstructed row is not rejected solely because bbox-center jitter makes that short row's individual fitted angle differ from the selected common direction.
 The exact angle-estimation, clustering, and numerical tolerance algorithm is implementation-owned.
 
 ## Frame recognition snapshot

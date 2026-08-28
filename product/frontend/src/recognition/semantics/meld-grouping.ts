@@ -9,9 +9,17 @@ import type {
 const MAX_MELD_GROUPS = 4;
 const MAX_GROUP_MEMBERS = 4;
 const MIN_GROUP_MEMBERS = 2;
-const MAX_TILT_RADIANS = Math.PI / 8;
+const MAX_COMMON_TILT_RADIANS = Math.PI / 4;
 const ANGLE_EPSILON = 1e-9;
-const ROW_CLUSTER_HEIGHT_FACTOR = 0.35;
+const ANGLE_CANDIDATE_DEDUP_RADIANS = Math.PI / 360;
+const ROW_PERPENDICULAR_SPREAD_HEIGHT_FACTOR = 0.9;
+const MAX_ADJACENT_GAP_WIDTH_FACTOR = 3;
+const MIN_ROW_CENTER_SEPARATION_HEIGHT_FACTOR = 0.55;
+const ROW_ANGLE_RESIDUAL_WEIGHT = 0.2;
+const ROW_GAP_VARIANCE_WEIGHT = 0.15;
+const ROW_LARGE_GAP_WEIGHT = 0.05;
+const LARGE_GAP_WIDTH_FACTOR = 1.8;
+const GROUP_COUNT_PENALTY = 0.02;
 const PARTITION_AMBIGUITY_EPSILON = 1e-7;
 
 export type MeldGroupingResult =
@@ -24,9 +32,18 @@ export type MeldGroupingResult =
     };
 
 interface ProjectedObservation {
+  readonly index: number;
   readonly observation: TileObservation;
   readonly u: number;
   readonly v: number;
+}
+
+interface RowCandidate {
+  readonly mask: number;
+  readonly members: readonly ProjectedObservation[];
+  readonly meanV: number;
+  readonly meanY: number;
+  readonly score: number;
 }
 
 interface CandidatePartition {
@@ -55,20 +72,27 @@ export function groupMeldObservations(
   const medianHeight = median(
     observations.map((observation) => observation.bbox.height),
   );
-  if (!(medianHeight > 0)) {
+  const medianWidth = median(
+    observations.map((observation) => observation.bbox.width),
+  );
+  if (!(medianHeight > 0) || !(medianWidth > 0)) {
     return { kind: 'unstable' };
   }
 
   const partitions = new Map<string, CandidatePartition>();
   for (const angle of candidateAngles(observations)) {
-    const partition = partitionAtAngle(observations, angle, medianHeight);
-    if (partition === null) {
-      continue;
-    }
-    const previous = partitions.get(partition.signature);
-    if (previous === undefined || partition.score < previous.score) {
-      partitions.set(partition.signature, partition);
-    }
+    collectPartitionsAtAngle(
+      observations,
+      angle,
+      medianHeight,
+      medianWidth,
+      (partition) => {
+        const previous = partitions.get(partition.signature);
+        if (previous === undefined || partition.score < previous.score) {
+          partitions.set(partition.signature, partition);
+        }
+      },
+    );
   }
 
   const ranked = [...partitions.values()].sort((left, right) =>
@@ -107,15 +131,11 @@ function candidateAngles(observations: readonly TileObservation[]): number[] {
       if (right === undefined) {
         continue;
       }
-      const leftCenter = center(left);
-      const rightCenter = center(right);
-      const dx = rightCenter.x - leftCenter.x;
-      const dy = rightCenter.y - leftCenter.y;
-      if (Math.abs(dx) <= ANGLE_EPSILON) {
-        continue;
-      }
-      const angle = Math.atan2(dy * Math.sign(dx), Math.abs(dx));
-      if (Math.abs(angle) <= MAX_TILT_RADIANS + ANGLE_EPSILON) {
+      const angle = undirectedLineAngle(center(left), center(right));
+      if (
+        angle !== null &&
+        Math.abs(angle) <= MAX_COMMON_TILT_RADIANS + ANGLE_EPSILON
+      ) {
         angles.push(angle);
       }
     }
@@ -125,99 +145,260 @@ function candidateAngles(observations: readonly TileObservation[]): number[] {
     .sort((left, right) => left - right)
     .filter(
       (angle, index, values) =>
-        index === 0 || Math.abs(angle - (values[index - 1] ?? 0)) > ANGLE_EPSILON,
+        index === 0 ||
+        Math.abs(angle - (values[index - 1] ?? 0)) >
+          ANGLE_CANDIDATE_DEDUP_RADIANS,
     );
 }
 
-function partitionAtAngle(
+function collectPartitionsAtAngle(
   observations: readonly TileObservation[],
   angle: number,
   medianHeight: number,
-): CandidatePartition | null {
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-  const projected = observations
-    .map((observation): ProjectedObservation => {
-      const point = center(observation);
-      return {
-        observation,
-        u: point.x * cos + point.y * sin,
-        v: -point.x * sin + point.y * cos,
-      };
-    })
-    .sort((left, right) => left.v - right.v || left.u - right.u);
+  medianWidth: number,
+  collect: (partition: CandidatePartition) => void,
+): void {
+  const projected = projectObservations(observations, angle);
+  const rows = enumerateRowCandidates(
+    projected,
+    angle,
+    medianHeight,
+    medianWidth,
+  );
+  if (rows.length === 0) {
+    return;
+  }
 
-  const tolerance = medianHeight * ROW_CLUSTER_HEIGHT_FACTOR;
-  const rows: ProjectedObservation[][] = [];
-
-  for (const item of projected) {
-    const current = rows.at(-1);
-    if (current === undefined) {
-      rows.push([item]);
-      continue;
-    }
-
-    const nextValues = [...current.map((member) => member.v), item.v];
-    if (Math.max(...nextValues) - Math.min(...nextValues) <= tolerance * 2) {
-      current.push(item);
-    } else {
-      rows.push([item]);
+  const rowsByObservation = Array.from(
+    { length: observations.length },
+    (): RowCandidate[] => [],
+  );
+  for (const row of rows) {
+    for (const member of row.members) {
+      rowsByObservation[member.index]?.push(row);
     }
   }
 
+  const allMask = (1 << observations.length) - 1;
+  const chosen: RowCandidate[] = [];
+
+  const search = (remainingMask: number): void => {
+    if (remainingMask === 0) {
+      const partition = materializePartition(chosen, medianHeight);
+      if (partition !== null) {
+        collect(partition);
+      }
+      return;
+    }
+
+    if (chosen.length >= MAX_MELD_GROUPS) {
+      return;
+    }
+
+    const remainingCount = bitCount(remainingMask);
+    const remainingGroupCapacity =
+      (MAX_MELD_GROUPS - chosen.length) * MAX_GROUP_MEMBERS;
+    if (
+      remainingCount < MIN_GROUP_MEMBERS ||
+      remainingCount > remainingGroupCapacity
+    ) {
+      return;
+    }
+
+    const firstIndex = firstSetBitIndex(remainingMask);
+    const candidates = rowsByObservation[firstIndex] ?? [];
+    for (const row of candidates) {
+      if ((row.mask & remainingMask) !== row.mask) {
+        continue;
+      }
+      chosen.push(row);
+      search(remainingMask ^ row.mask);
+      chosen.pop();
+    }
+  };
+
+  search(allMask);
+}
+
+function projectObservations(
+  observations: readonly TileObservation[],
+  angle: number,
+): ProjectedObservation[] {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return observations.map((observation, index): ProjectedObservation => {
+    const point = center(observation);
+    return {
+      index,
+      observation,
+      u: point.x * cos + point.y * sin,
+      v: -point.x * sin + point.y * cos,
+    };
+  });
+}
+
+function enumerateRowCandidates(
+  projected: readonly ProjectedObservation[],
+  commonAngle: number,
+  medianHeight: number,
+  medianWidth: number,
+): RowCandidate[] {
+  const rows: RowCandidate[] = [];
+
+  for (
+    let memberCount = MIN_GROUP_MEMBERS;
+    memberCount <= MAX_GROUP_MEMBERS;
+    memberCount += 1
+  ) {
+    enumerateCombinations(
+      projected.length,
+      memberCount,
+      (indices) => {
+        const row = createRowCandidate(
+          indices.map((index) => projected[index]).filter(isDefined),
+          commonAngle,
+          medianHeight,
+          medianWidth,
+        );
+        if (row !== null) {
+          rows.push(row);
+        }
+      },
+    );
+  }
+
+  return rows;
+}
+
+function createRowCandidate(
+  membersInput: readonly ProjectedObservation[],
+  commonAngle: number,
+  medianHeight: number,
+  medianWidth: number,
+): RowCandidate | null {
   if (
-    rows.length === 0 ||
-    rows.length > MAX_MELD_GROUPS ||
-    rows.some(
-      (row) =>
-        row.length < MIN_GROUP_MEMBERS || row.length > MAX_GROUP_MEMBERS,
-    )
+    membersInput.length < MIN_GROUP_MEMBERS ||
+    membersInput.length > MAX_GROUP_MEMBERS
   ) {
     return null;
   }
 
-  const orderedRows = rows
-    .map((row) => row.sort((left, right) => left.u - right.u))
-    .sort((left, right) => averageY(left) - averageY(right));
-
-  let score = 0;
-  const groups: MeldGroupObservation[] = [];
-  for (const row of orderedRows) {
-    const rowAngle = fittedRowAngle(row);
-    if (rowAngle === null) {
-      return null;
-    }
-
-    // Candidate angles already bound the supported common row direction. Keep
-    // the per-row fitted angle as a ranking residual rather than a hard gate:
-    // detector bbox-center jitter can move a short 2-3 tile row beyond 22.5°
-    // even when the projected row partition itself is stable.
-    const meanV = row.reduce((sum, member) => sum + member.v, 0) / row.length;
-    for (const member of row) {
-      const normalizedResidual = (member.v - meanV) / medianHeight;
-      score += normalizedResidual * normalizedResidual;
-    }
-    const angleResidual = rowAngle - angle;
-    score += angleResidual * angleResidual;
-
-    const orderedObservations = row.map((member) => member.observation);
-    groups.push({
-      memberObservationIds: orderedObservations.map((member) => member.id),
-      interpretation: interpretMeld(orderedObservations),
-    });
+  const members = [...membersInput].sort(
+    (left, right) => left.u - right.u || left.observation.id.localeCompare(right.observation.id),
+  );
+  const vValues = members.map((member) => member.v);
+  const vSpread = Math.max(...vValues) - Math.min(...vValues);
+  if (
+    vSpread >
+    medianHeight * ROW_PERPENDICULAR_SPREAD_HEIGHT_FACTOR + ANGLE_EPSILON
+  ) {
+    return null;
   }
 
+  const gaps: number[] = [];
+  for (let index = 1; index < members.length; index += 1) {
+    const previous = members[index - 1];
+    const current = members[index];
+    if (previous === undefined || current === undefined) {
+      return null;
+    }
+    const gap = current.u - previous.u;
+    if (
+      gap <= ANGLE_EPSILON ||
+      gap > medianWidth * MAX_ADJACENT_GAP_WIDTH_FACTOR + ANGLE_EPSILON
+    ) {
+      return null;
+    }
+    gaps.push(gap);
+  }
+
+  const rowAngle = fittedRowAngle(members);
+  if (rowAngle === null) {
+    return null;
+  }
+
+  const meanV = average(vValues);
+  let score = 0;
+  for (const member of members) {
+    const normalizedResidual = (member.v - meanV) / medianHeight;
+    score += normalizedResidual * normalizedResidual;
+  }
+
+  const angleResidual = undirectedAngleDifference(rowAngle, commonAngle);
+  score += ROW_ANGLE_RESIDUAL_WEIGHT * angleResidual * angleResidual;
+
+  if (gaps.length > 1) {
+    const meanGap = average(gaps);
+    const normalizedGapVariance =
+      gaps.reduce((sum, gap) => {
+        const normalized = (gap - meanGap) / medianWidth;
+        return sum + normalized * normalized;
+      }, 0) / gaps.length;
+    score += ROW_GAP_VARIANCE_WEIGHT * normalizedGapVariance;
+  }
+
+  for (const gap of gaps) {
+    const excess = Math.max(0, gap / medianWidth - LARGE_GAP_WIDTH_FACTOR);
+    score += ROW_LARGE_GAP_WEIGHT * excess * excess;
+  }
+
+  return {
+    mask: members.reduce((mask, member) => mask | (1 << member.index), 0),
+    members,
+    meanV,
+    meanY: average(members.map((member) => center(member.observation).y)),
+    score,
+  };
+}
+
+function materializePartition(
+  rows: readonly RowCandidate[],
+  medianHeight: number,
+): CandidatePartition | null {
+  if (rows.length === 0 || rows.length > MAX_MELD_GROUPS) {
+    return null;
+  }
+
+  const byProjectedRow = [...rows].sort(
+    (left, right) => left.meanV - right.meanV,
+  );
+  for (let index = 1; index < byProjectedRow.length; index += 1) {
+    const previous = byProjectedRow[index - 1];
+    const current = byProjectedRow[index];
+    if (
+      previous === undefined ||
+      current === undefined ||
+      current.meanV - previous.meanV <
+        medianHeight * MIN_ROW_CENTER_SEPARATION_HEIGHT_FACTOR - ANGLE_EPSILON
+    ) {
+      return null;
+    }
+  }
+
+  const orderedRows = [...rows].sort(
+    (left, right) => left.meanY - right.meanY || left.meanV - right.meanV,
+  );
+  const groups = orderedRows.map((row): MeldGroupObservation => {
+    const orderedObservations = row.members.map((member) => member.observation);
+    return {
+      memberObservationIds: orderedObservations.map((member) => member.id),
+      interpretation: interpretMeld(orderedObservations),
+    };
+  });
   const signature = groups
     .map((group) => group.memberObservationIds.join(','))
     .join('|');
+  const score =
+    rows.reduce((sum, row) => sum + row.score, 0) +
+    rows.length * GROUP_COUNT_PENALTY;
 
   return { signature, groups, score };
 }
 
 function fittedRowAngle(row: readonly ProjectedObservation[]): number | null {
   const points = row.map((member) => center(member.observation));
-  const meanX = points.reduce((sum, point) => sum + point.x, 0) / points.length;
-  const meanY = points.reduce((sum, point) => sum + point.y, 0) / points.length;
+  const meanX = average(points.map((point) => point.x));
+  const meanY = average(points.map((point) => point.y));
   let numerator = 0;
   let denominator = 0;
 
@@ -231,6 +412,88 @@ function fittedRowAngle(row: readonly ProjectedObservation[]): number | null {
     return null;
   }
   return Math.atan(numerator / denominator);
+}
+
+function undirectedLineAngle(
+  left: { readonly x: number; readonly y: number },
+  right: { readonly x: number; readonly y: number },
+): number | null {
+  const dx = right.x - left.x;
+  const dy = right.y - left.y;
+  if (Math.abs(dx) <= ANGLE_EPSILON && Math.abs(dy) <= ANGLE_EPSILON) {
+    return null;
+  }
+
+  let angle = Math.atan2(dy, dx);
+  if (angle > Math.PI / 2) {
+    angle -= Math.PI;
+  } else if (angle < -Math.PI / 2) {
+    angle += Math.PI;
+  }
+  return angle;
+}
+
+function undirectedAngleDifference(left: number, right: number): number {
+  let difference = left - right;
+  while (difference > Math.PI / 2) {
+    difference -= Math.PI;
+  }
+  while (difference < -Math.PI / 2) {
+    difference += Math.PI;
+  }
+  return difference;
+}
+
+function enumerateCombinations(
+  itemCount: number,
+  choose: number,
+  visit: (indices: readonly number[]) => void,
+): void {
+  const indices: number[] = [];
+  const search = (start: number): void => {
+    if (indices.length === choose) {
+      visit(indices);
+      return;
+    }
+
+    const needed = choose - indices.length;
+    for (let index = start; index <= itemCount - needed; index += 1) {
+      indices.push(index);
+      search(index + 1);
+      indices.pop();
+    }
+  };
+  search(0);
+}
+
+function firstSetBitIndex(mask: number): number {
+  for (let index = 0; index < 32; index += 1) {
+    if ((mask & (1 << index)) !== 0) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function bitCount(mask: number): number {
+  let value = mask >>> 0;
+  let count = 0;
+  while (value !== 0) {
+    value &= value - 1;
+    count += 1;
+  }
+  return count;
+}
+
+function average(values: readonly number[]): number {
+  if (values.length === 0) {
+    return 0;
+  }
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function isDefined<T>(value: T | undefined): value is T {
+  return value !== undefined;
 }
 
 function interpretMeld(
@@ -351,10 +614,6 @@ function center(observation: TileObservation): { readonly x: number; readonly y:
     x: observation.bbox.x + observation.bbox.width / 2,
     y: observation.bbox.y + observation.bbox.height / 2,
   };
-}
-
-function averageY(row: readonly ProjectedObservation[]): number {
-  return row.reduce((sum, member) => sum + center(member.observation).y, 0) / row.length;
 }
 
 function median(values: readonly number[]): number {

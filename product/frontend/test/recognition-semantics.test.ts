@@ -34,7 +34,7 @@ describe('recognition semantic observation and ordering', () => {
 });
 
 describe('recognition meld grouping and reconstruction', () => {
-  it.each([0, 22.5, -22.5])(
+  it.each([0, 22.5, -22.5, 45, -45])(
     'groups deterministic rows at %s degrees and orders groups top-to-bottom',
     (degrees) => {
       const snapshot = buildFrameRecognitionSnapshot([
@@ -59,10 +59,10 @@ describe('recognition meld grouping and reconstruction', () => {
     },
   );
 
-  it('marks geometry beyond the accepted tilt as non-committable', () => {
+  it('marks geometry beyond the accepted common tilt as non-committable', () => {
     const snapshot = buildFrameRecognitionSnapshot([
       ...handCandidates(8),
-      ...meldRow('steep', 0.4, 25, ['1m', '2m', '3m']),
+      ...meldRow('steep', 0.4, 50, ['1m', '2m', '3m']),
     ]);
 
     expect(snapshot.meldGroups).toEqual([]);
@@ -72,7 +72,7 @@ describe('recognition meld grouping and reconstruction', () => {
     });
   });
 
-  it('keeps a stable 3+2 meld partition when detector bbox-center jitter makes an individual fitted row exceed 22.5 degrees', () => {
+  it('keeps a stable 3+2 meld partition under captured detector bbox-center jitter', () => {
     const snapshot = buildFrameRecognitionSnapshot([
       ...handCandidates(5),
       capturedMeldCandidate('nanodet:1055', 0.7758695144053913, 0.3991592205292671, 0.03685314459588783, 0.0854463617245128, '8m'),
@@ -124,6 +124,7 @@ describe('recognition meld grouping and reconstruction', () => {
       ...meldRow('open-kan', 0.45, 0, ['6p', '6p', '6p', '6p']),
     ]);
 
+    expect(snapshot.meldGroups).toHaveLength(1);
     expect(snapshot.meldGroups[0]?.interpretation).toEqual({
       kind: 'open-kan',
       tiles: [

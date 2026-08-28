@@ -75,9 +75,9 @@ The recognized structure is a recognition draft: it is not required to already b
 Tiles recognized inside the meld region are reconstructed into zero through four spatial meld groups before a recognized structure is committed.
 
 - Meld grouping is based on the spatial arrangement of recognized tile bounding boxes.
-- Recognition must tolerate a common meld-row tilt of up to `±22.5°` from horizontal.
+- Recognition must tolerate a common meld-row tilt of up to `±45°` from horizontal.
 - Separate meld rows must remain distinguishable under that tilt; recognition is not required to support more extreme row rotation.
-- The `±22.5°` value defines the required common-row direction/search support boundary. It is not a mandatory rejection threshold for the fitted angle of every already-reconstructed short row: detector bounding-box center jitter may move a two- or three-member row's fitted angle beyond that value while the spatial partition remains stable.
+- The `±45°` value defines the common-row direction/search support boundary. Individual short-row fitted angles are not separate hard rejection criteria because detector bounding-box center jitter can move a two- or three-member fit substantially without changing the stable spatial partition.
 - Meld groups are ordered from top to bottom.
 - Tiles inside one group are ordered from left to right along that group's row direction.
 - Grouping first reconstructs spatial rows; scoring legality is not a grouping criterion.
