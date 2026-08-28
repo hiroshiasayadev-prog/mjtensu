@@ -212,16 +212,15 @@ describe('RecognitionPageView preparation and capture surface', () => {
 
     const viewport = screen.getByTestId('recognition-viewport');
     const captureSurface = screen.getByTestId('recognition-capture-surface');
-    const landscapeUi = screen.getByTestId('recognition-landscape-ui-surface');
     expect(viewport.style.position).toBe('fixed');
     expect(viewport.style.inset).toBe('0px');
     expect(captureSurface.style.width).toBe('min(100vw, 177.7778dvh)');
     expect(captureSurface.style.height).toBe('min(100dvh, 56.25vw)');
     const exitButton = screen.getByRole('button', { name: '認識を終了' });
     expect(exitButton).toBeVisible();
-    expect(exitButton.parentElement).toBe(landscapeUi);
-    expect(exitButton.style.position).toBe('absolute');
-    expect(exitButton.style.zIndex).toBe('200');
+    expect(exitButton.parentElement).toBe(document.body);
+    expect(exitButton.style.position).toBe('fixed');
+    expect(exitButton.style.zIndex).toBe('3000');
   });
 
   it('opens camera and runtime in parallel, exposes preview first, then starts realtime only when both are ready', async () => {
@@ -351,7 +350,9 @@ describe('RecognitionPageView preparation and capture surface', () => {
     expect(screen.queryByText(/端末を横向きにしてください/)).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('認識しています');
     const globalExit = screen.getByTestId('recognition-global-exit');
-    expect(globalExit.parentElement).toBe(landscapeUi);
+    expect(globalExit.parentElement).toBe(document.body);
+    expect(globalExit.style.position).toBe('fixed');
+    expect(globalExit.style.transform).toBe('rotate(90deg)');
 
     expect(recognizer.getSource()?.captureLatest()).toEqual({
       source: cameraSession.portraitLockedFrame.image,
@@ -380,7 +381,8 @@ describe('RecognitionPageView preparation and capture surface', () => {
     expect(landscapeUi.style.height).toBe('100%');
     expect(landscapeUi.style.transform).toBe('');
     expect(globalExit).toBeVisible();
-    expect(globalExit.parentElement).toBe(landscapeUi);
+    expect(globalExit.parentElement).toBe(document.body);
+    expect(globalExit.style.transform).toBe('');
     expect(handRegion.style.left).toBe('4%');
     expect(handRegion.style.top).toBe('50%');
     expect(handRegion.style.width).toBe('62%');
@@ -397,7 +399,7 @@ describe('RecognitionPageView preparation and capture surface', () => {
     });
   });
 
-  it('keeps global controls on the logical landscape surface across viewport rotation', async () => {
+  it('keeps global controls in a body-level fixed layer across viewport rotation', async () => {
     setViewportSize(390, 844);
     const cameraSession = createCameraSession();
     const recognizer = createRecognizerHarness();
@@ -421,8 +423,12 @@ describe('RecognitionPageView preparation and capture surface', () => {
     const debug = screen.getByTestId('recognition-debug-capture');
     expect(exit).toBeVisible();
     expect(debug).toBeVisible();
-    expect(exit.parentElement).toBe(landscapeUi);
-    expect(debug.parentElement).toBe(landscapeUi);
+    expect(exit.parentElement).toBe(document.body);
+    expect(debug.parentElement).toBe(document.body);
+    expect(exit.style.position).toBe('fixed');
+    expect(debug.style.position).toBe('fixed');
+    expect(exit.style.transform).toBe('rotate(90deg)');
+    expect(debug.style.transform).toBe('rotate(90deg)');
 
     act(() => {
       setViewportSize(844, 390);
@@ -433,8 +439,10 @@ describe('RecognitionPageView preparation and capture surface', () => {
     expect(landscapeUi.style.transform).toBe('');
     expect(exit).toBeVisible();
     expect(debug).toBeVisible();
-    expect(exit.parentElement).toBe(landscapeUi);
-    expect(debug.parentElement).toBe(landscapeUi);
+    expect(exit.parentElement).toBe(document.body);
+    expect(debug.parentElement).toBe(document.body);
+    expect(exit.style.transform).toBe('');
+    expect(debug.style.transform).toBe('');
   });
 });
 

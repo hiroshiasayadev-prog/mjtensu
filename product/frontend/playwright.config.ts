@@ -1,4 +1,4 @@
-import { defineConfig } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './test/e2e',
@@ -21,6 +21,14 @@ export default defineConfig({
       name: 'chromium',
       use: {
         browserName: 'chromium',
+      },
+    },
+    {
+      name: 'webkit-recognition-layout',
+      testMatch: '**/recognition-layout.spec.ts',
+      use: {
+        ...devices['iPhone 13'],
+        browserName: 'webkit',
       },
     },
   ],

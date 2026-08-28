@@ -52,7 +52,8 @@ type FakeFlowScenario =
   | 'camera-slow'
   | 'runtime-slow'
   | 'camera-retry'
-  | 'runtime-retry';
+  | 'runtime-retry'
+  | 'hold-recognition';
 
 const query = new URLSearchParams(window.location.search);
 const scenario = parseScenario(query.get('scenario'));
@@ -101,6 +102,7 @@ function parseScenario(value: string | null): FakeFlowScenario {
     case 'runtime-slow':
     case 'camera-retry':
     case 'runtime-retry':
+    case 'hold-recognition':
       return value;
     default:
       return 'primary';
@@ -152,6 +154,9 @@ function createRecognitionServices(
     createPipeline() {
       throw new Error('Fake-flow Recognition runtime does not create pipelines.');
     },
+    async requestDebugCapture() {
+      throw new Error('Fake-flow debug capture is not used by layout acceptance.');
+    },
     async dispose() {},
   };
 
@@ -162,15 +167,17 @@ function createRecognitionServices(
       recognitionSequence += 1;
       let active = true;
 
-      const timer = window.setTimeout(() => {
-        if (!active) {
-          return;
-        }
-        listener.onUpdate({
-          kind: 'confirmed',
-          result: createRecognizedStructure(`recognition-${recognitionSequence}`),
-        });
-      }, 60);
+      const timer = selectedScenario === 'hold-recognition'
+        ? null
+        : window.setTimeout(() => {
+            if (!active) {
+              return;
+            }
+            listener.onUpdate({
+              kind: 'confirmed',
+              result: createRecognizedStructure(`recognition-${recognitionSequence}`),
+            });
+          }, 60);
 
       return {
         stop() {
@@ -178,7 +185,9 @@ function createRecognitionServices(
             return;
           }
           active = false;
-          window.clearTimeout(timer);
+          if (timer !== null) {
+            window.clearTimeout(timer);
+          }
           state.recognizerStopCalls += 1;
         },
       };

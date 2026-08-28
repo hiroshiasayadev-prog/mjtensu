@@ -1,0 +1,77 @@
+import { expect, test, type Locator, type Page } from '@playwright/test';
+
+const HARNESS_PATH = '/test/e2e/fake-flow.html';
+
+test.describe('Recognition viewport controls', () => {
+  test('keeps exit and debug controls visible and hit-testable after portrait to landscape resize', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${HARNESS_PATH}?scenario=hold-recognition`);
+    await page.getByRole('button', { name: '判定する' }).click();
+
+    const exit = page.getByTestId('recognition-global-exit');
+    const debug = page.getByTestId('recognition-debug-capture');
+
+    await expect(page).toHaveURL('/recognition');
+    await expect(exit).toBeVisible();
+    await expect(debug).toBeVisible();
+    await expectControlsToBeBodyFixed(page, exit, debug);
+    await expectControlInViewportAndHitTestable(page, exit);
+    await expectControlInViewportAndHitTestable(page, debug);
+
+    await page.setViewportSize({ width: 844, height: 390 });
+
+    await expect(exit).toBeVisible();
+    await expect(debug).toBeVisible();
+    await expectControlsToBeBodyFixed(page, exit, debug);
+    await expectControlInViewportAndHitTestable(page, exit);
+    await expectControlInViewportAndHitTestable(page, debug);
+  });
+});
+
+async function expectControlsToBeBodyFixed(
+  page: Page,
+  exit: Locator,
+  debug: Locator,
+): Promise<void> {
+  for (const locator of [exit, debug]) {
+    const placement = await locator.evaluate((element) => ({
+      parentTag: element.parentElement?.tagName ?? null,
+      position: getComputedStyle(element).position,
+    }));
+    expect(placement).toEqual({ parentTag: 'BODY', position: 'fixed' });
+  }
+  expect(await page.locator('body > [data-testid="recognition-global-exit"]').count()).toBe(1);
+  expect(await page.locator('body > [data-testid="recognition-debug-capture"]').count()).toBe(1);
+}
+
+async function expectControlInViewportAndHitTestable(
+  page: Page,
+  locator: Locator,
+): Promise<void> {
+  await expect(locator).toBeInViewport();
+  const box = await locator.boundingBox();
+  expect(box).not.toBeNull();
+  if (box === null) {
+    return;
+  }
+
+  const viewport = page.viewportSize();
+  expect(viewport).not.toBeNull();
+  if (viewport === null) {
+    return;
+  }
+
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+
+  const hitTestable = await locator.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+    const hit = document.elementFromPoint(x, y);
+    return hit === element || (hit instanceof Element && element.contains(hit));
+  });
+  expect(hitTestable).toBe(true);
+}
