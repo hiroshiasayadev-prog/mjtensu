@@ -74,20 +74,24 @@ The recognized structure is a recognition draft: it is not required to already b
 
 Tiles recognized inside the meld region are reconstructed into zero through four spatial meld groups before a recognized structure is committed.
 
-- Meld grouping is based on the spatial arrangement of recognized tile bounding boxes.
-- Recognition must tolerate a common meld-row tilt of up to `±45°` from horizontal.
-- Separate meld rows must remain distinguishable under that tilt; recognition is not required to support more extreme row rotation.
-- The `±45°` value defines the common-row direction/search support boundary. Individual short-row fitted angles are not separate hard rejection criteria because detector bounding-box center jitter can move a two- or three-member fit substantially without changing the stable spatial partition.
-- Meld groups are ordered from top to bottom.
-- Tiles inside one group are ordered from left to right along that group's row direction.
-- Grouping first reconstructs spatial rows; scoring legality is not a grouping criterion.
-- A two-member group containing the same base tile identity, ignoring ordinary-versus-red-five distinction, is interpreted as the visible evidence for a concealed kan.
-- A concealed kan reconstructed from two visible tile observations is represented as one logical concealed-kan meld even though only the two face-up tiles produced detector boxes.
-- Three- and four-member groups may receive chi/pon/open-kan interpretation when their current identities make that interpretation unambiguous.
-- A spatially reconstructed group is not rejected solely because its current recognized identities do not form a legal scoring meld. Conditions owns correction and scoring owns winning-hand validity.
-- If the observed points cannot be assigned to stable spatial meld groups, the frame does not produce a committable recognized structure.
+The grouping approach is **Docstrum-inspired**: it follows the same bottom-up idea of deriving dominant line orientation and within-line relationships from the geometry of detected components rather than assuming perfectly horizontal rows. The reference is Lawrence O'Gorman, *The Document Spectrum for Page Layout Analysis*, IEEE TPAMI 15(11), 1993. The production algorithm is an adaptation for a very small, bounded set of mahjong-tile boxes; it does not reproduce Docstrum's histogram and transitive-closure procedure verbatim.
 
-The exact geometric grouping algorithm, including how row direction is estimated, how bounding-box centers are clustered, and what numerical clustering tolerances are used, is an implementation detail.
+The required grouping procedure is:
+
+1. Use meld-observation bounding-box centers as the geometric points.
+2. Generate candidate common row directions from pairwise center-to-center line angles plus a horizontal fallback. Only common directions inside `±45°` from horizontal are considered; directions outside that range are unsupported.
+3. For each candidate direction, project every center into row-aligned coordinates `(u, v)`, where `u` is parallel to the candidate row direction and `v` is perpendicular to it.
+4. Enumerate every possible spatial row candidate containing `2..4` observations. A row candidate is admissible only when all members fit within a bounded perpendicular `v` spread scaled by the median observed tile height and adjacent members along `u` remain within a bounded gap scaled by the median observed tile width. This is a complete-linkage-style constraint: one intermediate or bridge observation is not sufficient to merge otherwise incompatible members.
+5. Search exact covers of all meld observations using at most four admissible row candidates. Separate row centers must remain sufficiently separated in the perpendicular direction so one physical row is not arbitrarily split into multiple rows.
+6. Rank each complete partition using geometry only: normalized perpendicular residual, disagreement between the row fit and the candidate common direction, adjacent-gap regularity, excessive-gap penalty, and a small penalty for unnecessary additional groups.
+7. Select the unique lowest-score partition. If no complete partition exists, or the best partition is numerically ambiguous with a competing partition, the meld geometry is unstable and the frame is not committable.
+8. Order the accepted groups from top to bottom and their members from left to right along the selected row direction.
+
+Individual two- or three-member least-squares row angles are **not** separate hard rejection criteria. Detector bounding-box center jitter can move a short-row fitted angle substantially while the common-direction projection and complete partition remain stable.
+
+Grouping first reconstructs spatial rows; scoring legality is not a grouping criterion. A two-member group containing the same base tile identity, ignoring ordinary-versus-red-five distinction, is interpreted as the visible evidence for a concealed kan. A concealed kan reconstructed from two visible tile observations is represented as one logical concealed-kan meld even though only the two face-up tiles produced detector boxes. Three- and four-member groups may receive chi/pon/open-kan interpretation when their current identities make that interpretation unambiguous. A spatially reconstructed group is not rejected solely because its current recognized identities do not form a legal scoring meld; Conditions owns correction and scoring owns winning-hand validity.
+
+Concrete numeric tolerances and score weights remain implementation-owned, but the bounded common-direction search, row-candidate enumeration, complete-cover partitioning, and geometry-only best-partition selection are part of this contract.
 
 ## Invalid and duplicate candidates
 
@@ -149,3 +153,4 @@ The UI must not require the user to understand detector confidence, model names,
 | PRODUCT-ADR-RECOGNITION-001 | Origin of shutterless realtime evaluation and three-result stabilization. |
 | PRODUCT-ADR-RECOGNITION-002 | Origin of the capture-region and `320 x 320` composite layout. |
 | PRODUCT-ADR-RECOGNITION-004 | Current decision for the 35-class base-classifier pipeline and the separation of recognition acceptance from scoring validity. |
+| O'Gorman, Lawrence, 1993, *The Document Spectrum for Page Layout Analysis*, IEEE TPAMI 15(11):1162-1173 | External algorithmic reference for the Docstrum-inspired bottom-up orientation/within-line grouping approach; the production meld algorithm is a bounded small-set adaptation rather than a literal implementation. |

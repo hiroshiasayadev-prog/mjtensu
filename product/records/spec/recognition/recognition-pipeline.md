@@ -87,9 +87,18 @@ A two-member group containing the same base tile identity is interpreted as the 
 
 For a three- or four-member group, chi/pon/open-kan interpretation may be attached when it follows unambiguously from the observed identities. A geometrically reconstructed group is not rejected merely because its current tile identities do not form a legal scoring meld; correction and scoring validity belong downstream.
 
-The common meld-row tilt supported by grouping is `±45°` from horizontal as defined by `spec:product.recognition.runtime_recognition`.
-That support bound applies to common row-direction search; an otherwise stable reconstructed row is not rejected solely because bbox-center jitter makes that short row's individual fitted angle differ from the selected common direction.
-The exact angle-estimation, clustering, and numerical tolerance algorithm is implementation-owned.
+Meld grouping uses the Docstrum-inspired spatial procedure defined by `spec:product.recognition.runtime_recognition`. The external inspiration is Lawrence O'Gorman's 1993 Docstrum work on bottom-up page-layout analysis: infer line orientation and within-line relationships from detected component geometry rather than assuming a fixed horizontal baseline. The production implementation adapts that idea to the bounded mahjong case rather than copying Docstrum literally.
+
+For each frame, the pipeline must therefore:
+
+- derive bounded common row-direction candidates from meld bbox-center pair geometry, with a horizontal fallback and `±45°` support limit;
+- project observations into row-aligned parallel/perpendicular coordinates;
+- enumerate admissible `2..4`-member row candidates using median-tile-size-scaled perpendicular spread and adjacent-gap constraints;
+- construct complete partitions that cover every meld observation using at most four rows, rejecting partitions whose rows are not spatially distinguishable;
+- rank complete partitions by geometry-only residuals and spacing regularity, then select the unique best partition;
+- treat an individual short-row fitted angle as a scoring residual rather than a separate hard rejection threshold.
+
+The exact numeric tolerances and score weights are implementation-owned. The algorithmic structure above is canonical because stabilization depends on deterministic, jitter-tolerant grouping rather than the previous `v`-sorted greedy row cut.
 
 ## Frame recognition snapshot
 
@@ -139,3 +148,4 @@ Scoring validity is not a stabilization criterion.
 |---|---|
 | PRODUCT-ADR-RECOGNITION-002 | Establishes the fixed semantic regions and `320 x 320` composite. |
 | PRODUCT-ADR-RECOGNITION-004 | Establishes the current learned detector/crop-classifier runtime pipeline, integrated invalid/background outcome, and downstream scoring-validity boundary. |
+| O'Gorman, Lawrence, 1993, *The Document Spectrum for Page Layout Analysis*, IEEE TPAMI 15(11):1162-1173 | External reference for the Docstrum-inspired bottom-up row-orientation and within-line grouping concept adapted by meld grouping. |
