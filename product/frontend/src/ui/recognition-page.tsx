@@ -19,7 +19,6 @@ import {
   useState,
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { createPortal } from 'react-dom';
 
 import type {
   CameraFrameAspect,
@@ -390,42 +389,8 @@ export function RecognitionPageView({
     meldTiltWarningVisible,
   );
 
-  const globalControls = createPortal(
-    <>
-      {runtime.requestDebugCapture === undefined ? null : (
-        <Button
-          aria-label={
-            debugCaptureFile === null ? '認識デバッグを採取' : '認識デバッグを保存'
-          }
-          data-testid="recognition-debug-capture"
-          size="compact-sm"
-          variant="light"
-          disabled={debugCaptureStatus === 'capturing'}
-          onClick={handleDebugCapture}
-          style={globalControlStyle('debug', isPortraitViewport)}
-        >
-          {debugCaptureButtonLabel(debugCaptureStatus)}
-        </Button>
-      )}
-
-      <Button
-        aria-label="認識を終了"
-        data-testid="recognition-global-exit"
-        size="compact-sm"
-        variant="light"
-        onClick={onAbandon}
-        style={globalControlStyle('exit', isPortraitViewport)}
-      >
-        終了
-      </Button>
-    </>,
-    document.body,
-  );
-
   return (
-    <>
-      {globalControls}
-      <Box
+    <Box
       data-testid="recognition-viewport"
       style={{
         position: 'fixed',
@@ -471,9 +436,53 @@ export function RecognitionPageView({
           style={{
             ...landscapeUiSurfaceLayout(isPortraitViewport),
             aspectRatio: '16 / 9',
+            display: 'grid',
             pointerEvents: 'auto',
           }}
         >
+          <Box
+            data-testid="recognition-global-controls-layer"
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              width: '100%',
+              boxSizing: 'border-box',
+              padding: 10,
+              pointerEvents: 'none',
+              zIndex: 200,
+            }}
+          >
+            {runtime.requestDebugCapture === undefined ? (
+              <span aria-hidden="true" />
+            ) : (
+              <button
+                aria-label={
+                  debugCaptureFile === null
+                    ? '認識デバッグを採取'
+                    : '認識デバッグを保存'
+                }
+                data-testid="recognition-debug-capture"
+                disabled={debugCaptureStatus === 'capturing'}
+                onClick={handleDebugCapture}
+                style={RECOGNITION_GLOBAL_CONTROL_STYLE}
+                type="button"
+              >
+                {debugCaptureButtonLabel(debugCaptureStatus)}
+              </button>
+            )}
+
+            <button
+              aria-label="認識を終了"
+              data-testid="recognition-global-exit"
+              onClick={onAbandon}
+              style={RECOGNITION_GLOBAL_CONTROL_STYLE}
+              type="button"
+            >
+              終了
+            </button>
+          </Box>
+
           <CaptureRegionOverlay
             snapshot={snapshot}
             regions={RECOGNITION_CAPTURE_REGIONS}
@@ -540,7 +549,6 @@ export function RecognitionPageView({
         </Box>
       </Box>
     </Box>
-    </>
   );
 }
 
@@ -1062,6 +1070,22 @@ function createRecognitionFrameSource(
   };
 }
 
+const RECOGNITION_GLOBAL_CONTROL_STYLE = {
+  pointerEvents: 'auto',
+  touchAction: 'manipulation',
+  appearance: 'none',
+  border: '1px solid rgba(0,0,0,0.12)',
+  borderRadius: 6,
+  padding: '5px 10px',
+  minHeight: 30,
+  background: 'rgba(255,255,255,0.92)',
+  color: '#1b1d22',
+  font: 'inherit',
+  fontSize: 13,
+  fontWeight: 600,
+  lineHeight: 1.2,
+} as const;
+
 const PORTRAIT_CAPTURE_SURFACE_LAYOUT = {
   width: 'min(100vw, 56.25dvh)',
   height: 'min(100dvh, 177.7778vw)',
@@ -1121,47 +1145,6 @@ function viewportIsPortrait(): boolean {
     return false;
   }
   return window.innerHeight > window.innerWidth;
-}
-
-function globalControlStyle(
-  control: 'debug' | 'exit',
-  isPortraitViewport: boolean,
-) {
-  const base = {
-    position: 'fixed' as const,
-    zIndex: 3000,
-    pointerEvents: 'auto' as const,
-    touchAction: 'manipulation' as const,
-    background: 'rgba(255,255,255,0.92)',
-  };
-
-  if (!isPortraitViewport) {
-    return control === 'debug'
-      ? {
-          ...base,
-          top: 'max(10px, env(safe-area-inset-top))',
-          left: 'max(10px, env(safe-area-inset-left))',
-        }
-      : {
-          ...base,
-          top: 'max(10px, env(safe-area-inset-top))',
-          right: 'max(10px, env(safe-area-inset-right))',
-        };
-  }
-
-  return control === 'debug'
-    ? {
-        ...base,
-        top: 'max(56px, calc(env(safe-area-inset-top) + 44px))',
-        right: 'max(36px, calc(env(safe-area-inset-right) + 16px))',
-        transform: 'rotate(90deg)',
-      }
-    : {
-        ...base,
-        right: 'max(36px, calc(env(safe-area-inset-right) + 16px))',
-        bottom: 'max(44px, calc(env(safe-area-inset-bottom) + 36px))',
-        transform: 'rotate(90deg)',
-      };
 }
 
 function debugCaptureButtonLabel(
