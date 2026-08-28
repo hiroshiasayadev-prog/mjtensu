@@ -184,13 +184,14 @@ function partitionAtAngle(
   const groups: MeldGroupObservation[] = [];
   for (const row of orderedRows) {
     const rowAngle = fittedRowAngle(row);
-    if (
-      rowAngle === null ||
-      Math.abs(rowAngle) > MAX_TILT_RADIANS + ANGLE_EPSILON
-    ) {
+    if (rowAngle === null) {
       return null;
     }
 
+    // Candidate angles already bound the supported common row direction. Keep
+    // the per-row fitted angle as a ranking residual rather than a hard gate:
+    // detector bbox-center jitter can move a short 2-3 tile row beyond 22.5°
+    // even when the projected row partition itself is stable.
     const meanV = row.reduce((sum, member) => sum + member.v, 0) / row.length;
     for (const member of row) {
       const normalizedResidual = (member.v - meanV) / medianHeight;

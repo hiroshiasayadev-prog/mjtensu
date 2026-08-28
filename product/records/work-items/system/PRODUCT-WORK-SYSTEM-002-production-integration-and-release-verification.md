@@ -25,6 +25,7 @@
   - PRODUCT-TASK-SYSTEM-002-11
   - PRODUCT-TASK-SYSTEM-002-12
   - PRODUCT-TASK-SYSTEM-002-13
+  - PRODUCT-TASK-SYSTEM-002-14
 
 ## Goal
 
@@ -67,6 +68,7 @@ I09 -> I11 correct mobile Result information architecture
 I07 + I09 + I10 + I11 -> continue/reverify I04
 I04 duplicate-suppression finding -> I12 correct merged-bridge duplicate resolution
 I04 detector-artifact finding + I12 corrected postprocess -> I13 promote real-capture detector -> continue/reverify I04
+I04 meld-grouping fitted-angle finding -> I14 correct redundant per-row tilt gate -> continue/reverify I04
 I04 performance finding -> I08 optimize production Recognition throughput
 I03 + I04 + I08 -> I05 target-device complete-pipeline performance/release gate
 I05 -> I06 independent integrated release review
@@ -91,6 +93,7 @@ Real-device functional and browser/PWA verification may proceed in parallel once
 | PRODUCT-TASK-SYSTEM-002-11 | correction | Rework Result into compact tile/yaku/score cards with han-band feedback, dominant final points, on-demand fu detail, and persistent correction/restart actions. | I04 F-MAJ-08; I09 |
 | PRODUCT-TASK-SYSTEM-002-12 | correction | Correct detector duplicate suppression so a large merged bridge cannot transitively collapse multiple spatially distinct tile detections to one confidence winner. | I04 F-MAJ-09 |
 | PRODUCT-TASK-SYSTEM-002-13 | correction | Promote the real-capture fine-tuned detector after exact-runtime validation shows substantially better real meld recall with no held-out composite meld regression. | I04 F-MAJ-10; I12 |
+| PRODUCT-TASK-SYSTEM-002-14 | correction | Remove the redundant per-row fitted-angle rejection while preserving the `±22.5°` common-direction search support and exact captured `3 + 2` meld grouping. | I04 F-MAJ-11 |
 
 ## Completion Condition
 

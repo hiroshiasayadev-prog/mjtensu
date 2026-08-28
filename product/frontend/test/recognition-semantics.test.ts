@@ -72,6 +72,31 @@ describe('recognition meld grouping and reconstruction', () => {
     });
   });
 
+  it('keeps a stable 3+2 meld partition when detector bbox-center jitter makes an individual fitted row exceed 22.5 degrees', () => {
+    const snapshot = buildFrameRecognitionSnapshot([
+      ...handCandidates(5),
+      capturedMeldCandidate('nanodet:1055', 0.7758695144053913, 0.3991592205292671, 0.03685314459588783, 0.0854463617245128, '8m'),
+      capturedMeldCandidate('nanodet:1059', 0.8069168413218071, 0.387080997691361, 0.035905241358343734, 0.08095318851186205, '9m'),
+      capturedMeldCandidate('nanodet:1092', 0.7312824757391432, 0.44056500538946464, 0.05157752846196686, 0.06854383885798895, '7m'),
+      capturedMeldCandidate('nanodet:1217', 0.7914229242189214, 0.4841931244052497, 0.04139111841385075, 0.07414596020985928, '1p'),
+      capturedMeldCandidate('nanodet:1254', 0.7616863105844022, 0.4975748466154283, 0.03809097486246159, 0.07408504452926272, '1p'),
+    ]);
+
+    expect(snapshot.commitEligibility).toEqual({ kind: 'eligible' });
+    expect(snapshot.meldGroups).toHaveLength(2);
+    expect(snapshot.meldGroups[0]?.memberObservationIds).toEqual([
+      'nanodet:1092',
+      'nanodet:1055',
+      'nanodet:1059',
+    ]);
+    expect(snapshot.meldGroups[0]?.interpretation.kind).toBe('chi');
+    expect(snapshot.meldGroups[1]?.memberObservationIds).toEqual([
+      'nanodet:1254',
+      'nanodet:1217',
+    ]);
+    expect(snapshot.meldGroups[1]?.interpretation.kind).toBe('concealed-kan');
+  });
+
   it('reconstructs a two-visible-member same-base group as a concealed kan without fabricating hidden red', () => {
     const snapshot = buildFrameRecognitionSnapshot([
       candidate('kan-left', 'melds', 0.4, 0.45, '5m', true),
@@ -217,6 +242,25 @@ function meldRow(
     const centerY = baseCenterY + tangent * (centerX - firstX);
     return candidate(`${prefix}-${index}`, 'melds', centerX, centerY, kind);
   });
+}
+
+function capturedMeldCandidate(
+  id: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  kind: TileKind,
+): ClassifiedRecognitionCandidate {
+  return {
+    id,
+    region: 'melds',
+    bbox: { x, y, width, height },
+    classification: {
+      kind: 'tile',
+      tile: { kind, red: false },
+    },
+  };
 }
 
 function candidate(

@@ -77,6 +77,7 @@ Tiles recognized inside the meld region are reconstructed into zero through four
 - Meld grouping is based on the spatial arrangement of recognized tile bounding boxes.
 - Recognition must tolerate a common meld-row tilt of up to `±22.5°` from horizontal.
 - Separate meld rows must remain distinguishable under that tilt; recognition is not required to support more extreme row rotation.
+- The `±22.5°` value defines the required common-row direction/search support boundary. It is not a mandatory rejection threshold for the fitted angle of every already-reconstructed short row: detector bounding-box center jitter may move a two- or three-member row's fitted angle beyond that value while the spatial partition remains stable.
 - Meld groups are ordered from top to bottom.
 - Tiles inside one group are ordered from left to right along that group's row direction.
 - Grouping first reconstructs spatial rows; scoring legality is not a grouping criterion.
