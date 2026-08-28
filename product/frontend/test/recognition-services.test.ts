@@ -775,6 +775,7 @@ function eligibleSnapshot(firstKind: TileKind): FrameRecognitionSnapshot {
   return {
     observations: [],
     meldGroups: [],
+    meldCommonAngleRadians: null,
     draft: {
       completedHand: [
         { kind: firstKind, red: false },
@@ -800,6 +801,7 @@ function ineligibleSnapshot(): FrameRecognitionSnapshot {
   return {
     observations: [],
     meldGroups: [],
+    meldCommonAngleRadians: null,
     draft: {
       completedHand: [],
       doraIndicators: [],

@@ -109,6 +109,7 @@ The following checks are part of I04 rather than optional polish. They derive fr
 | all regions continuously active | Completed hand, dora, and meld regions remain active; empty dora/meld regions are accepted without toggles. |
 | live feedback | Retained detector candidates show box + recognized identity/unresolved state; recognized/unresolved feedback is readily distinguishable on the target camera surface, and meld grouping feedback is visually distinguishable from individual candidate boxes. Exact colors are implementation-owned. |
 | stabilization behavior | Bounding-box jitter alone does not prevent stabilization; three consecutive equal eligible structures commit once with no shutter/OK action. |
+| high-tilt capture guidance | Stable meld common angle above `30°` for three consecutive frames shows non-blocking horizontal-placement guidance; active guidance clears only after three consecutive frames below `25°` and does not change grouping/eligibility/commit behavior. |
 | downstream validity boundary | Non-winning/no-yaku structure does not keep Recognition open merely because scoring validity is downstream. |
 | route/resource cleanup | Leaving Recognition stops/releases the page-owned realtime run and camera session. |
 

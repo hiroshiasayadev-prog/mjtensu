@@ -56,6 +56,10 @@ describe('recognition meld grouping and reconstruction', () => {
         'bottom-2',
       ]);
       expect(snapshot.meldGroups[1]?.interpretation.kind).toBe('pon');
+      expect(snapshot.meldCommonAngleRadians).toBeCloseTo(
+        (degrees * Math.PI) / 180,
+        6,
+      );
     },
   );
 
@@ -95,6 +99,35 @@ describe('recognition meld grouping and reconstruction', () => {
       'nanodet:1217',
     ]);
     expect(snapshot.meldGroups[1]?.interpretation.kind).toBe('concealed-kan');
+  });
+
+  it('exposes a high common angle for the tilted iPhone capture without rejecting its stable 3+2 partition', () => {
+    const snapshot = buildFrameRecognitionSnapshot([
+      ...handCandidates(5),
+      capturedMeldCandidate('tilted:nanodet:937', 0.7948620883955927, 0.34139502548512746, 0.039692818013710905, 0.09014629073494253, '8m'),
+      capturedMeldCandidate('tilted:nanodet:941', 0.8287682451179188, 0.32070154662352623, 0.044132490685432096, 0.09126750199340482, '9m'),
+      capturedMeldCandidate('tilted:nanodet:1014', 0.7483078707143881, 0.3898091279866965, 0.05688012403802012, 0.08166095004663365, '7m'),
+      capturedMeldCandidate('tilted:nanodet:1100', 0.8200795173881215, 0.4262436826538486, 0.043178549798158085, 0.09032898924292493, '1p'),
+      capturedMeldCandidate('tilted:nanodet:1176', 0.786132419038734, 0.4560145205994171, 0.04336905902487448, 0.07668033302148929, '1p'),
+    ]);
+
+    expect(snapshot.commitEligibility).toEqual({ kind: 'eligible' });
+    expect(snapshot.meldGroups).toHaveLength(2);
+    expect(snapshot.meldGroups[0]?.memberObservationIds).toEqual([
+      'tilted:nanodet:1014',
+      'tilted:nanodet:937',
+      'tilted:nanodet:941',
+    ]);
+    expect(snapshot.meldGroups[1]?.memberObservationIds).toEqual([
+      'tilted:nanodet:1176',
+      'tilted:nanodet:1100',
+    ]);
+    expect(Math.abs(snapshot.meldCommonAngleRadians ?? 0)).toBeGreaterThan(
+      (30 * Math.PI) / 180,
+    );
+    expect(Math.abs(snapshot.meldCommonAngleRadians ?? 0)).toBeLessThanOrEqual(
+      (45 * Math.PI) / 180,
+    );
   });
 
   it('reconstructs a two-visible-member same-base group as a concealed kan without fabricating hidden red', () => {

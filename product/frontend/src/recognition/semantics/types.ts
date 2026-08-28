@@ -90,6 +90,7 @@ export type FrameCommitEligibility =
 export interface FrameRecognitionSnapshot {
   readonly observations: readonly TileObservation[];
   readonly meldGroups: readonly MeldGroupObservation[];
+  readonly meldCommonAngleRadians: number | null;
   readonly draft: FrameRecognitionDraft;
   readonly commitEligibility: FrameCommitEligibility;
 }

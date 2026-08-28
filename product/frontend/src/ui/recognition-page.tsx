@@ -106,6 +106,16 @@ export interface RecognitionPageViewProps {
 
 type PreparationStatus = 'preparing' | 'ready' | 'failed';
 
+const MELD_TILT_WARNING_SHOW_RADIANS = (30 * Math.PI) / 180;
+const MELD_TILT_WARNING_CLEAR_RADIANS = (25 * Math.PI) / 180;
+const MELD_TILT_WARNING_CONSECUTIVE_FRAMES = 3;
+
+interface MeldTiltWarningState {
+  readonly visible: boolean;
+  readonly highTiltConsecutive: number;
+  readonly lowTiltConsecutive: number;
+}
+
 export function RecognitionPageView({
   camera,
   runtime,
@@ -124,6 +134,7 @@ export function RecognitionPageView({
   const [recognitionProgress, setRecognitionProgress] = useState<
     'scanning' | 'stabilizing' | null
   >(null);
+  const [meldTiltWarningVisible, setMeldTiltWarningVisible] = useState(false);
   const [debugCaptureStatus, setDebugCaptureStatus] = useState<
     'idle' | 'capturing' | 'ready' | 'failed'
   >('idle');
@@ -133,11 +144,28 @@ export function RecognitionPageView({
   const cameraAttemptRef = useRef(0);
   const runtimeAttemptRef = useRef(0);
   const committedRef = useRef(false);
+  const meldTiltWarningStateRef = useRef<MeldTiltWarningState>(
+    initialMeldTiltWarningState(),
+  );
   const isPortraitViewport = usePortraitViewport();
   const captureAspectRatio: CameraFrameAspect = isPortraitViewport
     ? '9:16'
     : '16:9';
   const captureRotation: CameraFrameRotation = isPortraitViewport ? -90 : 0;
+
+  const resetMeldTiltWarning = useCallback(() => {
+    meldTiltWarningStateRef.current = initialMeldTiltWarningState();
+    setMeldTiltWarningVisible(false);
+  }, []);
+
+  const observeMeldTilt = useCallback((commonAngleRadians: number | null) => {
+    const next = advanceMeldTiltWarning(
+      meldTiltWarningStateRef.current,
+      commonAngleRadians,
+    );
+    meldTiltWarningStateRef.current = next;
+    setMeldTiltWarningVisible(next.visible);
+  }, []);
 
   const prepareCamera = useCallback(() => {
     const attempt = ++cameraAttemptRef.current;
@@ -170,6 +198,7 @@ export function RecognitionPageView({
     setRuntimeError(null);
     setSnapshot(null);
     setRecognitionProgress(null);
+    resetMeldTiltWarning();
 
     void runtime.initialize().then(
       () => {
@@ -186,7 +215,7 @@ export function RecognitionPageView({
         setRuntimeError(error);
       },
     );
-  }, [runtime]);
+  }, [resetMeldTiltWarning, runtime]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -222,7 +251,8 @@ export function RecognitionPageView({
     setRuntimeError(error);
     setSnapshot(null);
     setRecognitionProgress(null);
-  }, []);
+    resetMeldTiltWarning();
+  }, [resetMeldTiltWarning]);
 
   useEffect(() => {
     if (
@@ -249,6 +279,7 @@ export function RecognitionPageView({
     try {
       setSnapshot(null);
       setRecognitionProgress(null);
+      resetMeldTiltWarning();
       recognizer.reset();
       const source = createRecognitionFrameSource(
         cameraSession,
@@ -269,6 +300,7 @@ export function RecognitionPageView({
             return;
           }
 
+          observeMeldTilt(update.snapshot.meldCommonAngleRadians);
           setSnapshot(update.snapshot);
           setRecognitionProgress(update.kind);
         },
@@ -300,8 +332,10 @@ export function RecognitionPageView({
     cameraStatus,
     handleRuntimeFailure,
     isPortraitViewport,
+    observeMeldTilt,
     onConfirmed,
     recognizer,
+    resetMeldTiltWarning,
     runtimeStatus,
   ]);
 
@@ -352,6 +386,7 @@ export function RecognitionPageView({
     runtimeStatus,
     recognitionProgress,
     snapshot,
+    meldTiltWarningVisible,
   );
 
   return (
@@ -1201,12 +1236,16 @@ function getPreparationMessage(
   runtimeStatus: PreparationStatus,
   recognitionProgress: 'scanning' | 'stabilizing' | null,
   snapshot: FrameRecognitionSnapshot | null,
+  meldTiltWarningVisible: boolean,
 ): string {
   if (cameraStatus !== 'ready') {
     return 'カメラを起動しています';
   }
   if (runtimeStatus !== 'ready') {
     return '認識モデルを準備しています';
+  }
+  if (meldTiltWarningVisible) {
+    return '牌の並びを水平にすると認識が安定します';
   }
   if (recognitionProgress === 'stabilizing') {
     return '認識結果を安定確認しています';
@@ -1224,6 +1263,52 @@ function getPreparationMessage(
     return `認識しています（有効牌 ${completedHandTiles + meldTiles}/10、手牌 ${completedHandTiles}/2）`;
   }
   return '認識しています';
+}
+
+function initialMeldTiltWarningState(): MeldTiltWarningState {
+  return {
+    visible: false,
+    highTiltConsecutive: 0,
+    lowTiltConsecutive: 0,
+  };
+}
+
+function advanceMeldTiltWarning(
+  state: MeldTiltWarningState,
+  commonAngleRadians: number | null,
+): MeldTiltWarningState {
+  if (commonAngleRadians === null || !Number.isFinite(commonAngleRadians)) {
+    return state.visible
+      ? { ...state, lowTiltConsecutive: 0 }
+      : { ...state, highTiltConsecutive: 0 };
+  }
+
+  const absoluteAngle = Math.abs(commonAngleRadians);
+  if (!state.visible) {
+    if (absoluteAngle <= MELD_TILT_WARNING_SHOW_RADIANS) {
+      return { ...state, highTiltConsecutive: 0 };
+    }
+
+    const highTiltConsecutive = state.highTiltConsecutive + 1;
+    if (highTiltConsecutive < MELD_TILT_WARNING_CONSECUTIVE_FRAMES) {
+      return { ...state, highTiltConsecutive };
+    }
+    return {
+      visible: true,
+      highTiltConsecutive: 0,
+      lowTiltConsecutive: 0,
+    };
+  }
+
+  if (absoluteAngle >= MELD_TILT_WARNING_CLEAR_RADIANS) {
+    return { ...state, lowTiltConsecutive: 0 };
+  }
+
+  const lowTiltConsecutive = state.lowTiltConsecutive + 1;
+  if (lowTiltConsecutive < MELD_TILT_WARNING_CONSECUTIVE_FRAMES) {
+    return { ...state, lowTiltConsecutive };
+  }
+  return initialMeldTiltWarningState();
 }
 
 function countRecognizedTiles(

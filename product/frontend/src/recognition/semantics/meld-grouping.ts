@@ -26,6 +26,7 @@ export type MeldGroupingResult =
   | {
       readonly kind: 'stable';
       readonly groups: readonly MeldGroupObservation[];
+      readonly commonAngleRadians: number | null;
     }
   | {
       readonly kind: 'unstable';
@@ -50,13 +51,14 @@ interface CandidatePartition {
   readonly signature: string;
   readonly groups: readonly MeldGroupObservation[];
   readonly score: number;
+  readonly commonAngleRadians: number;
 }
 
 export function groupMeldObservations(
   observations: readonly TileObservation[],
 ): MeldGroupingResult {
   if (observations.length === 0) {
-    return { kind: 'stable', groups: [] };
+    return { kind: 'stable', groups: [], commonAngleRadians: null };
   }
 
   if (
@@ -111,7 +113,11 @@ export function groupMeldObservations(
     return { kind: 'unstable' };
   }
 
-  return { kind: 'stable', groups: best.groups };
+  return {
+    kind: 'stable',
+    groups: best.groups,
+    commonAngleRadians: best.commonAngleRadians,
+  };
 }
 
 function candidateAngles(observations: readonly TileObservation[]): number[] {
@@ -184,7 +190,7 @@ function collectPartitionsAtAngle(
 
   const search = (remainingMask: number): void => {
     if (remainingMask === 0) {
-      const partition = materializePartition(chosen, medianHeight);
+      const partition = materializePartition(chosen, medianHeight, angle);
       if (partition !== null) {
         collect(partition);
       }
@@ -354,6 +360,7 @@ function createRowCandidate(
 function materializePartition(
   rows: readonly RowCandidate[],
   medianHeight: number,
+  commonAngleRadians: number,
 ): CandidatePartition | null {
   if (rows.length === 0 || rows.length > MAX_MELD_GROUPS) {
     return null;
@@ -392,7 +399,7 @@ function materializePartition(
     rows.reduce((sum, row) => sum + row.score, 0) +
     rows.length * GROUP_COUNT_PENALTY;
 
-  return { signature, groups, score };
+  return { signature, groups, score, commonAngleRadians };
 }
 
 function fittedRowAngle(row: readonly ProjectedObservation[]): number | null {

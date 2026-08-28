@@ -493,6 +493,7 @@ describe('RecognitionPageView live feedback', () => {
           interpretation: concealedKan,
         },
       ],
+      meldCommonAngleRadians: 0,
       draft: {
         completedHand: [handTile],
         doraIndicators: [],
@@ -566,6 +567,62 @@ describe('RecognitionPageView live feedback', () => {
     );
   });
 
+  it('shows a non-blocking meld tilt warning after three high-tilt frames and clears it after three low-tilt frames', async () => {
+    const cameraSession = createCameraSession();
+    const recognizer = createRecognizerHarness();
+
+    renderView({
+      camera: { open: async () => cameraSession.session },
+      runtime: createRuntime(),
+      recognizer: recognizer.recognizer,
+    });
+
+    await waitFor(() => expect(recognizer.start).toHaveBeenCalledTimes(1));
+
+    const sendTilt = (degrees: number | null) => {
+      act(() => {
+        recognizer.getListener()?.onUpdate({
+          kind: 'scanning',
+          snapshot: tiltSnapshot(degrees),
+        });
+      });
+    };
+
+    sendTilt(31);
+    sendTilt(34);
+    expect(screen.getByRole('status')).not.toHaveTextContent(
+      '牌の並びを水平にすると認識が安定します',
+    );
+
+    sendTilt(-32);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '牌の並びを水平にすると認識が安定します',
+    );
+
+    sendTilt(null);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '牌の並びを水平にすると認識が安定します',
+    );
+
+    sendTilt(20);
+    sendTilt(22);
+    sendTilt(26);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '牌の並びを水平にすると認識が安定します',
+    );
+
+    sendTilt(24);
+    sendTilt(-20);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '牌の並びを水平にすると認識が安定します',
+    );
+
+    sendTilt(0);
+    expect(screen.getByRole('status')).not.toHaveTextContent(
+      '牌の並びを水平にすると認識が安定します',
+    );
+  });
+
   it('surfaces unresolved meld geometry instead of an opaque scanning state', async () => {
     const cameraSession = createCameraSession();
     const recognizer = createRecognizerHarness();
@@ -581,6 +638,7 @@ describe('RecognitionPageView live feedback', () => {
     const snapshot: FrameRecognitionSnapshot = {
       observations: [],
       meldGroups: [],
+      meldCommonAngleRadians: null,
       draft: {
         completedHand: [],
         doraIndicators: [],
@@ -830,6 +888,24 @@ function ConditionsTarget() {
       </button>
     </>
   );
+}
+
+function tiltSnapshot(degrees: number | null): FrameRecognitionSnapshot {
+  return {
+    observations: [],
+    meldGroups: [],
+    meldCommonAngleRadians:
+      degrees === null ? null : (degrees * Math.PI) / 180,
+    draft: {
+      completedHand: [],
+      doraIndicators: [],
+      meldGroups: [],
+    },
+    commitEligibility: {
+      kind: 'ineligible',
+      reason: 'insufficient-visible-tiles',
+    },
+  };
 }
 
 function recognizedStructure(): RecognizedStructure {

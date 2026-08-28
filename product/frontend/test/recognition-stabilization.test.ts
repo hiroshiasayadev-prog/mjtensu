@@ -137,6 +137,7 @@ function snapshot(
       },
     ],
     meldGroups: [],
+    meldCommonAngleRadians: null,
     draft,
     commitEligibility: eligible
       ? { kind: 'eligible' }

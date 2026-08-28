@@ -57,6 +57,7 @@ A committed recognized structure contains:
 | Completed-hand tiles | Ordered recognized tile instances from left to right. The winning tile is not inferred here; Application assigns the initial winning-tile selection. |
 | Dora indicators | Ordered recognized indicator tiles from left to right. Recognition does not distinguish visible, kan, ura, or kan-ura source; the user supplies the complete set that should count for this winning hand. |
 | Meld groups | Spatially reconstructed groups from top to bottom, preserving member order and inferred meld semantics when those semantics are unambiguous. |
+| Meld common angle | The selected common meld-row direction in radians when a non-empty stable meld partition exists; `null` when no stable common direction is available. This is live recognition guidance metadata and is not scoring input. |
 | Tile identity | Canonical riichi tile identity including distinction between ordinary fives and red fives. |
 
 Invalid/background classifier outcomes do not become recognized tiles, but their current detector observations may still be exposed to the Recognition page as unresolved live feedback.
@@ -86,6 +87,7 @@ The required grouping procedure is:
 6. Rank each complete partition using geometry only: normalized perpendicular residual, disagreement between the row fit and the candidate common direction, adjacent-gap regularity, excessive-gap penalty, and a small penalty for unnecessary additional groups.
 7. Select the unique lowest-score partition. If no complete partition exists, or the best partition is numerically ambiguous with a competing partition, the meld geometry is unstable and the frame is not committable.
 8. Order the accepted groups from top to bottom and their members from left to right along the selected row direction.
+9. Expose the selected common direction as live metadata for capture guidance. This angle does not participate in semantic draft equality, stabilization identity, commit eligibility, or scoring.
 
 Individual two- or three-member least-squares row angles are **not** separate hard rejection criteria. Detector bounding-box center jitter can move a short-row fitted angle substantially while the common-direction projection and complete partition remain stable.
 

@@ -32,6 +32,8 @@ Correct the target-device Recognition failure where valid meld observations rema
 - Preserve top-to-bottom group ordering, left-to-right member ordering, concealed-kan reconstruction, chi/pon/open-kan interpretation, and downstream correction/scoring boundaries.
 - Keep a deterministic regression fixture using the exact five meld bboxes from `mjtensu-recognition-debug-2026-08-27T17-37-35-246Z.json`; it must reconstruct `7m 8m 9m` plus `1p 1p`.
 - Add boundary coverage at `±45°` and keep a synthetic `50°` layout non-committable.
+- Expose the selected stable common meld-row angle as live snapshot metadata without adding it to semantic stabilization equality or commit eligibility.
+- Add non-blocking capture guidance: show `牌の並びを水平にすると認識が安定します` after three consecutive frames above `30°`; once visible, clear only after three consecutive frames below `25°`. Missing/unstable angle frames reset the pending transition counter but do not clear an already-visible warning.
 - Re-deploy and repeat the physical target-device arrangement before closing the finding.
 
 ## Done condition
@@ -42,7 +44,7 @@ The captured `3 + 2` meld geometry and deterministic synthetic rows through `±4
 
 From `product/frontend`:
 
-- `npx vitest run test/recognition-semantics.test.ts test/recognition-stabilization.test.ts`
+- `npx vitest run test/recognition-semantics.test.ts test/recognition-stabilization.test.ts test/recognition-page.test.tsx test/recognition-services.test.ts`
 - `npm run typecheck`
 
 Target-device:
@@ -59,7 +61,11 @@ Target-device:
 - That narrow correction passed deterministic verification on 2026-08-28 (`2` files / `16` tests and strict typecheck), but target-device re-verification showed no practical improvement. Those results therefore verify only the removed gate and do not close F-MAJ-11.
 - Follow-up inspection identified the broader failure mode: the original implementation sorts projected observations by `v` and greedily appends to only the current row, then rejects the entire common-angle candidate if any resulting row has fewer than two or more than four members. This makes row assignment order-sensitive and can create singleton rows from bbox-center jitter even when a valid `3 + 2` partition exists.
 - The current correction replaces that greedy cut with bounded common-direction search plus complete-linkage-style `2..4` row-candidate enumeration and exact-cover partition scoring. Common direction is now bounded to `±45°`; individual row fitted angles remain scoring inputs rather than hard gates.
-- `test/recognition-semantics.test.ts` retains the exact five captured meld bboxes and now covers deterministic row reconstruction at `0°`, `±22.5°`, and `±45°`, with `50°` remaining non-committable.
+- `test/recognition-semantics.test.ts` retains the original exact five captured meld bboxes and now covers deterministic row reconstruction at `0°`, `±22.5°`, and `±45°`, with `50°` remaining non-committable.
+- Follow-up target capture `mjtensu-recognition-debug-2026-08-28T13-55-32-749Z` provides a second exact `7m 8m 9m` / `1p 1p` geometry whose stable selected common direction is above `30°`; that geometry is also pinned as a regression fixture so live tilt guidance is anchored to observed device geometry rather than only synthetic rows.
 - 2026-08-28 deterministic verification of the expanded correction: `npx vitest run test/recognition-semantics.test.ts test/recognition-stabilization.test.ts` — **PASS**, 2 files / 18 tests (`recognition-semantics`: 14, `recognition-stabilization`: 4).
 - 2026-08-28 strict typecheck: `npm run typecheck` — **PASS** (`tsconfig.app.json` and `tsconfig.test.json`, no errors).
-- Desktop/deterministic T14 gates are complete for the rewritten grouping algorithm. T14 remains `in_progress` only for target-device re-deployment and physical meld-row re-verification.
+- Follow-up capture-guidance correction exposes the selected stable common angle on each non-empty meld snapshot and adds the non-blocking `>30° x3` show / `<25° x3` clear hysteresis. Missing common-angle frames reset only the pending transition counter and never change recognition eligibility.
+- 2026-08-29 deterministic verification of the capture-guidance follow-up: `npx vitest run test/recognition-semantics.test.ts test/recognition-stabilization.test.ts test/recognition-page.test.tsx test/recognition-services.test.ts` — **PASS**, 4 files / 48 tests (`recognition-semantics`: 15, `recognition-stabilization`: 4, `recognition-page`: 13, `recognition-services`: 16).
+- 2026-08-29 strict typecheck after the guidance follow-up: `npm run typecheck` — **PASS** (`tsconfig.app.json` and `tsconfig.test.json`, no errors).
+- Desktop/deterministic gates are complete for the grouping rewrite and non-blocking tilt guidance. T14 remains `in_progress` only for target-device re-deployment and physical warning/grouping re-verification.

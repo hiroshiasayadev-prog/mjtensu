@@ -83,6 +83,8 @@ For each current meld group, the output provides at least:
 - geometry sufficient to connect the member bounding-box centers in the visible preview;
 - an inferred meld interpretation when the observed identities make one unambiguous.
 
+For a non-empty stable meld partition, the frame output also exposes the selected common meld-row angle as live guidance metadata. It is not part of the recognized semantic structure, stabilization equality, commit eligibility, or scoring input.
+
 A two-member group containing the same base tile identity is interpreted as the visible evidence for a concealed kan. The recognition structure represents it as one logical concealed-kan meld even though only the two face-up tiles produced detector boxes.
 
 For a three- or four-member group, chi/pon/open-kan interpretation may be attached when it follows unambiguously from the observed identities. A geometrically reconstructed group is not rejected merely because its current tile identities do not form a legal scoring meld; correction and scoring validity belong downstream.

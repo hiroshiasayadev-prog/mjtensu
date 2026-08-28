@@ -22,11 +22,14 @@ export function buildFrameRecognitionSnapshot(
   );
   const grouping = groupMeldObservations(meldObservations);
   const meldGroups = grouping.kind === 'stable' ? grouping.groups : [];
+  const meldCommonAngleRadians =
+    grouping.kind === 'stable' ? grouping.commonAngleRadians : null;
   const commitEligibility = determineEligibility(observations, grouping.kind);
 
   return {
     observations,
     meldGroups,
+    meldCommonAngleRadians,
     draft: {
       completedHand,
       doraIndicators,
