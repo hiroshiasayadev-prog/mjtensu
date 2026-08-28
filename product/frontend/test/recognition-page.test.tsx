@@ -212,13 +212,14 @@ describe('RecognitionPageView preparation and capture surface', () => {
 
     const viewport = screen.getByTestId('recognition-viewport');
     const captureSurface = screen.getByTestId('recognition-capture-surface');
+    const landscapeUi = screen.getByTestId('recognition-landscape-ui-surface');
     expect(viewport.style.position).toBe('fixed');
     expect(viewport.style.inset).toBe('0px');
     expect(captureSurface.style.width).toBe('min(100vw, 177.7778dvh)');
     expect(captureSurface.style.height).toBe('min(100dvh, 56.25vw)');
     const exitButton = screen.getByRole('button', { name: '認識を終了' });
     expect(exitButton).toBeVisible();
-    expect(exitButton.parentElement).toBe(viewport);
+    expect(exitButton.parentElement).toBe(landscapeUi);
     expect(exitButton.style.position).toBe('absolute');
     expect(exitButton.style.zIndex).toBe('200');
   });
@@ -349,7 +350,7 @@ describe('RecognitionPageView preparation and capture surface', () => {
     expect(screen.queryByText(/端末を横向きにしてください/)).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('認識しています');
     const globalExit = screen.getByTestId('recognition-global-exit');
-    expect(globalExit.parentElement).toBe(screen.getByTestId('recognition-viewport'));
+    expect(globalExit.parentElement).toBe(landscapeUi);
 
     expect(recognizer.getSource()?.captureLatest()).toEqual({
       source: cameraSession.portraitLockedFrame.image,
@@ -378,7 +379,7 @@ describe('RecognitionPageView preparation and capture surface', () => {
     expect(landscapeUi.style.height).toBe('100%');
     expect(landscapeUi.style.transform).toBe('');
     expect(globalExit).toBeVisible();
-    expect(globalExit.parentElement).toBe(screen.getByTestId('recognition-viewport'));
+    expect(globalExit.parentElement).toBe(landscapeUi);
     expect(handRegion.style.left).toBe('4%');
     expect(handRegion.style.top).toBe('50%');
     expect(handRegion.style.width).toBe('62%');
@@ -393,6 +394,46 @@ describe('RecognitionPageView preparation and capture surface', () => {
       aspectRatio: '16:9',
       rotation: 0,
     });
+  });
+
+  it('keeps global controls on the logical landscape surface across viewport rotation', async () => {
+    setViewportSize(390, 844);
+    const cameraSession = createCameraSession();
+    const recognizer = createRecognizerHarness();
+    const runtime: RecognitionRuntime = {
+      ...createRuntime(),
+      requestDebugCapture: vi.fn(async () => {
+        throw new Error('not used');
+      }),
+    };
+
+    renderView({
+      camera: { open: async () => cameraSession.session },
+      runtime,
+      recognizer: recognizer.recognizer,
+    });
+
+    await waitFor(() => expect(recognizer.start).toHaveBeenCalledTimes(1));
+
+    const landscapeUi = screen.getByTestId('recognition-landscape-ui-surface');
+    const exit = screen.getByTestId('recognition-global-exit');
+    const debug = screen.getByTestId('recognition-debug-capture');
+    expect(exit).toBeVisible();
+    expect(debug).toBeVisible();
+    expect(exit.parentElement).toBe(landscapeUi);
+    expect(debug.parentElement).toBe(landscapeUi);
+
+    act(() => {
+      setViewportSize(844, 390);
+      window.dispatchEvent(new Event('resize'));
+    });
+
+    await waitFor(() => expect(recognizer.start).toHaveBeenCalledTimes(2));
+    expect(landscapeUi.style.transform).toBe('');
+    expect(exit).toBeVisible();
+    expect(debug).toBeVisible();
+    expect(exit.parentElement).toBe(landscapeUi);
+    expect(debug.parentElement).toBe(landscapeUi);
   });
 });
 

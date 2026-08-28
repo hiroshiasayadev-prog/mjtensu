@@ -368,49 +368,6 @@ export function RecognitionPageView({
         background: '#000',
       }}
     >
-      {runtime.requestDebugCapture === undefined ? null : (
-        <Button
-          aria-label={
-            debugCaptureFile === null ? '認識デバッグを採取' : '認識デバッグを保存'
-          }
-          data-testid="recognition-debug-capture"
-          size="compact-sm"
-          variant="light"
-          disabled={debugCaptureStatus === 'capturing'}
-          onClick={handleDebugCapture}
-          style={{
-            position: 'absolute',
-            top: 'max(10px, env(safe-area-inset-top))',
-            left: 'max(10px, env(safe-area-inset-left))',
-            zIndex: 200,
-            pointerEvents: 'auto',
-            touchAction: 'manipulation',
-            background: 'rgba(255,255,255,0.92)',
-          }}
-        >
-          {debugCaptureButtonLabel(debugCaptureStatus)}
-        </Button>
-      )}
-
-      <Button
-        aria-label="認識を終了"
-        data-testid="recognition-global-exit"
-        size="compact-sm"
-        variant="light"
-        onClick={onAbandon}
-        style={{
-          position: 'absolute',
-          top: 'max(10px, env(safe-area-inset-top))',
-          right: 'max(10px, env(safe-area-inset-right))',
-          zIndex: 200,
-          pointerEvents: 'auto',
-          touchAction: 'manipulation',
-          background: 'rgba(255,255,255,0.92)',
-        }}
-      >
-        終了
-      </Button>
-
       <Box
         data-testid="recognition-capture-surface"
         style={{
@@ -448,6 +405,49 @@ export function RecognitionPageView({
             pointerEvents: 'auto',
           }}
         >
+          {runtime.requestDebugCapture === undefined ? null : (
+            <Button
+              aria-label={
+                debugCaptureFile === null ? '認識デバッグを採取' : '認識デバッグを保存'
+              }
+              data-testid="recognition-debug-capture"
+              size="compact-sm"
+              variant="light"
+              disabled={debugCaptureStatus === 'capturing'}
+              onClick={handleDebugCapture}
+              style={{
+                position: 'absolute',
+                top: 'max(10px, env(safe-area-inset-top))',
+                left: 'max(10px, env(safe-area-inset-left))',
+                zIndex: 200,
+                pointerEvents: 'auto',
+                touchAction: 'manipulation',
+                background: 'rgba(255,255,255,0.92)',
+              }}
+            >
+              {debugCaptureButtonLabel(debugCaptureStatus)}
+            </Button>
+          )}
+
+          <Button
+            aria-label="認識を終了"
+            data-testid="recognition-global-exit"
+            size="compact-sm"
+            variant="light"
+            onClick={onAbandon}
+            style={{
+              position: 'absolute',
+              top: 'max(10px, env(safe-area-inset-top))',
+              right: 'max(10px, env(safe-area-inset-right))',
+              zIndex: 200,
+              pointerEvents: 'auto',
+              touchAction: 'manipulation',
+              background: 'rgba(255,255,255,0.92)',
+            }}
+          >
+            終了
+          </Button>
+
           <CaptureRegionOverlay
             snapshot={snapshot}
             regions={RECOGNITION_CAPTURE_REGIONS}
