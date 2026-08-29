@@ -513,6 +513,7 @@ describe('RecognitionPageView preparation and capture surface', () => {
     expect(timings.style.left).toBe('4%');
     expect(timings.style.right).toBe('4%');
     expect(timings.style.gridTemplateColumns).toBe('repeat(3, minmax(0, 1fr))');
+    expect(timings.style.gridTemplateRows).toBe('repeat(4, auto)');
     expect(debugActions.parentElement).toBe(debugControls);
     expect(debugActions.style.top).toBe('18%');
     expect(debugActions.style.left).toBe('72%');
@@ -524,6 +525,8 @@ describe('RecognitionPageView preparation and capture surface', () => {
     expect(screen.getByTestId('recognition-debug-capture')).toHaveTextContent(
       '診断JSON採取',
     );
+    expect(timings).toHaveTextContent(/candidates:\s*---/);
+    expect(timings).toHaveTextContent(/red5 candidates:\s*---/);
     expect(timings).toHaveTextContent(/detector preprocessing:\s*--- ms/);
 
     expect(recognizer.getSource()?.captureLatest()).toEqual({
@@ -544,6 +547,8 @@ describe('RecognitionPageView preparation and capture surface', () => {
       });
     });
 
+    expect(timings).toHaveTextContent(/candidates:\s*12/);
+    expect(timings).toHaveTextContent(/red5 candidates:\s*2/);
     expect(timings).toHaveTextContent(/detector preprocessing:\s*1.1 ms/);
     expect(timings).toHaveTextContent(/detector inference:\s*2.2 ms/);
     expect(timings).toHaveTextContent(/postprocess:\s*3.3 ms/);

@@ -675,7 +675,7 @@ function RecognitionDebugControls({
           right: '4%',
           display: 'grid',
           gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-          gridTemplateRows: 'repeat(3, auto)',
+          gridTemplateRows: 'repeat(4, auto)',
           columnGap: 12,
           rowGap: 2,
           boxSizing: 'border-box',
@@ -1408,8 +1408,12 @@ function recognitionTimingItems(
 ): ReadonlyArray<readonly [label: string, value: string]> {
   const value = (milliseconds: number | undefined) =>
     milliseconds === undefined ? '--- ms' : `${milliseconds.toFixed(1)} ms`;
+  const count = (items: number | undefined) =>
+    items === undefined ? '---' : String(items);
 
   return [
+    ['candidates:', count(timing?.candidateCount)],
+    ['red5 candidates:', count(timing?.redFiveCandidateCount)],
     ['detector preprocessing:', value(timing?.detectorPreprocessingMs)],
     ['detector inference:', value(timing?.detectorInferenceMs)],
     ['postprocess:', value(timing?.detectorPostprocessingMs)],

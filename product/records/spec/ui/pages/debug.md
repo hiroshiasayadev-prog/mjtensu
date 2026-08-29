@@ -23,7 +23,7 @@ It reuses the production camera and recognition runtime so performance observati
 Camera and recognition-runtime preparation follow the same parallel startup and owner-specific recovery behavior as production Recognition.
 Realtime recognition continues for diagnostics instead of transitioning to Conditions after a stable structure is confirmed. After a confirmation, stabilization is reset and evaluation continues.
 
-The latest completed evaluation timing is shown continuously for these nine values: detector preprocessing, detector inference, postprocess, crop extraction, base preprocessing, base inference, red5 preprocessing, red5 inference, and total. On the Debug surface they are arranged compactly across the upper unused strip, normally as a three-column by three-row grid rather than a single vertical list.
+The latest completed evaluation diagnostics are shown continuously for eleven values: candidate count, red5 candidate count, detector preprocessing, detector inference, postprocess, crop extraction, base preprocessing, base inference, red5 preprocessing, red5 inference, and total. On the Debug surface they are arranged compactly across the upper unused strip, normally as a three-column grid spanning up to four rows rather than a single vertical list.
 
 Before the first completed evaluation, timing values may be shown as unavailable placeholders.
 Values are diagnostics only and must not alter recognition behavior.
@@ -31,7 +31,7 @@ Values are diagnostics only and must not alter recognition behavior.
 ## Actions
 
 - `終了` returns to Top and tears down the page-owned camera/realtime run in the same way as production Recognition abandonment.
-- The timing telemetry uses the long unused strip above the recognition regions on the logical-landscape surface. The nine values may wrap into two or three horizontal rows so they remain compact and do not overlap the recognition regions.
+- The diagnostic telemetry uses the long unused strip above the recognition regions on the logical-landscape surface. Candidate counts and timing values may wrap across up to four compact rows so they remain readable and do not overlap the recognition regions.
 - `終了` and the diagnostic JSON action are placed together in the unused space directly above the meld region rather than being forced into the timing strip.
 - The timing telemetry and both actions live on the same logical-landscape surface as the existing portrait-locked production UI, so they rotate together with the recognition overlay.
 - Diagnostic JSON capture/save is available on Debug when supported by the recognition runtime.
