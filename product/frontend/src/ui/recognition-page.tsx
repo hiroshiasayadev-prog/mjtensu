@@ -461,20 +461,28 @@ export function RecognitionPageView({
             pointerEvents: 'auto',
           }}
         >
-          {debugMode ? null : (
-            <Box
-              data-testid="recognition-global-controls-layer"
-              style={{
-                display: 'flex',
-                justifyContent: 'flex-end',
-                alignItems: 'flex-start',
-                width: '100%',
-                boxSizing: 'border-box',
-                padding: 10,
-                pointerEvents: 'none',
-                zIndex: 200,
-              }}
-            >
+          <Box
+            data-testid="recognition-global-controls-layer"
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              alignItems: 'flex-start',
+              width: '100%',
+              boxSizing: 'border-box',
+              padding: 10,
+              pointerEvents: 'none',
+              zIndex: 200,
+            }}
+          >
+            {debugMode ? (
+              <RecognitionDebugControls
+                captureAvailable={runtime.requestDebugCapture !== undefined}
+                captureStatus={debugCaptureStatus}
+                onCapture={handleDebugCapture}
+                onExit={onAbandon}
+                timing={latestEvaluationTiming}
+              />
+            ) : (
               <button
                 aria-label="認識を終了"
                 data-testid="recognition-global-exit"
@@ -484,8 +492,8 @@ export function RecognitionPageView({
               >
                 終了
               </button>
-            </Box>
-          )}
+            )}
+          </Box>
 
           <CaptureRegionOverlay
             snapshot={snapshot}
@@ -551,16 +559,6 @@ export function RecognitionPageView({
           </Box>
           ) : null}
         </Box>
-
-        {debugMode ? (
-          <RecognitionDebugControls
-            captureAvailable={runtime.requestDebugCapture !== undefined}
-            captureStatus={debugCaptureStatus}
-            onCapture={handleDebugCapture}
-            onExit={onAbandon}
-            timing={latestEvaluationTiming}
-          />
-        ) : null}
       </Box>
     </Box>
   );
@@ -662,14 +660,10 @@ function RecognitionDebugControls({
     <Box
       data-testid="recognition-debug-controls"
       style={{
-        position: 'absolute',
-        top: 'max(10px, env(safe-area-inset-top))',
-        right: 'max(10px, env(safe-area-inset-right))',
-        zIndex: 300,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'flex-end',
-        gap: 8,
+        gap: 6,
         pointerEvents: 'none',
       }}
     >
@@ -691,8 +685,8 @@ function RecognitionDebugControls({
           background: 'rgba(0,0,0,0.68)',
           color: '#fff',
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-          fontSize: 10,
-          lineHeight: 1.4,
+          fontSize: 9,
+          lineHeight: 1.25,
           textAlign: 'left',
           whiteSpace: 'pre',
           pointerEvents: 'none',

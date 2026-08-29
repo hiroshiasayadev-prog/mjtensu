@@ -13,7 +13,8 @@ It reuses the production camera and recognition runtime so performance observati
 ## Entry and presentation
 
 - Top exposes a small, low-prominence `debug` link at the bottom-right.
-- Debug uses only the portrait-locked capture presentation. It does not switch to the ordinary landscape viewport presentation when the browser viewport becomes landscape.
+- Debug uses the same presentation as production Recognition while the smartphone viewport is portrait-locked: a `9:16` camera surface with the existing logical-landscape `16:9` recognition UI quarter-turned over it.
+- Debug does not introduce a separate portrait-native recognition UI and does not provide a second landscape-layout variant.
 - The camera preview and fixed semantic recognition regions remain the same recognition input geometry used by production Recognition.
 - The Debug route does not create or replace a scoring session.
 
@@ -42,7 +43,7 @@ Values are diagnostics only and must not alter recognition behavior.
 ## Actions
 
 - `終了` returns to Top and tears down the page-owned camera/realtime run in the same way as production Recognition abandonment.
-- The timing block is placed below `終了` in the portrait Debug controls.
+- `終了`, the timing block, and diagnostic JSON action live on the same logical-landscape controls surface as the existing portrait-locked production UI, so they rotate together; the timing block is directly below `終了`.
 - Diagnostic JSON capture/save is available on Debug when supported by the recognition runtime.
 - Diagnostic JSON capture/save and continuous timing telemetry are not exposed on the production Recognition surface.
 

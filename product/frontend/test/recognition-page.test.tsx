@@ -489,13 +489,21 @@ describe('RecognitionPageView preparation and capture surface', () => {
     await waitFor(() => expect(recognizer.start).toHaveBeenCalledTimes(1));
 
     const captureSurface = screen.getByTestId('recognition-capture-surface');
+    const landscapeUi = screen.getByTestId('recognition-landscape-ui-surface');
+    const controlsLayer = screen.getByTestId('recognition-global-controls-layer');
     const debugControls = screen.getByTestId('recognition-debug-controls');
     const debugExit = screen.getByTestId('recognition-debug-exit');
     const timings = screen.getByTestId('recognition-debug-timings');
     expect(captureSurface.style.width).toBe('min(100vw, 56.25dvh)');
     expect(captureSurface.style.height).toBe('min(100dvh, 177.7778vw)');
     expect(captureSurface.style.aspectRatio).toBe('9 / 16');
-    expect(screen.queryByTestId('recognition-global-controls-layer')).not.toBeInTheDocument();
+    expect(landscapeUi.style.width).toBe('177.7778%');
+    expect(landscapeUi.style.height).toBe('56.25%');
+    expect(landscapeUi.style.transform).toBe(
+      'translate(-50%, -50%) rotate(90deg)',
+    );
+    expect(controlsLayer.parentElement).toBe(landscapeUi);
+    expect(debugControls.parentElement).toBe(controlsLayer);
     expect(debugExit.parentElement).toBe(debugControls);
     expect(timings.parentElement).toBe(debugControls);
     expect(screen.getByTestId('recognition-debug-capture')).toHaveTextContent(
