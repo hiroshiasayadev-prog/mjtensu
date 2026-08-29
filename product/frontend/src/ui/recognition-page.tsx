@@ -461,28 +461,28 @@ export function RecognitionPageView({
             pointerEvents: 'auto',
           }}
         >
-          <Box
-            data-testid="recognition-global-controls-layer"
-            style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              alignItems: 'flex-start',
-              width: '100%',
-              boxSizing: 'border-box',
-              padding: 10,
-              pointerEvents: 'none',
-              zIndex: 200,
-            }}
-          >
-            {debugMode ? (
-              <RecognitionDebugControls
-                captureAvailable={runtime.requestDebugCapture !== undefined}
-                captureStatus={debugCaptureStatus}
-                onCapture={handleDebugCapture}
-                onExit={onAbandon}
-                timing={latestEvaluationTiming}
-              />
-            ) : (
+          {debugMode ? (
+            <RecognitionDebugControls
+              captureAvailable={runtime.requestDebugCapture !== undefined}
+              captureStatus={debugCaptureStatus}
+              onCapture={handleDebugCapture}
+              onExit={onAbandon}
+              timing={latestEvaluationTiming}
+            />
+          ) : (
+            <Box
+              data-testid="recognition-global-controls-layer"
+              style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                alignItems: 'flex-start',
+                width: '100%',
+                boxSizing: 'border-box',
+                padding: 10,
+                pointerEvents: 'none',
+                zIndex: 200,
+              }}
+            >
               <button
                 aria-label="認識を終了"
                 data-testid="recognition-global-exit"
@@ -492,8 +492,8 @@ export function RecognitionPageView({
               >
                 終了
               </button>
-            )}
-          </Box>
+            </Box>
+          )}
 
           <CaptureRegionOverlay
             snapshot={snapshot}
@@ -660,54 +660,89 @@ function RecognitionDebugControls({
     <Box
       data-testid="recognition-debug-controls"
       style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-end',
-        gap: 6,
+        position: 'absolute',
+        inset: 0,
+        zIndex: 200,
         pointerEvents: 'none',
       }}
     >
-      <button
-        aria-label="認識を終了"
-        data-testid="recognition-debug-exit"
-        onClick={onExit}
-        style={RECOGNITION_GLOBAL_CONTROL_STYLE}
-        type="button"
-      >
-        終了
-      </button>
-      <pre
+      <Box
         data-testid="recognition-debug-timings"
         style={{
-          margin: 0,
-          padding: '7px 8px',
+          position: 'absolute',
+          top: '2.5%',
+          left: '4%',
+          right: '4%',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+          gridTemplateRows: 'repeat(3, auto)',
+          columnGap: 12,
+          rowGap: 2,
+          boxSizing: 'border-box',
+          padding: '5px 8px',
           borderRadius: 5,
-          background: 'rgba(0,0,0,0.68)',
+          background: 'rgba(0,0,0,0.62)',
           color: '#fff',
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
           fontSize: 9,
-          lineHeight: 1.25,
-          textAlign: 'left',
-          whiteSpace: 'pre',
+          lineHeight: 1.2,
           pointerEvents: 'none',
         }}
       >
-        {formatRecognitionTiming(timing)}
-      </pre>
-      {captureAvailable ? (
+        {recognitionTimingItems(timing).map(([label, value]) => (
+          <Box
+            key={label}
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 6,
+              minWidth: 0,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <span>{label}</span>
+            <span>{value}</span>
+          </Box>
+        ))}
+      </Box>
+
+      <Box
+        data-testid="recognition-debug-actions"
+        style={{
+          position: 'absolute',
+          top: '18%',
+          left: '72%',
+          width: '24%',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: 6,
+          pointerEvents: 'none',
+        }}
+      >
         <button
-          aria-label={
-            captureStatus === 'ready' ? '診断JSONを保存' : '診断JSONを採取'
-          }
-          data-testid="recognition-debug-capture"
-          disabled={captureStatus === 'capturing'}
-          onClick={onCapture}
+          aria-label="認識を終了"
+          data-testid="recognition-debug-exit"
+          onClick={onExit}
           style={RECOGNITION_GLOBAL_CONTROL_STYLE}
           type="button"
         >
-          {debugCaptureButtonLabel(captureStatus)}
+          終了
         </button>
-      ) : null}
+        {captureAvailable ? (
+          <button
+            aria-label={
+              captureStatus === 'ready' ? '診断JSONを保存' : '診断JSONを採取'
+            }
+            data-testid="recognition-debug-capture"
+            disabled={captureStatus === 'capturing'}
+            onClick={onCapture}
+            style={RECOGNITION_GLOBAL_CONTROL_STYLE}
+            type="button"
+          >
+            {debugCaptureButtonLabel(captureStatus)}
+          </button>
+        ) : null}
+      </Box>
     </Box>
   );
 }
@@ -1368,25 +1403,23 @@ function readLatestEvaluationTiming(
   }
 }
 
-function formatRecognitionTiming(
+function recognitionTimingItems(
   timing: RecognitionEvaluationTiming | null,
-): string {
+): ReadonlyArray<readonly [label: string, value: string]> {
   const value = (milliseconds: number | undefined) =>
     milliseconds === undefined ? '--- ms' : `${milliseconds.toFixed(1)} ms`;
-  const line = (label: string, milliseconds: number | undefined) =>
-    `${`${label}:`.padEnd(24, ' ')}${value(milliseconds)}`;
 
   return [
-    line('detector preprocessing', timing?.detectorPreprocessingMs),
-    line('detector inference', timing?.detectorInferenceMs),
-    line('postprocess', timing?.detectorPostprocessingMs),
-    line('crop extraction', timing?.cropExtractionMs),
-    line('base preprocessing', timing?.baseClassifierPreprocessingMs),
-    line('base inference', timing?.baseClassifierInferenceMs),
-    line('red5 preprocessing', timing?.redFiveClassifierPreprocessingMs),
-    line('red5 inference', timing?.redFiveClassifierInferenceMs),
-    line('total', timing?.totalMs),
-  ].join('\n');
+    ['detector preprocessing:', value(timing?.detectorPreprocessingMs)],
+    ['detector inference:', value(timing?.detectorInferenceMs)],
+    ['postprocess:', value(timing?.detectorPostprocessingMs)],
+    ['crop extraction:', value(timing?.cropExtractionMs)],
+    ['base preprocessing:', value(timing?.baseClassifierPreprocessingMs)],
+    ['base inference:', value(timing?.baseClassifierInferenceMs)],
+    ['red5 preprocessing:', value(timing?.redFiveClassifierPreprocessingMs)],
+    ['red5 inference:', value(timing?.redFiveClassifierInferenceMs)],
+    ['total:', value(timing?.totalMs)],
+  ];
 }
 
 function getPreparationMessage(

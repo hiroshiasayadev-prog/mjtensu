@@ -454,7 +454,7 @@ describe('RecognitionPageView preparation and capture surface', () => {
     expect(exit.style.transform).toBe('');
   });
 
-  it('forces the portrait capture layout in debug mode and shows the latest evaluation timings below exit', async () => {
+  it('forces the portrait capture layout in debug mode and places timings above the recognition regions with actions above melds', async () => {
     setViewportSize(844, 390);
     const cameraSession = createCameraSession();
     const recognizer = createRecognizerHarness();
@@ -490,8 +490,8 @@ describe('RecognitionPageView preparation and capture surface', () => {
 
     const captureSurface = screen.getByTestId('recognition-capture-surface');
     const landscapeUi = screen.getByTestId('recognition-landscape-ui-surface');
-    const controlsLayer = screen.getByTestId('recognition-global-controls-layer');
     const debugControls = screen.getByTestId('recognition-debug-controls');
+    const debugActions = screen.getByTestId('recognition-debug-actions');
     const debugExit = screen.getByTestId('recognition-debug-exit');
     const timings = screen.getByTestId('recognition-debug-timings');
     expect(captureSurface.style.width).toBe('min(100vw, 56.25dvh)');
@@ -502,14 +502,29 @@ describe('RecognitionPageView preparation and capture surface', () => {
     expect(landscapeUi.style.transform).toBe(
       'translate(-50%, -50%) rotate(90deg)',
     );
-    expect(controlsLayer.parentElement).toBe(landscapeUi);
-    expect(debugControls.parentElement).toBe(controlsLayer);
-    expect(debugExit.parentElement).toBe(debugControls);
+    expect(
+      screen.queryByTestId('recognition-global-controls-layer'),
+    ).not.toBeInTheDocument();
+    expect(debugControls.parentElement).toBe(landscapeUi);
+    expect(debugControls.style.position).toBe('absolute');
+    expect(debugControls.style.inset).toBe('0px');
     expect(timings.parentElement).toBe(debugControls);
+    expect(timings.style.top).toBe('2.5%');
+    expect(timings.style.left).toBe('4%');
+    expect(timings.style.right).toBe('4%');
+    expect(timings.style.gridTemplateColumns).toBe('repeat(3, minmax(0, 1fr))');
+    expect(debugActions.parentElement).toBe(debugControls);
+    expect(debugActions.style.top).toBe('18%');
+    expect(debugActions.style.left).toBe('72%');
+    expect(debugActions.style.width).toBe('24%');
+    expect(debugExit.parentElement).toBe(debugActions);
+    expect(screen.getByTestId('recognition-debug-capture').parentElement).toBe(
+      debugActions,
+    );
     expect(screen.getByTestId('recognition-debug-capture')).toHaveTextContent(
       '診断JSON採取',
     );
-    expect(timings).toHaveTextContent('detector preprocessing: --- ms');
+    expect(timings).toHaveTextContent(/detector preprocessing:\s*--- ms/);
 
     expect(recognizer.getSource()?.captureLatest()).toEqual({
       source: cameraSession.portraitLockedFrame.image,
@@ -529,15 +544,15 @@ describe('RecognitionPageView preparation and capture surface', () => {
       });
     });
 
-    expect(timings).toHaveTextContent('detector preprocessing: 1.1 ms');
-    expect(timings).toHaveTextContent('detector inference: 2.2 ms');
-    expect(timings).toHaveTextContent('postprocess: 3.3 ms');
-    expect(timings).toHaveTextContent('crop extraction: 4.4 ms');
-    expect(timings).toHaveTextContent('base preprocessing: 5.5 ms');
-    expect(timings).toHaveTextContent('base inference: 6.6 ms');
-    expect(timings).toHaveTextContent('red5 preprocessing: 7.7 ms');
-    expect(timings).toHaveTextContent('red5 inference: 8.8 ms');
-    expect(timings).toHaveTextContent('total: 42.1 ms');
+    expect(timings).toHaveTextContent(/detector preprocessing:\s*1.1 ms/);
+    expect(timings).toHaveTextContent(/detector inference:\s*2.2 ms/);
+    expect(timings).toHaveTextContent(/postprocess:\s*3.3 ms/);
+    expect(timings).toHaveTextContent(/crop extraction:\s*4.4 ms/);
+    expect(timings).toHaveTextContent(/base preprocessing:\s*5.5 ms/);
+    expect(timings).toHaveTextContent(/base inference:\s*6.6 ms/);
+    expect(timings).toHaveTextContent(/red5 preprocessing:\s*7.7 ms/);
+    expect(timings).toHaveTextContent(/red5 inference:\s*8.8 ms/);
+    expect(timings).toHaveTextContent(/total:\s*42.1 ms/);
 
     act(() => {
       recognizer.getListener()?.onUpdate({
