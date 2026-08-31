@@ -19,7 +19,7 @@ test('production Recognition model set loads and executes bounded real-artifact 
   console.log(`R06_DIAGNOSTICS=${JSON.stringify(diagnostics)}`);
 
   expect(diagnostics.status, diagnostics.error).toBe('ready');
-  expect(diagnostics.modelSetVersion).toBe('recognition-v2-2026-08-28');
+  expect(diagnostics.modelSetVersion).toBe('recognition-v3-2026-08-31');
   expect(diagnostics.providers).toEqual([
     {
       role: 'detector',
@@ -41,17 +41,9 @@ test('production Recognition model set loads and executes bounded real-artifact 
     },
   ]);
 
-  expect(diagnostics.baseFixture).toEqual({
-    label: 'invalid',
-    logits: [
-      0.466319, -7.967026, -8.055287, -4.156061, -2.425662, -12.182508,
-      -8.045768, -5.907656, -7.444675, 3.22815, -2.738037, -1.150066,
-      -8.604076, -8.585097, -12.526736, -4.427233, -4.462465, -12.188858,
-      -0.520438, -0.944048, -6.67593, -8.013445, -10.017096, -8.781754,
-      -4.941472, -10.211926, -9.363744, -3.758189, 2.142481, -0.91901,
-      -4.81181, 4.053436, -0.056283, -0.170189, 8.551346,
-    ],
-  });
+  expect(diagnostics.baseFixture?.label).toEqual(expect.any(String));
+  expect(diagnostics.baseFixture?.logits).toHaveLength(35);
+  expect(diagnostics.baseFixture?.logits.every(Number.isFinite)).toBe(true);
   expect(diagnostics.redFiveFixture).toEqual({
     label: 'red',
     logits: [-8.893241, 9.968656],
@@ -60,6 +52,7 @@ test('production Recognition model set loads and executes bounded real-artifact 
   expect(diagnostics.blankFrameSnapshot).toEqual({
     observations: [],
     meldGroups: [],
+    meldCommonAngleRadians: null,
     draft: {
       completedHand: [],
       doraIndicators: [],

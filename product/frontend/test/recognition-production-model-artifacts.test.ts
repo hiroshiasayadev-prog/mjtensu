@@ -21,10 +21,11 @@ const expectedModels = {
       '.local/recognition/nanodet_runs/E1_plus_m_320_real_capture_ft10_l10_seed42/model_best',
   },
   'tile-classifier': {
-    artifact: 'tile-c8-gray35-v3-jp189.onnx',
-    sha256: 'b8a8fa3ff6c6d1e944a7593fa0afc947e0cd2513fb79ca46e5f8fcd6e19c97d0',
-    bytes: 6261185,
+    artifact: 'tile-plain-gray35-random360-e150.onnx',
+    sha256: '553d1a65b6f3a12be7de53e5c83a889df5a0e296d8957b14bf18e8d601442018',
+    bytes: 1495802,
     runtimeSpec: 'c8-tile-35-v1',
+    sourceRun: '.local/recognition/plain_random360_epoch_sweep/e150/plain-random360',
   },
   'red-five-classifier': {
     artifact: 'red-five-c8-rgb-warmaug.onnx',
@@ -40,7 +41,7 @@ describe('production Recognition model artifacts', () => {
       PRODUCTION_RECOGNITION_MODEL_SET,
     );
     expect(PRODUCTION_RECOGNITION_MODEL_SET.modelSetVersion).toBe(
-      'recognition-v2-2026-08-28',
+      'recognition-v3-2026-08-31',
     );
 
     for (const [role, expected] of Object.entries(expectedModels)) {
