@@ -22,6 +22,7 @@ import {
   type ScoringSessionCalculation,
   type ScoringSessionService,
 } from '@/application';
+import { PRODUCTION_RECOGNITION_MODEL_SET } from '@/recognition';
 
 import { useApplicationStore } from './application-state';
 import { ConditionsPageView } from './conditions-page';
@@ -118,6 +119,20 @@ export function TopPage() {
           使い方
         </Button>
       </Stack>
+
+      <Text
+        c="dimmed"
+        data-testid="top-model-set-version"
+        size="xs"
+        style={{
+          position: 'fixed',
+          left: 'max(10px, env(safe-area-inset-left))',
+          bottom: 'max(8px, env(safe-area-inset-bottom))',
+          fontSize: 9,
+        }}
+      >
+        {PRODUCTION_RECOGNITION_MODEL_SET.modelSetVersion}
+      </Text>
 
       <Text
         component={RouterLink}

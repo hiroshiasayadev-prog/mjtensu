@@ -184,6 +184,17 @@ describe('production shell routing', () => {
     expect(screen.getByRole('button', { name: '戻る' })).toBeVisible();
   });
 
+  it('shows the active Recognition model-set version at the bottom-left of Top', () => {
+    renderRoute('/');
+
+    const version = screen.getByTestId('top-model-set-version');
+    expect(version).toBeVisible();
+    expect(version).toHaveTextContent('recognition-v3-2026-08-31');
+    expect(version.style.position).toBe('fixed');
+    expect(version.style.left).not.toBe('');
+    expect(version.style.bottom).not.toBe('');
+  });
+
   it('exposes the debug route as a small link from the bottom-right of Top', () => {
     renderRoute('/');
 
