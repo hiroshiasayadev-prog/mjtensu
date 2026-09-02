@@ -21,7 +21,7 @@ camera frame
   -> region assignment
   -> detector-duplicate suppression
   -> candidate crop extraction
-  -> grayscale C8 35-class classification
+  -> grayscale 35-class base classification
        -> 34 base tile identities
        -> invalid/background
   -> RGB red-five classification for base 5m / 5p / 5s only
@@ -32,7 +32,7 @@ camera frame
   -> temporal stabilization
 ```
 
-There is no separate invalid/background classifier stage. The selected grayscale C8 base classifier has 35 outcomes: the 34 ordinary riichi tile identities plus one invalid/background outcome.
+There is no separate invalid/background classifier stage. The selected grayscale base classifier has 35 outcomes: the 34 ordinary riichi tile identities plus one invalid/background outcome.
 Candidates classified as invalid/background do not become recognized tiles.
 
 The red-five specialist runs only after the base classifier identifies `5m`, `5p`, or `5s`. It refines that base identity to ordinary-five or red-five identity.

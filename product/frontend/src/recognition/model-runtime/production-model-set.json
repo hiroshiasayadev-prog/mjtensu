@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "modelSetVersion": "recognition-v3-2026-08-31",
+  "modelSetVersion": "recognition-v4-2026-09-02",
   "models": {
     "detector": {
       "role": "detector",
@@ -15,9 +15,9 @@
     },
     "tile-classifier": {
       "role": "tile-classifier",
-      "url": "tile-plain-gray35-random360-e150.onnx?sha256=553d1a65b6f3a12be7de53e5c83a889df5a0e296d8957b14bf18e8d601442018",
-      "sha256": "553d1a65b6f3a12be7de53e5c83a889df5a0e296d8957b14bf18e8d601442018",
-      "runtimeSpec": "c8-tile-35-v1",
+      "url": "tile-mobilenet-v3-small-1.0x-random360-e150.onnx?sha256=6c93615cf6b7ffcb829ce49e91c9f6557b499aeeae51129cd8411b665331af76",
+      "sha256": "6c93615cf6b7ffcb829ce49e91c9f6557b499aeeae51129cd8411b665331af76",
+      "runtimeSpec": "gray64-tile-35-v1",
       "providerPreference": [
         "wasm-simd",
         "wasm-threaded",

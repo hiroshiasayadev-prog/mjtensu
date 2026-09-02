@@ -54,6 +54,8 @@ For a typical tile crop resized to roughly `32 x 64`, this is on the order of te
 
 `test/recognition-c8-classifier.test.ts` includes the former direct 2D Lanczos algorithm as a test-only reference and checks a nontrivial `5 x 3 -> 4 x 2` resize through the production grayscale preprocessing path with a maximum one-byte difference tolerance.
 
+The RGB red-five path now shares one horizontal/vertical Lanczos contribution table across all three color channels instead of invoking the same resampler independently three times. Its production batch path also keeps the resized image as three channel planes through normalization rather than interleaving RGB bytes and immediately deinterleaving them back into NCHW planes. The exported `preprocessRgbClassifierCrop()` helper retains the existing interleaved RGB contract for tests/callers. A nontrivial RGB resize regression compares all three resized channels against the legacy per-channel 2D Lanczos reference with the same one-byte tolerance.
+
 ## Verification: 2026-09-02
 
 User-executed verification from `product/frontend`:
@@ -61,4 +63,22 @@ User-executed verification from `product/frontend`:
 - `npx vitest run test/recognition-c8-classifier.test.ts test/recognition-services.test.ts` — **PASS**, 2/2 files and 30/30 tests.
 - `npm run typecheck` — **PASS**.
 
-The implementation/regression gates are therefore PASS. Task completion still depends on target-device timing evidence because the Done condition explicitly requires confirming a material iPhone preprocessing reduction or escalating to the Canvas-native resize stage.
+The implementation/regression gates are therefore PASS.
+
+### iPhone evidence after separable grayscale Lanczos
+
+A representative iPhone 13 frame after the separable-Lanczos change measured `18` base candidates with about `23 ms` base preprocessing, versus the earlier `17`-candidate observation at about `161 ms`. This is approximately a sevenfold reduction at a comparable candidate count and confirms that the direct 2D software Lanczos implementation was the dominant base-preprocessing bottleneck. The same frame had one red-five candidate and still measured about `18 ms` red-five preprocessing, motivating the subsequent RGB shared-contribution/planar optimization described above.
+
+The base-preprocessing Done condition is therefore satisfied without moving to Canvas-native resize. Final task closure waits only on one target-device re-measurement of the optimized RGB red-five path so its remaining cost is recorded rather than assumed.
+
+### Verification after RGB shared-resampler implementation
+
+User-executed verification from `product/frontend` after the RGB shared-contribution/planar optimization and MobileNet production wiring:
+
+- focused Vitest set covering classifier preprocessing/runtime, browser model cache, production model artifacts, PWA production assets, and production Recognition services — **PASS**, 6/6 files and 51/51 tests;
+- `npm run typecheck` — **PASS**;
+- `npm run build` — **PASS**, production asset manifest materialized successfully;
+- `npm run build:browser-verification` — **PASS**;
+- `npx playwright test test/e2e/recognition-production-artifacts.spec.ts` — **PASS**, real production detector/base/red-five ONNX artifacts initialized on `wasm-simd` and executed successfully.
+
+The software regression/build/runtime-integrity gates are therefore complete. Only the target-device red-five preprocessing re-measurement remains before closing I15.

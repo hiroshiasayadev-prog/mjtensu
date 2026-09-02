@@ -5,7 +5,7 @@ import type {
   ClassifierTensor,
 } from './classifier/preprocessing';
 import {
-  createC8ClassifierRuntime,
+  createTileClassifierRuntime,
   type ClassifierSession,
 } from './classifier/runtime';
 import {
@@ -114,7 +114,7 @@ export function createProductionRecognitionPipeline(
   const now = dependencies.now ?? monotonicNow;
   const debugCaptureBuilder =
     dependencies.debugCaptureBuilder ?? buildBrowserRecognitionDebugCapture;
-  const classifier = createC8ClassifierRuntime({
+  const classifier = createTileClassifierRuntime({
     baseClassifier: createClassifierSessionAdapter(
       baseClassifier,
       'tile-classifier',

@@ -29,7 +29,7 @@ export interface ClassifierBatchTiming {
   readonly redFiveInferenceMs: number;
 }
 
-export interface C8ClassifierRuntimeOptions {
+export interface TileClassifierRuntimeOptions {
   readonly baseClassifier: ClassifierSession;
   readonly redFiveClassifier: ClassifierSession;
   readonly baseNormalization: ClassifierNormalization;
@@ -38,15 +38,15 @@ export interface C8ClassifierRuntimeOptions {
   readonly now?: () => number;
 }
 
-export interface C8ClassifierRuntime {
+export interface TileClassifierRuntime {
   classify(crop: ClassifierCropImage): Promise<TileClassification>;
   classifyBatch(crops: readonly ClassifierCropImage[]): Promise<readonly TileClassification[]>;
   getLastBatchTiming(): ClassifierBatchTiming | null;
 }
 
-export function createC8ClassifierRuntime(
-  options: C8ClassifierRuntimeOptions,
-): C8ClassifierRuntime {
+export function createTileClassifierRuntime(
+  options: TileClassifierRuntimeOptions,
+): TileClassifierRuntime {
   const imageSize = options.imageSize ?? CLASSIFIER_IMAGE_SIZE;
   const now = options.now ?? monotonicNow;
   let lastBatchTiming: ClassifierBatchTiming | null = null;

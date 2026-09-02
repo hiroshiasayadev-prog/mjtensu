@@ -233,7 +233,7 @@ describe('recognition runtime lifecycle composition', () => {
           },
           {
             role: 'tile-classifier',
-            runtimeSpec: 'c8-tile-35-v1',
+            runtimeSpec: 'gray64-tile-35-v1',
             selectedProvider: 'wasm-simd',
             failedProviders: [],
           },
@@ -691,7 +691,7 @@ function initializedModel(
 ): InitializedRecognitionModel {
   const runtimeSpec = {
     detector: 'nanodet-plus-m-320-v1',
-    'tile-classifier': 'c8-tile-35-v1',
+    'tile-classifier': 'gray64-tile-35-v1',
     'red-five-classifier': 'c8-red-five-v1',
   } as const;
   return {

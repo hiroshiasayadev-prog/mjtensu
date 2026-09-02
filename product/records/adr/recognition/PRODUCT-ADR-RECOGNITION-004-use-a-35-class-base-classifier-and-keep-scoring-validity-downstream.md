@@ -36,7 +36,7 @@ camera frame
   -> semantic-region assignment
   -> detector-duplicate suppression
   -> candidate crop extraction
-  -> grayscale C8 35-class classification
+  -> grayscale 35-class base classification
        -> 34 base tile identities
        -> invalid/background
   -> RGB red-five classification for base 5m / 5p / 5s only
@@ -51,7 +51,7 @@ camera frame
 
 ### Invalid/background is a base-classifier outcome
 
-Use one grayscale C8 base crop classifier whose output vocabulary contains:
+Use one grayscale base crop classifier whose output vocabulary contains:
 
 - the 34 ordinary Japanese riichi base tile identities; and
 - one `invalid/background` outcome.
@@ -171,7 +171,7 @@ The production recognition model set continues to contain three learned model ro
 - RGB red-five specialist.
 
 The runtime contract for the base classifier must preserve the 35-class output vocabulary and must not assume that every classifier result is a tile.
-The current model-runtime spec identifies that deployment contract as `c8-tile-35-v1`.
+The current model-runtime spec identifies that architecture-neutral deployment contract as `gray64-tile-35-v1`.
 
 Recognition/UI code must distinguish an unresolved live detector observation from a committed semantic tile.
 An invalid/background classifier result may still have a detector box for feedback but contributes no tile to the committed structure.
@@ -207,7 +207,9 @@ The v3 dataset extends v2 with 189 reviewed Japanese detector crops from the tra
   gray64_c8_rot22p5_bs512_gray35_v3_jp189_seed42/best.pt
 ```
 
-The selected checkpoint is epoch 45. Its production preprocessing normalization is `mean = 0.6815832403977466` and `std = 0.2725553681973969`; `c8-tile-35-v1` is bound to those values in the runtime-spec implementation. The exported deployment artifact is `tile-c8-gray35-v3-jp189.onnx` with SHA-256 `b8a8fa3ff6c6d1e944a7593fa0afc947e0cd2513fb79ca46e5f8fcd6e19c97d0`.
+The selected historical C8 checkpoint was epoch 45. Its preprocessing normalization is `mean = 0.6815832403977466` and `std = 0.2725553681973969`; those values remain the current gray64 base-classifier contract. The historical exported artifact was `tile-c8-gray35-v3-jp189.onnx` with SHA-256 `b8a8fa3ff6c6d1e944a7593fa0afc947e0cd2513fb79ca46e5f8fcd6e19c97d0`.
+
+Later classifier work retained the same `[N,1,64,64] -> [N,35]` contract while changing the implementation architecture. PRODUCT-INV-RECOGNITION-011 selected `tile-mobilenet-v3-small-1.0x-random360-e150.onnx` as the production replacement candidate after dense-angle evaluation and direct iPhone 13 ONNX Runtime Web A/B measurement. The current runtime spec is therefore architecture-neutral (`gray64-tile-35-v1`) rather than naming the C8 backbone.
 
 `tools/recognition/tile_shape_classifier.py` supports checkpoint-selected class counts without changing the C8 backbone responsibility, and `tools/recognition/export_c8_classifiers_onnx.py` reconstructs the tile-shape output count/class labels from checkpoint metadata for deployment export.
 The selected v3 export parity check produced zero prediction mismatches between the source C8 model and ONNX Runtime; ONNX Runtime parity was `allclose=true` with maximum absolute error `1.1920928955078125e-05`.

@@ -17,7 +17,7 @@ import {
   type ClassifierTensor,
 } from '@/recognition/classifier/preprocessing';
 import {
-  createC8ClassifierRuntime,
+  createTileClassifierRuntime,
   type ClassifierSession,
 } from '@/recognition/classifier/runtime';
 import { describe, expect, it } from 'vitest';
@@ -84,6 +84,51 @@ describe('C8 classifier crop preprocessing', () => {
       expect(
         Math.abs((observedResized[index] ?? 0) - (legacyResized[index] ?? 0)),
       ).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('keeps shared RGB Lanczos resize equivalent to the legacy per-channel kernel', () => {
+    const data = new Uint8Array(5 * 3 * 3);
+    for (let pixel = 0; pixel < 15; pixel += 1) {
+      data[pixel * 3] = (pixel * 13) % 256;
+      data[pixel * 3 + 1] = (pixel * 29 + 17) % 256;
+      data[pixel * 3 + 2] = (pixel * 47 + 31) % 256;
+    }
+    const crop = {
+      width: 5,
+      height: 3,
+      channels: 3,
+      data,
+    } as const satisfies ClassifierCropImage;
+
+    const observed = preprocessRgbClassifierCrop(crop, 4);
+    const sourceChannels = [
+      new Uint8Array(15),
+      new Uint8Array(15),
+      new Uint8Array(15),
+    ] as const;
+    for (let pixel = 0; pixel < 15; pixel += 1) {
+      sourceChannels[0][pixel] = data[pixel * 3] ?? 0;
+      sourceChannels[1][pixel] = data[pixel * 3 + 1] ?? 0;
+      sourceChannels[2][pixel] = data[pixel * 3 + 2] ?? 0;
+    }
+    const legacy = sourceChannels.map((channel) =>
+      legacyLanczosResample(channel, 5, 3, 4, 2),
+    );
+
+    for (let y = 0; y < 2; y += 1) {
+      for (let x = 0; x < 4; x += 1) {
+        const observedPixel = ((y + 1) * 4 + x) * 3;
+        const expectedPixel = y * 4 + x;
+        for (let channel = 0; channel < 3; channel += 1) {
+          expect(
+            Math.abs(
+              (observed[observedPixel + channel] ?? 0) -
+                (legacy[channel]?.[expectedPixel] ?? 0),
+            ),
+          ).toBeLessThanOrEqual(1);
+        }
+      }
     }
   });
 
@@ -158,7 +203,7 @@ describe('C8 classifier runtime red-five refinement', () => {
       ),
     );
     const redFive = new FakeSession(new Float32Array([1, 0, 0, 1]));
-    const runtime = createC8ClassifierRuntime({
+    const runtime = createTileClassifierRuntime({
       baseClassifier: base,
       redFiveClassifier: redFive,
       baseNormalization: { mean: [0], std: [1] },
@@ -189,7 +234,7 @@ describe('C8 classifier runtime red-five refinement', () => {
       concatenateLogits(logitsFor('4m'), logitsFor('invalid'), logitsFor('9s')),
     );
     const redFive = new FakeSession([0, 1]);
-    const runtime = createC8ClassifierRuntime({
+    const runtime = createTileClassifierRuntime({
       baseClassifier: base,
       redFiveClassifier: redFive,
       baseNormalization: { mean: [0], std: [1] },
@@ -209,7 +254,7 @@ describe('C8 classifier runtime red-five refinement', () => {
   it('does not invoke the red-five specialist for non-five and invalid base results', async () => {
     const base = new FakeSession(logitsFor('4m'), logitsFor('invalid'));
     const redFive = new FakeSession([0, 1]);
-    const runtime = createC8ClassifierRuntime({
+    const runtime = createTileClassifierRuntime({
       baseClassifier: base,
       redFiveClassifier: redFive,
       baseNormalization: { mean: [0], std: [1] },
@@ -233,7 +278,7 @@ describe('C8 classifier runtime red-five refinement', () => {
     'refines base %s into ordinary-versus-red identity',
     async (baseLabel, redFiveLogits, expectedRed) => {
       const redFive = new FakeSession(redFiveLogits);
-      const runtime = createC8ClassifierRuntime({
+      const runtime = createTileClassifierRuntime({
         baseClassifier: new FakeSession(logitsFor(baseLabel)),
         redFiveClassifier: redFive,
         baseNormalization: { mean: [0], std: [1] },

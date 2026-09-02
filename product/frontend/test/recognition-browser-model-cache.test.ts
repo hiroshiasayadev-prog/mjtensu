@@ -18,7 +18,7 @@ const manifest: RecognitionModelSetManifest = {
   modelSetVersion: 'browser-cache-fixture-v1',
   models: {
     detector: artifact('detector', 'nanodet-plus-m-320-v1'),
-    'tile-classifier': artifact('tile-classifier', 'c8-tile-35-v1'),
+    'tile-classifier': artifact('tile-classifier', 'gray64-tile-35-v1'),
     'red-five-classifier': artifact('red-five-classifier', 'c8-red-five-v1'),
   },
 };
@@ -58,7 +58,7 @@ function artifact(
   role: RecognitionModelRole,
   runtimeSpec:
     | 'nanodet-plus-m-320-v1'
-    | 'c8-tile-35-v1'
+    | 'gray64-tile-35-v1'
     | 'c8-red-five-v1',
 ) {
   return {

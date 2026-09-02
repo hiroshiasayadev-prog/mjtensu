@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "modelSetVersion": "recognition-v3-2026-08-31",
+  "modelSetVersion": "recognition-v4-2026-09-02",
   "models": {
     "detector": {
       "artifact": "nanodet-plus-m-320-real-capture-ft10-l10.onnx",
@@ -56,14 +56,11 @@
       }
     },
     "tile-classifier": {
-      "artifact": "tile-plain-gray35-random360-e150.onnx",
-      "sourceRun": ".local/recognition/plain_random360_epoch_sweep/e150/plain-random360",
-      "checkpoint": "best.pt",
-      "checkpointEpoch": 125,
-      "checkpointSha256": "dfcf8bb4c8b5aa2b275530f273f66fa138711b6040946ca6a19281f04f29e7ba",
-      "sha256": "553d1a65b6f3a12be7de53e5c83a889df5a0e296d8957b14bf18e8d601442018",
-      "bytes": 1495802,
-      "runtimeSpec": "c8-tile-35-v1",
+      "artifact": "tile-mobilenet-v3-small-1.0x-random360-e150.onnx",
+      "sourceRun": ".local/recognition/mobile_classifier_experiment/mobilenet-v3-small-1.0x",
+      "sha256": "6c93615cf6b7ffcb829ce49e91c9f6557b499aeeae51129cd8411b665331af76",
+      "bytes": 6223234,
+      "runtimeSpec": "gray64-tile-35-v1",
       "inputShape": [
         "batch",
         1,
@@ -81,6 +78,17 @@
         "std": [
           0.2725553681973969
         ]
+      },
+      "selectionEvidence": {
+        "investigation": "PRODUCT-INV-RECOGNITION-011",
+        "manualMean": 0.9487153,
+        "manualWorst": 0.9311111,
+        "jpMean": 0.9994784,
+        "jpWorst": 0.9989706,
+        "iphoneWasmSimdMedianMs": {
+          "batch16": 30,
+          "batch24": 46
+        }
       }
     },
     "red-five-classifier": {

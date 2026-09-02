@@ -22,7 +22,7 @@ export const DEFAULT_EXECUTION_PROVIDER_PREFERENCE = [
 
 export const RECOGNITION_MODEL_RUNTIME_SPECS = [
   'nanodet-plus-m-320-v1',
-  'c8-tile-35-v1',
+  'gray64-tile-35-v1',
   'c8-red-five-v1',
 ] as const;
 

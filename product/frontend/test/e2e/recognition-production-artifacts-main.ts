@@ -73,7 +73,7 @@ async function runVerification(): Promise<void> {
 
     diagnostics.phase = 'inspection-runtime-initialize';
     await inspectionRuntime.initialize();
-    const baseNormalization = getRecognitionClassifierNormalization('c8-tile-35-v1');
+    const baseNormalization = getRecognitionClassifierNormalization('gray64-tile-35-v1');
     const redFiveNormalization = getRecognitionClassifierNormalization('c8-red-five-v1');
     if (baseNormalization === null || redFiveNormalization === null) {
       throw new Error('Classifier runtime normalization is unavailable.');

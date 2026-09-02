@@ -19,7 +19,7 @@ test('production Recognition model set loads and executes bounded real-artifact 
   console.log(`R06_DIAGNOSTICS=${JSON.stringify(diagnostics)}`);
 
   expect(diagnostics.status, diagnostics.error).toBe('ready');
-  expect(diagnostics.modelSetVersion).toBe('recognition-v3-2026-08-31');
+  expect(diagnostics.modelSetVersion).toBe('recognition-v4-2026-09-02');
   expect(diagnostics.providers).toEqual([
     {
       role: 'detector',
@@ -29,7 +29,7 @@ test('production Recognition model set loads and executes bounded real-artifact 
     },
     {
       role: 'tile-classifier',
-      runtimeSpec: 'c8-tile-35-v1',
+      runtimeSpec: 'gray64-tile-35-v1',
       selectedProvider: 'wasm-simd',
       failedProviders: [],
     },

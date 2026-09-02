@@ -36,7 +36,7 @@ describe('recognition model manifest validation', () => {
   });
 
   it('binds classifier normalization to the selected production checkpoints', () => {
-    expect(getRecognitionClassifierNormalization('c8-tile-35-v1')).toEqual({
+    expect(getRecognitionClassifierNormalization('gray64-tile-35-v1')).toEqual({
       mean: [0.6815832403977466],
       std: [0.2725553681973969],
     });
@@ -254,7 +254,7 @@ describe('recognition model runtime initialization', () => {
       },
       {
         role: 'tile-classifier',
-        runtimeSpec: 'c8-tile-35-v1',
+        runtimeSpec: 'gray64-tile-35-v1',
         selectedProvider: 'webgl',
         failedProviders: ['wasm-simd', 'wasm-threaded'],
       },
@@ -339,7 +339,7 @@ function makeManifest(): RecognitionModelSetManifest {
         role: 'tile-classifier',
         url: '/models/tile-classifier.onnx',
         sha256: fixtureHash(modelBytes['tile-classifier']),
-        runtimeSpec: 'c8-tile-35-v1',
+        runtimeSpec: 'gray64-tile-35-v1',
         providerPreference,
       },
       'red-five-classifier': {

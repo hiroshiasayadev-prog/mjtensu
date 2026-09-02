@@ -43,7 +43,7 @@ export type ExecutionProvider =
 
 export type RecognitionModelRuntimeSpec =
   | 'nanodet-plus-m-320-v1'
-  | 'c8-tile-35-v1'
+  | 'gray64-tile-35-v1'
   | 'c8-red-five-v1';
 
 export interface RecognitionModelArtifactManifest {

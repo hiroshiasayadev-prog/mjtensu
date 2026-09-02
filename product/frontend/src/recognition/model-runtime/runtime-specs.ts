@@ -20,8 +20,8 @@ const RUNTIME_SPEC_DESCRIPTORS = {
     runtimeSpec: 'nanodet-plus-m-320-v1',
     role: 'detector',
   },
-  'c8-tile-35-v1': {
-    runtimeSpec: 'c8-tile-35-v1',
+  'gray64-tile-35-v1': {
+    runtimeSpec: 'gray64-tile-35-v1',
     role: 'tile-classifier',
     classifierNormalization: {
       mean: [0.6815832403977466],

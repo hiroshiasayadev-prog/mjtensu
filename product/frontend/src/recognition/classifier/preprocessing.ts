@@ -277,6 +277,93 @@ function resampleChannel(
   return target;
 }
 
+function resampleRgbChannels(
+  source: readonly [Uint8Array, Uint8Array, Uint8Array],
+  sourceWidth: number,
+  sourceHeight: number,
+  targetWidth: number,
+  targetHeight: number,
+): readonly [Uint8Array, Uint8Array, Uint8Array] {
+  if (sourceWidth === targetWidth && sourceHeight === targetHeight) {
+    return [
+      new Uint8Array(source[0]),
+      new Uint8Array(source[1]),
+      new Uint8Array(source[2]),
+    ];
+  }
+
+  const horizontalContributions = buildLanczosContributions(
+    sourceWidth,
+    targetWidth,
+  );
+  const verticalContributions = buildLanczosContributions(
+    sourceHeight,
+    targetHeight,
+  );
+  const horizontal = [
+    new Float64Array(targetWidth * sourceHeight),
+    new Float64Array(targetWidth * sourceHeight),
+    new Float64Array(targetWidth * sourceHeight),
+  ] as const;
+
+  for (let sourceY = 0; sourceY < sourceHeight; sourceY += 1) {
+    const sourceRowOffset = sourceY * sourceWidth;
+    const targetRowOffset = sourceY * targetWidth;
+    for (let targetX = 0; targetX < targetWidth; targetX += 1) {
+      const contribution = horizontalContributions[targetX];
+      if (contribution === undefined || !contribution.hasWeight) {
+        continue;
+      }
+      let red = 0;
+      let green = 0;
+      let blue = 0;
+      for (let index = 0; index < contribution.sourceIndices.length; index += 1) {
+        const sourceX = contribution.sourceIndices[index] ?? 0;
+        const weight = contribution.normalizedWeights[index] ?? 0;
+        const sourceIndex = sourceRowOffset + sourceX;
+        red += (source[0][sourceIndex] ?? 0) * weight;
+        green += (source[1][sourceIndex] ?? 0) * weight;
+        blue += (source[2][sourceIndex] ?? 0) * weight;
+      }
+      const targetIndex = targetRowOffset + targetX;
+      horizontal[0][targetIndex] = red;
+      horizontal[1][targetIndex] = green;
+      horizontal[2][targetIndex] = blue;
+    }
+  }
+
+  const target = [
+    new Uint8Array(targetWidth * targetHeight),
+    new Uint8Array(targetWidth * targetHeight),
+    new Uint8Array(targetWidth * targetHeight),
+  ] as const;
+  for (let targetY = 0; targetY < targetHeight; targetY += 1) {
+    const contribution = verticalContributions[targetY];
+    if (contribution === undefined || !contribution.hasWeight) {
+      continue;
+    }
+    for (let targetX = 0; targetX < targetWidth; targetX += 1) {
+      let red = 0;
+      let green = 0;
+      let blue = 0;
+      for (let index = 0; index < contribution.sourceIndices.length; index += 1) {
+        const sourceY = contribution.sourceIndices[index] ?? 0;
+        const weight = contribution.normalizedWeights[index] ?? 0;
+        const horizontalIndex = sourceY * targetWidth + targetX;
+        red += (horizontal[0][horizontalIndex] ?? 0) * weight;
+        green += (horizontal[1][horizontalIndex] ?? 0) * weight;
+        blue += (horizontal[2][horizontalIndex] ?? 0) * weight;
+      }
+      const targetIndex = targetY * targetWidth + targetX;
+      target[0][targetIndex] = clampByte(red);
+      target[1][targetIndex] = clampByte(green);
+      target[2][targetIndex] = clampByte(blue);
+    }
+  }
+
+  return target;
+}
+
 function resizedDimensions(
   sourceWidth: number,
   sourceHeight: number,
@@ -381,10 +468,10 @@ export function preprocessGrayClassifierCrop(
   return canvas;
 }
 
-export function preprocessRgbClassifierCrop(
+function preprocessRgbClassifierCropPlanes(
   crop: ClassifierCropImage,
-  imageSize = CLASSIFIER_IMAGE_SIZE,
-): Uint8Array {
+  imageSize: number,
+): readonly [Uint8Array, Uint8Array, Uint8Array] {
   const channels = validateCrop(crop);
   validateImageSize(imageSize);
   const [resizedWidth, resizedHeight] = resizedDimensions(
@@ -396,7 +483,7 @@ export function preprocessRgbClassifierCrop(
     new Uint8Array(crop.width * crop.height),
     new Uint8Array(crop.width * crop.height),
     new Uint8Array(crop.width * crop.height),
-  ];
+  ] as const;
 
   for (let y = 0; y < crop.height; y += 1) {
     for (let x = 0; x < crop.width; x += 1) {
@@ -408,29 +495,48 @@ export function preprocessRgbClassifierCrop(
     }
   }
 
-  const resizedChannels = sourceChannels.map((channel) =>
-    resampleChannel(channel, crop.width, crop.height, resizedWidth, resizedHeight),
+  const resizedChannels = resampleRgbChannels(
+    sourceChannels,
+    crop.width,
+    crop.height,
+    resizedWidth,
+    resizedHeight,
   );
   const fill = rgbBorderFill(crop, channels);
-  const canvas = new Uint8Array(imageSize * imageSize * 3);
+  const canvasChannels = [
+    new Uint8Array(imageSize * imageSize),
+    new Uint8Array(imageSize * imageSize),
+    new Uint8Array(imageSize * imageSize),
+  ] as const;
+  canvasChannels[0].fill(fill[0]);
+  canvasChannels[1].fill(fill[1]);
+  canvasChannels[2].fill(fill[2]);
   const offsetX = Math.floor((imageSize - resizedWidth) / 2);
   const offsetY = Math.floor((imageSize - resizedHeight) / 2);
 
-  for (let index = 0; index < imageSize * imageSize; index += 1) {
-    canvas[index * 3] = fill[0];
-    canvas[index * 3 + 1] = fill[1];
-    canvas[index * 3 + 2] = fill[2];
-  }
   for (let y = 0; y < resizedHeight; y += 1) {
-    for (let x = 0; x < resizedWidth; x += 1) {
-      const targetOffset = ((offsetY + y) * imageSize + offsetX + x) * 3;
-      const sourceOffset = y * resizedWidth + x;
-      canvas[targetOffset] = resizedChannels[0]?.[sourceOffset] ?? 0;
-      canvas[targetOffset + 1] = resizedChannels[1]?.[sourceOffset] ?? 0;
-      canvas[targetOffset + 2] = resizedChannels[2]?.[sourceOffset] ?? 0;
-    }
+    const sourceStart = y * resizedWidth;
+    const sourceEnd = sourceStart + resizedWidth;
+    const targetStart = (offsetY + y) * imageSize + offsetX;
+    canvasChannels[0].set(resizedChannels[0].subarray(sourceStart, sourceEnd), targetStart);
+    canvasChannels[1].set(resizedChannels[1].subarray(sourceStart, sourceEnd), targetStart);
+    canvasChannels[2].set(resizedChannels[2].subarray(sourceStart, sourceEnd), targetStart);
   }
 
+  return canvasChannels;
+}
+
+export function preprocessRgbClassifierCrop(
+  crop: ClassifierCropImage,
+  imageSize = CLASSIFIER_IMAGE_SIZE,
+): Uint8Array {
+  const channels = preprocessRgbClassifierCropPlanes(crop, imageSize);
+  const canvas = new Uint8Array(imageSize * imageSize * 3);
+  for (let index = 0; index < imageSize * imageSize; index += 1) {
+    canvas[index * 3] = channels[0][index] ?? 0;
+    canvas[index * 3 + 1] = channels[1][index] ?? 0;
+    canvas[index * 3 + 2] = channels[2][index] ?? 0;
+  }
   return canvas;
 }
 
@@ -462,22 +568,9 @@ export function makeRedFiveClassifierBatchTensor(
   imageSize = CLASSIFIER_IMAGE_SIZE,
 ): ClassifierTensor {
   validateImageSize(imageSize);
-  const planeLength = imageSize * imageSize;
-  const samples = crops.map((crop) => {
-    const rgb = preprocessRgbClassifierCrop(crop, imageSize);
-    const channels = [
-      new Uint8Array(planeLength),
-      new Uint8Array(planeLength),
-      new Uint8Array(planeLength),
-    ];
-
-    for (let index = 0; index < planeLength; index += 1) {
-      channels[0][index] = rgb[index * 3] ?? 0;
-      channels[1][index] = rgb[index * 3 + 1] ?? 0;
-      channels[2][index] = rgb[index * 3 + 2] ?? 0;
-    }
-    return channels;
-  });
+  const samples = crops.map((crop) =>
+    preprocessRgbClassifierCropPlanes(crop, imageSize),
+  );
 
   return normalizeBatchToTensor(samples, 3, imageSize, normalization);
 }
