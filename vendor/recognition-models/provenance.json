@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "modelSetVersion": "recognition-v4-2026-09-02",
+  "modelSetVersion": "recognition-v5-2026-09-03",
   "models": {
     "detector": {
       "artifact": "nanodet-plus-m-320-real-capture-ft10-l10.onnx",
@@ -56,10 +56,9 @@
       }
     },
     "tile-classifier": {
-      "artifact": "tile-mobilenet-v3-small-1.0x-random360-e150.onnx",
-      "sourceRun": ".local/recognition/mobile_classifier_experiment/mobilenet-v3-small-1.0x",
-      "sha256": "6c93615cf6b7ffcb829ce49e91c9f6557b499aeeae51129cd8411b665331af76",
-      "bytes": 6223234,
+      "artifact": "mobile-tile-f8-r1.onnx",
+      "sha256": "5039c044a490b44e8c645ead5a3280293f78c3c43db9baabd9f07219ff883a7e",
+      "bytes": 3873724,
       "runtimeSpec": "gray64-tile-35-v1",
       "inputShape": [
         "batch",
@@ -80,14 +79,25 @@
         ]
       },
       "selectionEvidence": {
-        "investigation": "PRODUCT-INV-RECOGNITION-011",
-        "manualMean": 0.9487153,
-        "manualWorst": 0.9311111,
-        "jpMean": 0.9994784,
-        "jpWorst": 0.9989706,
+        "investigation": "PRODUCT-INV-RECOGNITION-012",
+        "finalFeatureResolution": 8,
+        "lateRepeats": 1,
+        "manualMean": 0.9715625,
+        "manualWorst": 0.9533333333333334,
+        "cropRobustnessMean": 0.9666666666666667,
+        "cropRobustnessWorst": 0.96,
+        "cropRobustnessWorstCondition": "shift-x-plus-2px",
         "iphoneWasmSimdMedianMs": {
-          "batch16": 30,
-          "batch24": 46
+          "batch16": 39.84,
+          "batch24": 58.18
+        },
+        "iphonePlainMedianMs": {
+          "batch16": 50.56,
+          "batch24": 77.52
+        },
+        "iphoneStandardMobileMedianMs": {
+          "batch16": 30.4,
+          "batch24": 44.02
         }
       }
     },

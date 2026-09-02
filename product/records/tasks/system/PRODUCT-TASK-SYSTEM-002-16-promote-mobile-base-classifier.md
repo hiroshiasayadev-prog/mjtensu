@@ -6,8 +6,9 @@
 - **task_type**: correction
 - **depends_on**:
   - PRODUCT-INV-RECOGNITION-011
+  - PRODUCT-INV-RECOGNITION-012
 - **outputs**:
-  - MobileNetV3-Small 1.0x production base-classifier binding
+  - resolution-preserving `mobile-tile-f8-r1` production base-classifier binding
   - updated production model-set/provenance identity
   - production artifact regression evidence
   - PRODUCT-TASK-SYSTEM-002-16
@@ -20,11 +21,11 @@ Representative iPhone production diagnostics after classifier-preprocessing opti
 
 ## Goal
 
-Replace the production Plain e150 base classifier with the selected MobileNetV3-Small 1.0x artifact without changing the existing `[N,1,64,64] -> [N,35]` classifier input/output contract, normalization, label mapping, invalid/background semantics, red-five refinement, or execution-provider preference.
+Replace the regressed standard MobileNetV3-Small 1.0x production candidate with the INV-012 `mobile-tile-f8-r1` finalist without changing the existing `[N,1,64,64] -> [N,35]` classifier input/output contract, normalization, label mapping, invalid/background semantics, red-five refinement, or execution-provider preference. The replacement must preserve a useful iPhone latency advantage over Plain while recovering practical fine-grained crop robustness.
 
 ## Work
 
-- Bind `tile-mobilenet-v3-small-1.0x-random360-e150.onnx` as the production `tile-classifier` artifact.
+- Bind `mobile-tile-f8-r1.onnx` as the production `tile-classifier` artifact.
 - Preserve the current gray64 normalization and runtime preprocessing contract.
 - Update model-set version, content-addressed URL, SHA-256 identity, provenance, and production-artifact tests.
 - Keep provider preference `wasm-simd -> wasm-threaded -> webgl` unchanged.
@@ -34,7 +35,7 @@ Replace the production Plain e150 base classifier with the selected MobileNetV3-
 
 ## Done condition
 
-- Production build integrity validates the MobileNet artifact against the committed SHA-256.
+- Production build integrity validates the `mobile-tile-f8-r1` artifact against the committed SHA-256.
 - Production Recognition initializes and classifies through the existing contract without semantic regression.
 - Focused tests/typecheck/build pass.
 - iPhone diagnostics confirm the expected material base-inference reduction versus the current ~62 ms / 18-candidate observation.
@@ -71,4 +72,19 @@ User-executed verification from `product/frontend`:
 
 The real-artifact browser verification initialized all three production models on `wasm-simd`, reported model set `recognition-v4-2026-09-02`, reported the base classifier runtime spec as `gray64-tile-35-v1`, executed the MobileNet base classifier to a finite 35-logit output, executed the red-five classifier to the expected fixture result, and completed the blank-frame production pipeline fixture.
 
-All desktop/browser integrity and semantic-regression gates are PASS. I16 remains `in_progress` only because its Done condition requires post-deployment iPhone timing confirming the expected material reduction from the prior ~62 ms / 18-candidate base-inference observation.
+All desktop/browser integrity gates are PASS. Post-deployment iPhone timing subsequently confirmed the expected speed class (about `35 ms` base inference for roughly 17 candidates), but live recognition also exposed a practical fine-grained accuracy regression, including within-manzu errors such as `2m -> 7m` and `6m -> 7m` on an otherwise ordinary hand. This means the semantic-regression portion of the Done condition is **not** satisfied even though isolated/dense-angle evaluation had appeared comparable to Plain.
+
+The promotion therefore remains provisional rather than accepted. PRODUCT-INV-RECOGNITION-012 is opened to test whether preserving `8 x 8` / `4 x 4` late feature maps recovers Plain-like robustness while retaining a useful mobile latency advantage. I16 must not be marked completed solely from the successful v4 wiring or speed result; its final disposition depends on the INV-012 replacement/rollback decision.
+
+## Replacement implementation: 2026-09-03
+
+INV-012 identified `mobile-tile-f8-r1` as the best deployment tradeoff among the measured finalists. It preserves an `8 x 8` late feature map with one terminal repeat and recorded manual dense-angle accuracy `0.9715625` mean / `0.9533333333` worst. The deterministic crop-perturbation proxy recorded `0.9666666667` mean / `0.96` worst, with `shift-x-plus-2px` as the worst condition.
+
+Direct iPhone 13 WASM-SIMD, one-thread measurement confirms that f8-r1 remains materially faster than Plain while avoiding the excessive cost of f8-r2:
+
+- batch 16: f8-r1 `39.84 ms`, Plain `50.56 ms`, standard MobileNet `30.40 ms`, f8-r2 `62.34 ms`;
+- batch 24: f8-r1 `58.18 ms`, Plain `77.52 ms`, standard MobileNet `44.02 ms`, f8-r2 `91.54 ms`.
+
+The production model set is therefore rewired to `mobile-tile-f8-r1.onnx` as `recognition-v5-2026-09-03`. The user-verified SHA-256 is `5039c044a490b44e8c645ead5a3280293f78c3c43db9baabd9f07219ff883a7e`; the artifact size is `3,873,724` bytes. The runtime contract remains `gray64-tile-35-v1`, with unchanged normalization, label order, dynamic-batch shape, provider preference, and red-five specialist.
+
+This replacement is still **pending live production-pipeline acceptance**. I16 remains `in_progress` until the v5 build is exercised on the iPhone hand/crop distribution that exposed the v4 standard-MobileNet regression and the result confirms that the practical fine-grained errors are materially improved.

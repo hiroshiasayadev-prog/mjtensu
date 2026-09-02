@@ -73,8 +73,9 @@ I04 detector-artifact finding + I12 corrected postprocess -> I13 promote real-ca
 I04 meld-grouping geometry finding -> I14 replace greedy meld-row grouping -> continue/reverify I04
 I04 performance finding -> I08 optimize production Recognition throughput
 I05 classifier timing + INV-011 -> I15 optimize classifier preprocessing -> continue/reverify I05
-INV-011 -> I16 promote MobileNetV3-Small 1.0x base classifier -> continue/reverify I05
-I03 + I04 + I08 + I15 + I16 -> I05 target-device complete-pipeline performance/release gate
+INV-011 -> I16 promote MobileNetV3-Small 1.0x base classifier -> live iPhone accuracy finding
+I16 live fine-grained accuracy regression -> INV-012 resolution-preserving mobile classifier investigation -> f8-r1 v5 finalist -> live acceptance -> continue/reverify I05
+I03 + I04 + I08 + I15 + I16/INV-012 disposition -> I05 target-device complete-pipeline performance/release gate
 I05 -> I06 independent integrated release review
 ```
 
@@ -99,7 +100,7 @@ Real-device functional and browser/PWA verification may proceed in parallel once
 | PRODUCT-TASK-SYSTEM-002-13 | correction | Promote the real-capture fine-tuned detector after exact-runtime validation shows substantially better real meld recall with no held-out composite meld regression. | I04 F-MAJ-10; I12 |
 | PRODUCT-TASK-SYSTEM-002-14 | correction | Replace jitter-sensitive greedy meld-row cutting with bounded `±45°` common-direction search and complete-linkage-style exact-cover partition scoring. | I04 F-MAJ-11 |
 | PRODUCT-TASK-SYSTEM-002-15 | correction | Reduce the classifier preprocessing bottleneck by replacing direct 2D software Lanczos with equivalent separable filtering, sharing RGB resize work, then re-measure iPhone 13 preprocessing before considering browser-native resize. | I08; I05 timing; INV-011 |
-| PRODUCT-TASK-SYSTEM-002-16 | correction | Promote the INV-011-selected MobileNetV3-Small 1.0x base classifier and verify the target-device inference reduction under the production integrity/runtime contract. | INV-011; I05 timing |
+| PRODUCT-TASK-SYSTEM-002-16 | correction | Resolve the standard-MobileNet live regression by promoting the INV-012 `mobile-tile-f8-r1` finalist under the unchanged gray64 classifier contract, then verify target-device latency and live fine-grained accuracy before acceptance. | INV-011; I05 timing; INV-012 |
 
 ## Completion Condition
 
