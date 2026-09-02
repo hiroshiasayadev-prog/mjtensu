@@ -26,6 +26,7 @@
   - PRODUCT-TASK-SYSTEM-002-12
   - PRODUCT-TASK-SYSTEM-002-13
   - PRODUCT-TASK-SYSTEM-002-14
+  - PRODUCT-TASK-SYSTEM-002-15
 
 ## Goal
 
@@ -70,7 +71,8 @@ I04 duplicate-suppression finding -> I12 correct merged-bridge duplicate resolut
 I04 detector-artifact finding + I12 corrected postprocess -> I13 promote real-capture detector -> continue/reverify I04
 I04 meld-grouping geometry finding -> I14 replace greedy meld-row grouping -> continue/reverify I04
 I04 performance finding -> I08 optimize production Recognition throughput
-I03 + I04 + I08 -> I05 target-device complete-pipeline performance/release gate
+I05 classifier timing + INV-011 -> I15 optimize classifier preprocessing -> continue/reverify I05
+I03 + I04 + I08 + I15 -> I05 target-device complete-pipeline performance/release gate
 I05 -> I06 independent integrated release review
 ```
 
@@ -94,6 +96,7 @@ Real-device functional and browser/PWA verification may proceed in parallel once
 | PRODUCT-TASK-SYSTEM-002-12 | correction | Correct detector duplicate suppression so a large merged bridge cannot transitively collapse multiple spatially distinct tile detections to one confidence winner. | I04 F-MAJ-09 |
 | PRODUCT-TASK-SYSTEM-002-13 | correction | Promote the real-capture fine-tuned detector after exact-runtime validation shows substantially better real meld recall with no held-out composite meld regression. | I04 F-MAJ-10; I12 |
 | PRODUCT-TASK-SYSTEM-002-14 | correction | Replace jitter-sensitive greedy meld-row cutting with bounded `±45°` common-direction search and complete-linkage-style exact-cover partition scoring. | I04 F-MAJ-11 |
+| PRODUCT-TASK-SYSTEM-002-15 | correction | Reduce the classifier preprocessing bottleneck by replacing direct 2D software Lanczos with equivalent separable filtering, then re-measure iPhone 13 preprocessing before considering browser-native resize. | I08; I05 timing; INV-011 |
 
 ## Completion Condition
 

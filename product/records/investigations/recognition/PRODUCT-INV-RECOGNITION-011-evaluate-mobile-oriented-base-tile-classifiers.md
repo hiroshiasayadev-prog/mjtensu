@@ -1,6 +1,6 @@
 # PRODUCT-INV-RECOGNITION-011: Evaluate mobile-oriented base-tile classifiers
 
-- **status**: in_progress
+- **status**: completed
 - **date**: 2026-09-02
 - **trigger**: PRODUCT-INV-RECOGNITION-008 promoted the 150-epoch `PlainTileShapeClassifier` random360 checkpoint as the speed-oriented base-classifier candidate and the production model set now uses that Plain ONNX artifact. iPhone 13 runtime instrumentation nevertheless shows that base-classifier inference remains substantially slower than the much larger NanoDet detector artifact. Code inspection confirmed that batching is already correct: all detector crops are passed to one dynamic `[N,1,64,64]` classifier invocation. The remaining mismatch is architectural. The Plain model is a small conventional dense-convolution CNN, while the detector uses ShuffleNetV2, GhostPAN, and depthwise convolution designed for efficient mobile inference. Artifact bytes therefore do not predict deployed latency in the current runtime.
 - **scope**: On the frozen gray64 v3 35-class corpus, compare the accepted Plain random360 e150 classifier against mobile-oriented grayscale classifiers built from ShuffleNetV2 and MobileNetV3-Small families. Keep the current per-crop dynamic-batch input contract unchanged so the experiment isolates classifier architecture rather than changing the Recognition pipeline. Train all new candidates with the accepted deterministic random360 policy and 150-epoch schedule, run the same dense-angle accuracy protocol used by INV-007/008, export dynamic-batch ONNX, verify parity, characterize graph/MAC/activation cost, benchmark single-thread desktop ORT, and benchmark ONNX Runtime Web on iPhone 13 using the current production execution-provider path.
@@ -587,3 +587,47 @@ measurement = 50 runs per batch
 and renders median, p95, and median ms/image plus a JSON report containing `navigator.hardwareConcurrency`, `crossOriginIsolated`, and user-agent evidence. This isolates architecture/runtime performance from camera, detector, crop extraction, and classifier preprocessing while using the same ORT Web WASM configuration as the production `wasm-simd` path.
 
 The MobileNet artifact is intentionally not bound into `production-model-set.json` yet. Promotion remains gated on this iPhone comparison.
+
+## iPhone 13 ONNX Runtime Web result: 2026-09-02
+
+The direct same-device A/B benchmark completed on iPhone 13 / Safari with the production-style single-thread WASM SIMD configuration:
+
+```text
+provider = wasm-simd
+wasm.numThreads = 1
+wasm.proxy = false
+hardwareConcurrency = 4
+crossOriginIsolated = false
+warm-up = 10
+measurement = 50
+```
+
+Measured latency:
+
+| batch | Plain e150 median | Plain p95 | MobileNetV3-Small 1.0x median | Mobile p95 | speedup |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 3 ms | 4 ms | 2 ms | 2 ms | 1.50x |
+| 4 | 12 ms | 13 ms | 8 ms | 8 ms | 1.50x |
+| 8 | 24 ms | 25 ms | 15 ms | 16 ms | 1.60x |
+| 16 | 51 ms | 53 ms | 30 ms | 31 ms | 1.70x |
+| 24 | 79 ms | 82 ms | 46 ms | 47 ms | 1.72x |
+
+The iPhone result confirms that the desktop ordering generalizes to the actual ORT Web deployment path, but not at the same magnitude: the desktop historical comparison suggested about 5.7x while the direct iPhone gain is about 1.5-1.7x over the measured batch range. MobileNet's median cost stays near 1.9-2.0 ms/image at larger batches, versus about 3.0-3.3 ms/image for Plain.
+
+Combined with dense-angle accuracy, MobileNetV3-Small 1.0x is the clear replacement candidate: manual mean is slightly higher than Plain (`0.94872` versus `0.94743`) while manual worst is lower by about 0.89 percentage point (`0.93111` versus `0.94000`). The speed gain is real on the target device and does not require worker parallelism or threaded WASM.
+
+The same iPhone diagnostics also clarify that classifier inference is not the dominant remaining frame cost. A representative 17-candidate production frame showed base-classifier preprocessing around 161 ms versus base-classifier inference around 66 ms. The standalone Plain benchmark predicts roughly 50-60 ms inference at that batch size, so the production inference measurement is broadly consistent with the isolated benchmark. The next performance investigation should therefore focus on classifier preprocessing rather than further classifier-architecture work.
+
+## Conclusion
+
+INV-011 is complete.
+
+- Dynamic batching was already functioning correctly; one classifier inference is issued for the full crop batch.
+- Standard mobile-oriented topology does improve the actual iPhone ORT Web path.
+- ShuffleNetV2 0.5x/1.0x are dominated by the corresponding MobileNetV3-Small candidates in the desktop comparison and require no further device work.
+- MobileNetV3-Small 0.5x is the speed boundary but gives up too much manual-domain accuracy for the primary candidate.
+- MobileNetV3-Small 1.0x preserves essentially the same mean accuracy as Plain and reduces iPhone batch inference by about 1.5-1.7x.
+- Production promotion remains a separate explicit change, but there is no further architecture-selection question to answer in this investigation.
+- The dominant next optimization target is the existing gray64 classifier preprocessing path, especially per-crop software resampling.
+
+**Decision:** close INV-011 with MobileNetV3-Small 1.0x as the selected classifier replacement candidate. Open/follow a separate preprocessing-performance task or investigation before considering workers, shared-backbone classification, or further model-family changes.

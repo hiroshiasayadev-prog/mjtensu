@@ -60,6 +60,33 @@ describe('C8 classifier crop preprocessing', () => {
     ]);
   });
 
+  it('keeps separable Lanczos resize equivalent to the legacy 2D kernel', () => {
+    const crop = {
+      width: 5,
+      height: 3,
+      channels: 1,
+      data: new Uint8Array([
+        0, 25, 50, 75, 100,
+        30, 60, 90, 120, 150,
+        80, 110, 140, 170, 200,
+      ]),
+    } as const satisfies ClassifierCropImage;
+
+    const observed = preprocessGrayClassifierCrop(crop, 4);
+    const legacyResized = legacyLanczosResample(crop.data, 5, 3, 4, 2);
+    const observedResized = new Uint8Array([
+      ...observed.slice(4, 8),
+      ...observed.slice(8, 12),
+    ]);
+
+    expect(observedResized).toHaveLength(legacyResized.length);
+    for (let index = 0; index < legacyResized.length; index += 1) {
+      expect(
+        Math.abs((observedResized[index] ?? 0) - (legacyResized[index] ?? 0)),
+      ).toBeLessThanOrEqual(1);
+    }
+  });
+
   it('normalizes grayscale input into NCHW float32 tensors', () => {
     const tensor = makeBaseClassifierTensor(
       grayCrop,
@@ -232,6 +259,62 @@ describe('C8 classifier runtime red-five refinement', () => {
     expect(publicEntry).not.toMatch(/onnxruntime|InferenceSession|ORT/);
   });
 });
+
+function legacyLanczosResample(
+  source: Uint8Array,
+  sourceWidth: number,
+  sourceHeight: number,
+  targetWidth: number,
+  targetHeight: number,
+): Uint8Array {
+  const radius = 3;
+  const lanczos = (value: number): number => {
+    const distance = Math.abs(value);
+    if (distance < 1e-7) {
+      return 1;
+    }
+    if (distance >= radius) {
+      return 0;
+    }
+    const piX = Math.PI * distance;
+    return (
+      (Math.sin(piX) / piX) *
+      (Math.sin(piX / radius) / (piX / radius))
+    );
+  };
+  const target = new Uint8Array(targetWidth * targetHeight);
+  const scaleX = sourceWidth / targetWidth;
+  const scaleY = sourceHeight / targetHeight;
+
+  for (let targetY = 0; targetY < targetHeight; targetY += 1) {
+    const sourceY = (targetY + 0.5) * scaleY - 0.5;
+    const minY = Math.ceil(sourceY - radius + 1);
+    const maxY = Math.floor(sourceY + radius);
+    for (let targetX = 0; targetX < targetWidth; targetX += 1) {
+      const sourceX = (targetX + 0.5) * scaleX - 0.5;
+      const minX = Math.ceil(sourceX - radius + 1);
+      const maxX = Math.floor(sourceX + radius);
+      let weightedSum = 0;
+      let weightSum = 0;
+      for (let y = minY; y <= maxY; y += 1) {
+        const clampedY = Math.max(0, Math.min(sourceHeight - 1, y));
+        const yWeight = lanczos(sourceY - y);
+        for (let x = minX; x <= maxX; x += 1) {
+          const clampedX = Math.max(0, Math.min(sourceWidth - 1, x));
+          const weight = yWeight * lanczos(sourceX - x);
+          weightedSum += (source[clampedY * sourceWidth + clampedX] ?? 0) * weight;
+          weightSum += weight;
+        }
+      }
+      const value = weightSum === 0 ? 0 : weightedSum / weightSum;
+      target[targetY * targetWidth + targetX] = Math.max(
+        0,
+        Math.min(255, Math.round(value)),
+      );
+    }
+  }
+  return target;
+}
 
 function logitsFor(label: BaseClassifierLabel): Float32Array {
   const logits = new Float32Array(BASE_CLASSIFIER_LABELS.length);

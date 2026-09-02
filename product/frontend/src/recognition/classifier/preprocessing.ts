@@ -173,6 +173,48 @@ function lanczos(value: number): number {
   );
 }
 
+interface ResampleContribution {
+  readonly sourceIndices: readonly number[];
+  readonly normalizedWeights: readonly number[];
+  readonly hasWeight: boolean;
+}
+
+function buildLanczosContributions(
+  sourceSize: number,
+  targetSize: number,
+): readonly ResampleContribution[] {
+  const scale = sourceSize / targetSize;
+  return Array.from({ length: targetSize }, (_, targetIndex) => {
+    const sourceCoordinate = (targetIndex + 0.5) * scale - 0.5;
+    const minimum = Math.ceil(sourceCoordinate - LANCZOS_RADIUS + 1);
+    const maximum = Math.floor(sourceCoordinate + LANCZOS_RADIUS);
+    const sourceIndices: number[] = [];
+    const weights: number[] = [];
+    let weightSum = 0;
+
+    for (let sourceIndex = minimum; sourceIndex <= maximum; sourceIndex += 1) {
+      const weight = lanczos(sourceCoordinate - sourceIndex);
+      sourceIndices.push(Math.max(0, Math.min(sourceSize - 1, sourceIndex)));
+      weights.push(weight);
+      weightSum += weight;
+    }
+
+    if (Math.abs(weightSum) < 1e-12) {
+      return {
+        sourceIndices,
+        normalizedWeights: weights.map(() => 0),
+        hasWeight: false,
+      };
+    }
+
+    return {
+      sourceIndices,
+      normalizedWeights: weights.map((weight) => weight / weightSum),
+      hasWeight: true,
+    };
+  });
+}
+
 function resampleChannel(
   source: Uint8Array,
   sourceWidth: number,
@@ -184,36 +226,51 @@ function resampleChannel(
     return new Uint8Array(source);
   }
 
-  const target = new Uint8Array(targetWidth * targetHeight);
-  const scaleX = sourceWidth / targetWidth;
-  const scaleY = sourceHeight / targetHeight;
+  const horizontalContributions = buildLanczosContributions(
+    sourceWidth,
+    targetWidth,
+  );
+  const verticalContributions = buildLanczosContributions(
+    sourceHeight,
+    targetHeight,
+  );
+  const horizontal = new Float64Array(targetWidth * sourceHeight);
 
-  for (let targetY = 0; targetY < targetHeight; targetY += 1) {
-    const sourceY = (targetY + 0.5) * scaleY - 0.5;
-    const minY = Math.ceil(sourceY - LANCZOS_RADIUS + 1);
-    const maxY = Math.floor(sourceY + LANCZOS_RADIUS);
-
+  for (let sourceY = 0; sourceY < sourceHeight; sourceY += 1) {
+    const sourceRowOffset = sourceY * sourceWidth;
+    const targetRowOffset = sourceY * targetWidth;
     for (let targetX = 0; targetX < targetWidth; targetX += 1) {
-      const sourceX = (targetX + 0.5) * scaleX - 0.5;
-      const minX = Math.ceil(sourceX - LANCZOS_RADIUS + 1);
-      const maxX = Math.floor(sourceX + LANCZOS_RADIUS);
-      let weightedSum = 0;
-      let weightSum = 0;
-
-      for (let y = minY; y <= maxY; y += 1) {
-        const clampedY = Math.max(0, Math.min(sourceHeight - 1, y));
-        const yWeight = lanczos(sourceY - y);
-        for (let x = minX; x <= maxX; x += 1) {
-          const clampedX = Math.max(0, Math.min(sourceWidth - 1, x));
-          const weight = yWeight * lanczos(sourceX - x);
-          weightedSum += source[clampedY * sourceWidth + clampedX] * weight;
-          weightSum += weight;
-        }
+      const contribution = horizontalContributions[targetX];
+      if (contribution === undefined || !contribution.hasWeight) {
+        horizontal[targetRowOffset + targetX] = 0;
+        continue;
       }
+      let weightedSum = 0;
+      for (let index = 0; index < contribution.sourceIndices.length; index += 1) {
+        const sourceX = contribution.sourceIndices[index] ?? 0;
+        const weight = contribution.normalizedWeights[index] ?? 0;
+        weightedSum += (source[sourceRowOffset + sourceX] ?? 0) * weight;
+      }
+      horizontal[targetRowOffset + targetX] = weightedSum;
+    }
+  }
 
-      target[targetY * targetWidth + targetX] = clampByte(
-        weightSum === 0 ? 0 : weightedSum / weightSum,
-      );
+  const target = new Uint8Array(targetWidth * targetHeight);
+  for (let targetY = 0; targetY < targetHeight; targetY += 1) {
+    const contribution = verticalContributions[targetY];
+    for (let targetX = 0; targetX < targetWidth; targetX += 1) {
+      if (contribution === undefined || !contribution.hasWeight) {
+        target[targetY * targetWidth + targetX] = 0;
+        continue;
+      }
+      let weightedSum = 0;
+      for (let index = 0; index < contribution.sourceIndices.length; index += 1) {
+        const sourceY = contribution.sourceIndices[index] ?? 0;
+        const weight = contribution.normalizedWeights[index] ?? 0;
+        weightedSum +=
+          (horizontal[sourceY * targetWidth + targetX] ?? 0) * weight;
+      }
+      target[targetY * targetWidth + targetX] = clampByte(weightedSum);
     }
   }
 
