@@ -20,6 +20,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from tile_shape_classifier import DEFAULT_C8_FIELDS, build_model, describe_model
+from classifier_geometric_augmentation import projective_augment_batch
 
 
 DEFAULT_SEED = 42
@@ -96,6 +97,30 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=DEFAULT_ROTATION_AUGMENT_DEG,
         help="Uniform residual rotation range. B experiment uses 22.5; A uses 0.",
+    )
+    parser.add_argument(
+        "--perspective-augment",
+        type=float,
+        default=0.0,
+        help="Maximum normalized projective strength per axis. 0 disables; try 0.08 for mild camera tilt.",
+    )
+    parser.add_argument(
+        "--shear-augment",
+        type=float,
+        default=0.0,
+        help="Maximum normalized x/y shear. 0 disables; try 0.08.",
+    )
+    parser.add_argument(
+        "--stretch-augment",
+        type=float,
+        default=0.0,
+        help="Maximum independent x/y scale deviation. 0 disables; try 0.12.",
+    )
+    parser.add_argument(
+        "--projective-augment-probability",
+        type=float,
+        default=0.0,
+        help="Probability that a training sample receives projective/shear/stretch augmentation.",
     )
     parser.add_argument(
         "--eval-angles",
@@ -195,6 +220,10 @@ def main() -> None:
         "learning_rate": float(args.learning_rate),
         "weight_decay": float(args.weight_decay),
         "rotation_augment_deg": float(args.rotation_augment_deg),
+        "perspective_augment": float(args.perspective_augment),
+        "shear_augment": float(args.shear_augment),
+        "stretch_augment": float(args.stretch_augment),
+        "projective_augment_probability": float(args.projective_augment_probability),
         "eval_angles": [float(value) for value in args.eval_angles],
         "angle_eval_every": int(args.angle_eval_every),
         "best_checkpoint_metric": "manual_angle_mean_full_sweep_only",
@@ -244,6 +273,10 @@ def main() -> None:
             mean=cache.mean,
             std=cache.std,
             rotation_augment_deg=float(args.rotation_augment_deg),
+            perspective_augment=float(args.perspective_augment),
+            shear_augment=float(args.shear_augment),
+            stretch_augment=float(args.stretch_augment),
+            projective_augment_probability=float(args.projective_augment_probability),
             amp=bool(args.amp),
             epoch=epoch,
             seed=int(args.seed),
@@ -355,6 +388,14 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--weight-decay must not be negative")
     if not 0.0 <= args.rotation_augment_deg <= 45.0:
         raise ValueError("--rotation-augment-deg must be in [0,45]")
+    if not 0.0 <= args.perspective_augment <= 0.25:
+        raise ValueError("--perspective-augment must be in [0,0.25]")
+    if not 0.0 <= args.shear_augment <= 0.25:
+        raise ValueError("--shear-augment must be in [0,0.25]")
+    if not 0.0 <= args.stretch_augment <= 0.30:
+        raise ValueError("--stretch-augment must be in [0,0.30]")
+    if not 0.0 <= args.projective_augment_probability <= 1.0:
+        raise ValueError("--projective-augment-probability must be in [0,1]")
     if not args.eval_angles:
         raise ValueError("--eval-angles must not be empty")
     if not any(abs(float(angle)) < 1.0e-9 for angle in args.eval_angles):
@@ -556,6 +597,10 @@ def train_one_epoch(
     mean: float,
     std: float,
     rotation_augment_deg: float,
+    perspective_augment: float,
+    shear_augment: float,
+    stretch_augment: float,
+    projective_augment_probability: float,
     amp: bool,
     epoch: int,
     seed: int,
@@ -579,6 +624,16 @@ def train_one_epoch(
                 (images.shape[0],), device=device, dtype=torch.float32
             ).uniform_(-rotation_augment_deg, rotation_augment_deg)
             images = rotate_batch(images, angles)
+        if projective_augment_probability > 0.0 and (
+            perspective_augment > 0.0 or shear_augment > 0.0 or stretch_augment > 0.0
+        ):
+            images = projective_augment_batch(
+                images,
+                max_perspective=perspective_augment,
+                max_shear=shear_augment,
+                max_stretch=stretch_augment,
+                probability=projective_augment_probability,
+            )
         images = images.sub(mean).div(std)
 
         optimizer.zero_grad(set_to_none=True)

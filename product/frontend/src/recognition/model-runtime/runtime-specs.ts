@@ -28,6 +28,14 @@ const RUNTIME_SPEC_DESCRIPTORS = {
       std: [0.2725553681973969],
     },
   },
+  'gray64-tile-35-v2': {
+    runtimeSpec: 'gray64-tile-35-v2',
+    role: 'tile-classifier',
+    classifierNormalization: {
+      mean: [0.6816653769847909],
+      std: [0.2714782333298719],
+    },
+  },
   'c8-red-five-v1': {
     runtimeSpec: 'c8-red-five-v1',
     role: 'red-five-classifier',

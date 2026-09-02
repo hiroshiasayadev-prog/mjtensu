@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "modelSetVersion": "recognition-v5-2026-09-03",
+  "modelSetVersion": "recognition-v6-2026-09-03",
   "models": {
     "detector": {
       "artifact": "nanodet-plus-m-320-real-capture-ft10-l10.onnx",
@@ -56,10 +56,14 @@
       }
     },
     "tile-classifier": {
-      "artifact": "mobile-tile-f8-r1.onnx",
-      "sha256": "5039c044a490b44e8c645ead5a3280293f78c3c43db9baabd9f07219ff883a7e",
-      "bytes": 3873724,
-      "runtimeSpec": "gray64-tile-35-v1",
+      "artifact": "tile-c8-gray35-obb120-perspective.onnx",
+      "sourceRun": ".local/recognition/tile_shape_runs/gray35_obb120_perspective_seed42",
+      "checkpoint": "best.pt",
+      "checkpointEpoch": 40,
+      "checkpointSha256": "a06f696ff4adb6f74ad10c62270046773610a94b69e8413cec6c8ef0e0e57682",
+      "sha256": "f17de1508be0b9b6ebd17746d7a977241c5aa1b33d8aeadeba5b4b03c20fa31c",
+      "bytes": 6261185,
+      "runtimeSpec": "gray64-tile-35-v2",
       "inputShape": [
         "batch",
         1,
@@ -72,32 +76,38 @@
       ],
       "normalization": {
         "mean": [
-          0.6815832403977466
+          0.6816653769847909
         ],
         "std": [
-          0.2725553681973969
+          0.2714782333298719
         ]
       },
       "selectionEvidence": {
-        "investigation": "PRODUCT-INV-RECOGNITION-012",
-        "finalFeatureResolution": 8,
-        "lateRepeats": 1,
-        "manualMean": 0.9715625,
-        "manualWorst": 0.9533333333333334,
-        "cropRobustnessMean": 0.9666666666666667,
-        "cropRobustnessWorst": 0.96,
-        "cropRobustnessWorstCondition": "shift-x-plus-2px",
-        "iphoneWasmSimdMedianMs": {
-          "batch16": 39.84,
-          "batch24": 58.18
+        "trainingDataset": ".local/recognition/tile_classifier_datasets/gray35_jp500_seed42_obb120_jp189.sqlite",
+        "humanObbCaptures": 120,
+        "humanObbAnnotations": 1984,
+        "rotationAugmentDeg": 22.5,
+        "perspectiveAugment": 0.08,
+        "shearAugment": 0.08,
+        "stretchAugment": 0.12,
+        "projectiveAugmentProbability": 0.75,
+        "bestPrimaryScore": 0.9811608961303462,
+        "exportParity": {
+          "sampleCount": 16,
+          "predictionMismatches": 0,
+          "maxAbsError": 0.0000095367431640625
         },
-        "iphonePlainMedianMs": {
-          "batch16": 50.56,
-          "batch24": 77.52
+        "manualValidationAccuracy": {
+          "0deg": 0.9877800407331976,
+          "15deg": 0.9857433808553971,
+          "30deg": 0.9796334012219959,
+          "45deg": 0.9714867617107943
         },
-        "iphoneStandardMobileMedianMs": {
-          "batch16": 30.4,
-          "batch24": 44.02
+        "jpValidationAccuracy": {
+          "0deg": 0.9995588235294117,
+          "15deg": 0.9997058823529412,
+          "30deg": 0.9994117647058823,
+          "45deg": 0.9985294117647059
         }
       }
     },

@@ -67,7 +67,7 @@ describe('production recognition one-frame composition', () => {
     expect(tensorDims(base.runCalls[0])).toEqual([3, 1, 64, 64]);
     expect(tensorDims(redFive.runCalls[0])).toEqual([1, 3, 64, 64]);
     expect(firstTensorValue(base.runCalls[0])).toBeCloseTo(
-      (128 / 255 - 0.6815832403977466) / 0.2725553681973969,
+      (128 / 255 - 0.6816653769847909) / 0.2714782333298719,
     );
     expect(firstTensorValue(redFive.runCalls[0])).toBeCloseTo(
       (128 / 255 - 0.66025093606229934) / 0.30491469480493394,
@@ -691,7 +691,7 @@ function initializedModel(
 ): InitializedRecognitionModel {
   const runtimeSpec = {
     detector: 'nanodet-plus-m-320-v1',
-    'tile-classifier': 'gray64-tile-35-v1',
+    'tile-classifier': 'gray64-tile-35-v2',
     'red-five-classifier': 'c8-red-five-v1',
   } as const;
   return {

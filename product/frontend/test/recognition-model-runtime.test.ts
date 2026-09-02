@@ -40,6 +40,10 @@ describe('recognition model manifest validation', () => {
       mean: [0.6815832403977466],
       std: [0.2725553681973969],
     });
+    expect(getRecognitionClassifierNormalization('gray64-tile-35-v2')).toEqual({
+      mean: [0.6816653769847909],
+      std: [0.2714782333298719],
+    });
     expect(getRecognitionClassifierNormalization('c8-red-five-v1')).toEqual({
       mean: [0.66025093606229934, 0.69172744263865471, 0.6489080530422624],
       std: [0.30491469480493394, 0.24924454491506576, 0.27107025824445752],
