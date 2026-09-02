@@ -10,6 +10,7 @@ import {
   createScoringSessionService,
   type ApplicationStore,
 } from '@/application';
+import { PRODUCTION_RECOGNITION_MODEL_SET } from '@/recognition';
 import type { ScoringService } from '@/scoring';
 
 const routeScoringService: ScoringService = {
@@ -189,7 +190,9 @@ describe('production shell routing', () => {
 
     const version = screen.getByTestId('top-model-set-version');
     expect(version).toBeVisible();
-    expect(version).toHaveTextContent('recognition-v3-2026-08-31');
+    expect(version).toHaveTextContent(
+      PRODUCTION_RECOGNITION_MODEL_SET.modelSetVersion,
+    );
     expect(version.style.position).toBe('fixed');
     expect(version.style.left).not.toBe('');
     expect(version.style.bottom).not.toBe('');
