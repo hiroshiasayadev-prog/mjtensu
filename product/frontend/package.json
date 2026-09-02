@@ -16,6 +16,7 @@
     "test:watch": "vitest",
     "build:e2e": "vite build --mode e2e",
     "build:browser-verification": "vite build --mode browser-verification",
+    "serve:browser-verification:https": "node scripts/serve-browser-verification-https.mjs",
     "test:e2e": "npm run build:browser-verification && playwright test",
     "test:browser-verification": "npm run test:e2e",
     "test:e2e:install": "playwright install chromium webkit",
