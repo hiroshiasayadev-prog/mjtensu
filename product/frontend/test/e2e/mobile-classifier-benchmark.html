@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mobile classifier benchmark</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 16px; }
+      table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+      th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: right; }
+      th:first-child, td:first-child { text-align: left; }
+      pre { white-space: pre-wrap; word-break: break-word; }
+      button { font: inherit; padding: 8px 12px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Mobile classifier benchmark</h1>
+      <p id="environment">loading environment...</p>
+      <button id="run" type="button">Run benchmark</button>
+      <div id="status" role="status">idle</div>
+      <div id="results"></div>
+      <h2>JSON</h2>
+      <pre id="json"></pre>
+    </main>
+    <script type="module" src="./mobile-classifier-benchmark-main.ts"></script>
+  </body>
+</html>

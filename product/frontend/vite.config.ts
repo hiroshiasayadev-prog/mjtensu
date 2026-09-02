@@ -61,6 +61,12 @@ export default defineConfig(({ mode }) => {
             ),
             ...(mode === 'browser-verification'
               ? {
+                  mobileClassifierBenchmark: fileURLToPath(
+                    new URL(
+                      './test/e2e/mobile-classifier-benchmark.html',
+                      import.meta.url,
+                    ),
+                  ),
                   productionScoring: fileURLToPath(
                     new URL('./test/e2e/production-scoring.html', import.meta.url),
                   ),
