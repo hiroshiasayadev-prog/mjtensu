@@ -53,6 +53,15 @@ PCのbrowserで次を開く。
 http://127.0.0.1:5174/
 ```
 
+既存annotationまたはrectifierのAI候補を回転矩形として見直す場合はOBB review modeを使う。
+rectifier候補は`AI未レビュー`、明示的に「OBB保存して次へ」を押したcaptureは`レビュー済`として表示する。
+一覧をクリックして移動しただけではレビュー済みへ昇格せず、編集内容はAI未レビューのままdraft保存される。
+既存矩形を初期値として、四隅dragまたは幅/高さの数値入力でサイズを詰め、回転handleまたは角度入力で傾きを合わせる。
+
+```text
+http://127.0.0.1:5174/?mode=obb-review
+```
+
 production build:
 
 ```powershell
@@ -75,7 +84,23 @@ capture_annotation
 detection_refresh
 ```
 
-保存状態は`draft`または`complete`。画像ファイル自体は変更しない。
+保存状態は`draft`または`complete`。OBB review provenanceはannotation JSONの`review.state`に
+`model_suggested`または`human_reviewed`として保持する。画像ファイル自体は変更しない。
+
+rectifierで未レビューcaptureへAI候補を投入する前に、まずdry-runする。
+
+```powershell
+python tools\recognition\apply_rotated_box_rectifier_suggestions.py --dry-run
+```
+
+対象件数を確認後、実際にSQLiteへ反映する。
+
+```powershell
+python tools\recognition\apply_rotated_box_rectifier_suggestions.py
+```
+
+反映前DBは`.local/recognition/capture_dataset/dataset.pre-rectifier-suggestions.sqlite`へ一度だけbackupする。
+pre-OBB backupとのgeometry差分があるcaptureは人手レビュー済みとして保護し、AI候補では上書きしない。
 
 ## Refresh detector candidates
 

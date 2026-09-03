@@ -1,5 +1,21 @@
 export type RegionKey = 'completed_hand' | 'dora_indicators' | 'melds';
 export type AnnotationStatus = 'unannotated' | 'draft' | 'complete';
+export type AnnotationReviewState = 'model_suggested' | 'human_reviewed';
+
+export interface AnnotationReview {
+  state: AnnotationReviewState;
+  source?: string;
+  generatedAt?: string;
+  reviewedAt?: string;
+  modelSha256?: string;
+  modelCheckpoint?: string;
+  checkpointEpoch?: number;
+  inputSource?: string;
+  contextScale?: number;
+  inputSize?: number;
+  changedBoxCount?: number;
+  maxGeometryDelta?: number;
+}
 
 export interface TileSlot {
   ordinal: number;
@@ -65,6 +81,8 @@ export interface CaptureSummary {
   taskOrder: number;
   annotationStatus: AnnotationStatus;
   annotationUpdatedAt: string | null;
+  reviewState: AnnotationReviewState | null;
+  reviewSource: string | null;
 }
 
 export interface Rect {
@@ -94,6 +112,7 @@ export interface AnnotationDocument {
   schemaVersion: 1;
   captureId: string;
   boxes: Record<RegionKey, AnnotationBox[]>;
+  review?: AnnotationReview;
 }
 
 export interface CaptureDetail {

@@ -12,6 +12,7 @@ import { normalizeAngle } from './geometry';
 import type {
   AnnotationBox,
   AnnotationDocument,
+  AnnotationReview,
   CampaignSummary,
   CaptureDetail,
   CaptureSummary,
@@ -21,6 +22,10 @@ import type {
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (app === null) throw new Error('Missing #app root.');
+const appRoot = app;
+
+const initialQuery = new URLSearchParams(window.location.search);
+const obbReviewMode = initialQuery.get('mode') === 'obb-review';
 
 let campaigns: CampaignSummary[] = [];
 let captures: CaptureSummary[] = [];
@@ -28,13 +33,14 @@ let currentCampaignId = '';
 let currentDetail: CaptureDetail | null = null;
 let currentRegion: RegionKey = 'completed_hand';
 let boxesByRegion: Record<RegionKey, AnnotationBox[]> = emptyBoxes();
+let currentReview: AnnotationReview | undefined;
 let validation: ValidationResult | null = null;
 let editor: CanvasEditor;
 let captureLoadGeneration = 0;
 let autosaveTimer: number | null = null;
 let saveSerial = Promise.resolve();
 let suppressAutosave = false;
-let filterStatus = 'all';
+let filterStatus = obbReviewMode ? 'review-pending' : 'all';
 
 renderShell();
 editor = new CanvasEditor(
@@ -64,12 +70,12 @@ async function boot(): Promise<void> {
 }
 
 function renderShell(): void {
-  app.innerHTML = `
+  appRoot.innerHTML = `
     <div class="app-shell">
       <header class="topbar">
         <div class="brand-block">
           <span class="eyebrow">MJTENSU / RECOGNITION</span>
-          <h1>Tile annotation</h1>
+          <h1>${obbReviewMode ? 'Tile OBB review' : 'Tile annotation'}</h1>
         </div>
         <label class="campaign-picker">campaign
           <select id="campaign-select"></select>
@@ -83,6 +89,9 @@ function renderShell(): void {
           <label>表示
             <select id="status-filter">
               <option value="all">すべて</option>
+              <option value="annotated">annotationあり</option>
+              <option value="review-pending">AI未レビュー</option>
+              <option value="reviewed">レビュー済</option>
               <option value="unannotated">未着手</option>
               <option value="draft">途中</option>
               <option value="complete">完了</option>
@@ -99,7 +108,10 @@ function renderShell(): void {
               <span class="eyebrow" id="capture-eyebrow">capture未選択</span>
               <h2 id="capture-title">—</h2>
             </div>
-            <div id="capture-environment" class="environment-badge">—</div>
+            <div class="capture-badges">
+              <div id="capture-review-badge" class="review-badge">—</div>
+              <div id="capture-environment" class="environment-badge">—</div>
+            </div>
           </div>
 
           <div class="region-tabs" id="region-tabs">
@@ -131,6 +143,14 @@ function renderShell(): void {
           <section class="inspector-card selection-card">
             <span class="eyebrow">選択中</span>
             <div id="selection-label">矩形なし</div>
+            <div class="size-grid">
+              <label>幅 px
+                <input id="width-input" type="number" step="0.5" min="2" disabled>
+              </label>
+              <label>高さ px
+                <input id="height-input" type="number" step="0.5" min="2" disabled>
+              </label>
+            </div>
             <label>角度
               <div class="angle-row">
                 <input id="angle-input" type="number" step="0.1" min="-180" max="180" disabled>
@@ -151,7 +171,7 @@ function renderShell(): void {
             <div id="save-status">—</div>
             <div class="save-actions">
               <button id="previous-button">← 前</button>
-              <button id="complete-next-button" class="primary" disabled>保存して次へ →</button>
+              <button id="complete-next-button" class="primary" disabled>${obbReviewMode ? 'OBB保存して次へ →' : '保存して次へ →'}</button>
             </div>
           </section>
         </aside>
@@ -162,6 +182,7 @@ function renderShell(): void {
 }
 
 function bindShellEvents(): void {
+  requireElement<HTMLSelectElement>('status-filter').value = filterStatus;
   requireElement<HTMLSelectElement>('campaign-select').onchange = (event) => {
     const campaignId = (event.currentTarget as HTMLSelectElement).value;
     void loadCampaign(campaignId).catch((error) => setError(errorMessage(error)));
@@ -186,6 +207,8 @@ function bindShellEvents(): void {
   requireElement<HTMLButtonElement>('delete-box-button').onclick = () => editor.deleteSelected();
   requireElement<HTMLButtonElement>('split-x-button').onclick = () => editor.splitSelected('screen-x');
   requireElement<HTMLButtonElement>('split-y-button').onclick = () => editor.splitSelected('screen-y');
+  requireElement<HTMLInputElement>('width-input').oninput = () => updateSelectedSizeFromInputs();
+  requireElement<HTMLInputElement>('height-input').oninput = () => updateSelectedSizeFromInputs();
   requireElement<HTMLInputElement>('angle-input').oninput = (event) => {
     const value = (event.currentTarget as HTMLInputElement).valueAsNumber;
     if (Number.isFinite(value)) editor.setSelectedAngle(value);
@@ -208,7 +231,10 @@ async function loadCampaign(campaignId: string): Promise<void> {
   captures = await fetchCaptureList(campaignId);
   renderCaptureList();
   renderProgress();
-  const first = captures.find((capture) => capture.annotationStatus !== 'complete') ?? captures[0];
+  const first = obbReviewMode
+    ? captures.find((capture) => capture.reviewState === 'model_suggested')
+      ?? captures.find((capture) => capture.annotationStatus !== 'unannotated')
+    : captures.find((capture) => capture.annotationStatus !== 'complete') ?? captures[0];
   if (first === undefined) {
     setGlobalStatus('captureなし');
     clearCurrentCapture();
@@ -231,6 +257,7 @@ async function loadCapture(captureId: string): Promise<void> {
     const detail = await fetchCapture(captureId);
     if (generation !== captureLoadGeneration) return;
     currentDetail = detail;
+    currentReview = detail.annotation?.document.review;
     const emptyCatalogDraftCanUseDetector = (
       detail.campaignId.startsWith('tile-catalog')
       && detail.annotation?.status === 'draft'
@@ -248,7 +275,15 @@ async function loadCapture(captureId: string): Promise<void> {
     await switchRegion(currentRegion);
     renderValidation();
     renderNavigation();
-    setGlobalStatus(initializedFromDetector ? '検出結果から初期化' : `${detail.annotation?.status ?? 'draft'}を読込`);
+    setGlobalStatus(
+      initializedFromDetector
+        ? '検出結果から初期化'
+        : currentReview?.state === 'model_suggested'
+          ? 'AI OBB候補を読込・未レビュー'
+          : currentReview?.state === 'human_reviewed'
+            ? '人間レビュー済みOBBを読込'
+            : `${detail.annotation?.status ?? 'draft'}を読込`,
+    );
   } finally {
     suppressAutosave = false;
   }
@@ -290,21 +325,35 @@ function onEditorBoxesChanged(boxes: AnnotationBox[]): void {
 }
 
 function onEditorSelectionChanged(box: AnnotationBox | null): void {
+  const widthInput = requireElement<HTMLInputElement>('width-input');
+  const heightInput = requireElement<HTMLInputElement>('height-input');
   const angleInput = requireElement<HTMLInputElement>('angle-input');
   const selectedLabel = requireElement('selection-label');
   const hasSelection = box !== null;
+  widthInput.disabled = !hasSelection;
+  heightInput.disabled = !hasSelection;
   angleInput.disabled = !hasSelection;
   requireElement<HTMLButtonElement>('delete-box-button').disabled = !hasSelection;
   requireElement<HTMLButtonElement>('split-x-button').disabled = !hasSelection;
   requireElement<HTMLButtonElement>('split-y-button').disabled = !hasSelection;
   if (box === null) {
+    widthInput.value = '';
+    heightInput.value = '';
     angleInput.value = '';
     selectedLabel.textContent = '矩形なし';
     return;
   }
+  widthInput.value = box.width.toFixed(1);
+  heightInput.value = box.height.toFixed(1);
   angleInput.value = normalizeAngle(box.angleDeg).toFixed(1);
   const label = validation?.regions[currentRegion].labels.get(box.id);
   selectedLabel.textContent = `${label?.text ?? '未割当'} / ${box.width.toFixed(1)} × ${box.height.toFixed(1)} px`;
+}
+
+function updateSelectedSizeFromInputs(): void {
+  const width = requireElement<HTMLInputElement>('width-input').valueAsNumber;
+  const height = requireElement<HTMLInputElement>('height-input').valueAsNumber;
+  if (Number.isFinite(width) && Number.isFinite(height)) editor.setSelectedSize(width, height);
 }
 
 function updateValidationAndLabels(): void {
@@ -367,13 +416,19 @@ function enqueueSave(status: 'draft' | 'complete'): Promise<void> {
   const detail = currentDetail;
   if (detail === null) return Promise.resolve();
   const captureId = detail.captureId;
-  const document = makeDocument(captureId, boxesByRegion);
+  const document = makeDocument(captureId, boxesByRegion, status);
   const operation = saveSerial.then(async () => {
     if (status === 'draft') requireElement('save-status').textContent = 'draft保存中…';
     await saveAnnotation(captureId, status, document);
-    updateCaptureStatus(captureId, status);
+    updateCaptureStatus(captureId, status, document.review);
     if (currentDetail?.captureId === captureId) {
-      requireElement('save-status').textContent = status === 'complete' ? '完了として保存済み' : 'draft自動保存済み';
+      currentReview = document.review;
+      requireElement('save-status').textContent = status === 'complete'
+        ? (obbReviewMode ? '人間レビュー済みとして保存' : '完了として保存済み')
+        : currentReview?.state === 'model_suggested'
+          ? 'AI候補をdraft保存・未レビュー'
+          : 'draft自動保存済み';
+      renderCaptureHeading();
     }
     renderCaptureList();
     renderProgress();
@@ -395,12 +450,14 @@ async function completeAndMoveNext(): Promise<void> {
     autosaveTimer = null;
   }
   const completedId = currentDetail.captureId;
-  setGlobalStatus('完了annotationを保存中…');
+  setGlobalStatus(obbReviewMode ? 'OBB annotationを保存中…' : '完了annotationを保存中…');
   try {
     await enqueueSave('complete');
-    const next = nextIncompleteAfter(completedId);
+    const next = obbReviewMode
+      ? nextReviewPendingAfter(completedId)
+      : nextIncompleteAfter(completedId);
     if (next === null) {
-      setGlobalStatus('全captureのannotation完了 🎉');
+      setGlobalStatus(obbReviewMode ? 'AI OBB候補のレビュー完了 🎉' : '全captureのannotation完了 🎉');
       renderProgress();
       return;
     }
@@ -414,14 +471,29 @@ async function movePrevious(): Promise<void> {
   const detail = currentDetail;
   if (detail === null) return;
   const index = captures.findIndex((capture) => capture.captureId === detail.captureId);
-  const previous = captures[index - 1];
-  if (previous !== undefined) await loadCapture(previous.captureId);
+  if (!obbReviewMode) {
+    const previous = captures[index - 1];
+    if (previous !== undefined) await loadCapture(previous.captureId);
+    return;
+  }
+  for (let candidateIndex = index - 1; candidateIndex >= 0; candidateIndex -= 1) {
+    const candidate = captures[candidateIndex];
+    if (candidate !== undefined && candidate.annotationStatus !== 'unannotated') {
+      await loadCapture(candidate.captureId);
+      return;
+    }
+  }
 }
 
 async function navigateToCapture(captureId: string): Promise<void> {
   const detail = currentDetail;
   if (detail === null || detail.captureId === captureId) {
     if (detail === null && captureId) await loadCapture(captureId);
+    return;
+  }
+  if (obbReviewMode) {
+    await flushAutosave();
+    await loadCapture(captureId);
     return;
   }
   const currentIndex = captures.findIndex((capture) => capture.captureId === detail.captureId);
@@ -514,11 +586,23 @@ function equalSpacingBoxes(detail: CaptureDetail, region: RegionKey): Annotation
 function makeDocument(
   captureId: string,
   boxes: Record<RegionKey, AnnotationBox[]>,
+  status: 'draft' | 'complete',
 ): AnnotationDocument {
+  const review = obbReviewMode
+    ? status === 'complete'
+      ? {
+          ...(currentReview ?? {}),
+          state: 'human_reviewed' as const,
+          source: 'annotation_tool',
+          reviewedAt: new Date().toISOString(),
+        }
+      : currentReview
+    : currentReview;
   return {
     schemaVersion: 1,
     captureId,
     boxes: cloneBoxes(boxes),
+    ...(review === undefined ? {} : { review }),
   };
 }
 
@@ -532,18 +616,22 @@ function renderCampaignOptions(): void {
 function renderCaptureList(): void {
   const list = requireElement('capture-list');
   const visible = captures.filter((capture) => (
-    filterStatus === 'all' || capture.annotationStatus === filterStatus
+    filterStatus === 'all'
+    || (filterStatus === 'annotated' && capture.annotationStatus !== 'unannotated')
+    || (filterStatus === 'review-pending' && capture.reviewState === 'model_suggested')
+    || (filterStatus === 'reviewed' && capture.reviewState === 'human_reviewed')
+    || capture.annotationStatus === filterStatus
   ));
   list.innerHTML = visible.map((capture) => {
     const active = capture.captureId === currentDetail?.captureId;
     return `
       <button class="capture-item ${active ? 'active' : ''}" data-capture-id="${escapeHtml(capture.captureId)}">
-        <span class="status-dot ${capture.annotationStatus}"></span>
+        <span class="status-dot ${reviewDotClass(capture)}"></span>
         <span class="capture-item-main">
           <strong>${currentCampaignId.startsWith('tile-catalog') ? `撮影 ${capture.taskOrder + 1}` : `配置 ${capture.layoutOrdinal + 1}`}</strong>
           <small>${escapeHtml(capture.environment.label ?? environmentText(capture.environment.brightness, capture.environment.shadow))}</small>
         </span>
-        <span class="status-text">${statusText(capture.annotationStatus)}</span>
+        <span class="status-text">${captureStatusText(capture)}</span>
       </button>`;
   }).join('');
   for (const button of list.querySelectorAll<HTMLButtonElement>('button[data-capture-id]')) {
@@ -565,6 +653,9 @@ function renderCaptureHeading(): void {
     detail.task.environment.brightness,
     detail.task.environment.shadow,
   );
+  const reviewBadge = requireElement('capture-review-badge');
+  reviewBadge.textContent = reviewStateText(currentReview?.state);
+  reviewBadge.className = `review-badge ${currentReview?.state ?? 'untracked'}`;
 }
 
 function renderRegionTabs(): void {
@@ -615,7 +706,13 @@ function renderValidation(): void {
 function renderProgress(): void {
   const complete = captures.filter((capture) => capture.annotationStatus === 'complete').length;
   const draft = captures.filter((capture) => capture.annotationStatus === 'draft').length;
-  requireElement('top-progress').textContent = `${complete} / ${captures.length} 完了 · ${draft} 途中`;
+  if (obbReviewMode) {
+    const reviewed = captures.filter((capture) => capture.reviewState === 'human_reviewed').length;
+    const pending = captures.filter((capture) => capture.reviewState === 'model_suggested').length;
+    requireElement('top-progress').textContent = `${reviewed} レビュー済 · ${pending} AI未レビュー`;
+  } else {
+    requireElement('top-progress').textContent = `${complete} / ${captures.length} 完了 · ${draft} 途中`;
+  }
   const campaign = campaigns.find((candidate) => candidate.campaignId === currentCampaignId);
   if (campaign !== undefined) {
     campaign.completeCount = complete;
@@ -634,7 +731,9 @@ function renderNavigation(): void {
     return;
   }
   const index = captures.findIndex((capture) => capture.captureId === detail.captureId);
-  requireElement<HTMLButtonElement>('previous-button').disabled = index <= 0;
+  requireElement<HTMLButtonElement>('previous-button').disabled = obbReviewMode
+    ? !captures.slice(0, index).some((capture) => capture.annotationStatus !== 'unannotated')
+    : index <= 0;
 }
 
 function renderAddMode(): void {
@@ -649,9 +748,17 @@ function setToolbarDisabled(disabled: boolean): void {
   }
 }
 
-function updateCaptureStatus(captureId: string, status: 'draft' | 'complete'): void {
+function updateCaptureStatus(
+  captureId: string,
+  status: 'draft' | 'complete',
+  review: AnnotationReview | undefined,
+): void {
   const capture = captures.find((candidate) => candidate.captureId === captureId);
-  if (capture !== undefined) capture.annotationStatus = status;
+  if (capture !== undefined) {
+    capture.annotationStatus = status;
+    capture.reviewState = review?.state ?? null;
+    capture.reviewSource = review?.source ?? null;
+  }
 }
 
 function nextIncompleteAfter(captureId: string): CaptureSummary | null {
@@ -663,12 +770,22 @@ function nextIncompleteAfter(captureId: string): CaptureSummary | null {
   return null;
 }
 
+function nextReviewPendingAfter(captureId: string): CaptureSummary | null {
+  const index = captures.findIndex((capture) => capture.captureId === captureId);
+  for (let offset = 1; offset <= captures.length; offset += 1) {
+    const candidate = captures[(index + offset) % captures.length];
+    if (candidate !== undefined && candidate.reviewState === 'model_suggested') return candidate;
+  }
+  return null;
+}
+
 function firstAvailableRegion(detail: CaptureDetail): RegionKey {
   return regionKeys().find((region) => detail.regionPaths[region] !== null) ?? 'completed_hand';
 }
 
 function clearCurrentCapture(): void {
   currentDetail = null;
+  currentReview = undefined;
   boxesByRegion = emptyBoxes();
   validation = null;
   editor.clearImage();
@@ -713,8 +830,28 @@ function environmentText(brightness: string, shadow: string): string {
   return `${brightnessText}・${shadowText}`;
 }
 
-function statusText(status: CaptureSummary['annotationStatus']): string {
-  return status === 'complete' ? '完了' : status === 'draft' ? '途中' : '未着手';
+function captureStatusText(capture: CaptureSummary): string {
+  if (capture.reviewState === 'model_suggested') return 'AI未レビュー';
+  if (capture.reviewState === 'human_reviewed') return 'レビュー済';
+  return capture.annotationStatus === 'complete'
+    ? '完了'
+    : capture.annotationStatus === 'draft'
+      ? '途中'
+      : '未着手';
+}
+
+function reviewDotClass(capture: CaptureSummary): string {
+  if (capture.reviewState === 'model_suggested') return 'model-suggested';
+  if (capture.reviewState === 'human_reviewed') return 'human-reviewed';
+  return capture.annotationStatus;
+}
+
+function reviewStateText(state: AnnotationReview['state'] | undefined): string {
+  return state === 'model_suggested'
+    ? 'AI候補・未レビュー'
+    : state === 'human_reviewed'
+      ? '✓ 人間レビュー済み'
+      : 'レビュー状態なし';
 }
 
 function isSideways(rotation: number): boolean {

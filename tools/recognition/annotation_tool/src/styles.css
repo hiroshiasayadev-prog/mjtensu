@@ -203,8 +203,13 @@ input[type="number"] {
   background: #f7ce46;
 }
 
-.status-dot.complete {
+.status-dot.complete,
+.status-dot.human-reviewed {
   background: #57e389;
+}
+
+.status-dot.model-suggested {
+  background: #70b8ff;
 }
 
 .workspace {
@@ -236,7 +241,14 @@ input[type="number"] {
   font-size: 21px;
 }
 
-.environment-badge {
+.capture-badges {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.environment-badge,
+.review-badge {
   padding: 7px 11px;
   color: #dce3ec;
   background: #171d26;
@@ -244,6 +256,22 @@ input[type="number"] {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
+}
+
+.review-badge.model_suggested {
+  color: #b9dcff;
+  border-color: #3978ad;
+  background: #13283b;
+}
+
+.review-badge.human_reviewed {
+  color: #9af0bd;
+  border-color: #2d8c58;
+  background: #10291d;
+}
+
+.review-badge.untracked {
+  color: #8f9bad;
 }
 
 .region-tabs,
@@ -374,6 +402,17 @@ input[type="number"] {
   border-radius: 7px;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 12px;
+}
+
+.size-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.size-grid input {
+  width: 100%;
+  min-width: 0;
 }
 
 .angle-row {

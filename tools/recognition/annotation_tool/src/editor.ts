@@ -145,6 +145,22 @@ export class CanvasEditor {
     this.onSelection(next.find((box) => box.id === selected.id) ?? null);
   }
 
+  setSelectedSize(width: number, height: number): void {
+    const selected = this.selectedBox();
+    if (
+      selected === null
+      || !Number.isFinite(width)
+      || !Number.isFinite(height)
+      || width <= 1
+      || height <= 1
+    ) return;
+    const next = this.boxes.map((box) => (
+      box.id === selected.id ? { ...box, width, height } : box
+    ));
+    this.commit(next);
+    this.onSelection(next.find((box) => box.id === selected.id) ?? null);
+  }
+
   private readonly onPointerDown = (event: PointerEvent): void => {
     if (this.image === null) return;
     this.canvas.focus();
