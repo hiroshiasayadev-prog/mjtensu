@@ -72,10 +72,10 @@ export function groupMeldObservations(
   }
 
   const medianHeight = median(
-    observations.map((observation) => observation.bbox.height),
+    observations.map((observation) => observation.obb?.height ?? observation.bbox.height),
   );
   const medianWidth = median(
-    observations.map((observation) => observation.bbox.width),
+    observations.map((observation) => observation.obb?.width ?? observation.bbox.width),
   );
   if (!(medianHeight > 0) || !(medianWidth > 0)) {
     return { kind: 'unstable' };
@@ -618,8 +618,8 @@ function asFourTiles(
 
 function center(observation: TileObservation): { readonly x: number; readonly y: number } {
   return {
-    x: observation.bbox.x + observation.bbox.width / 2,
-    y: observation.bbox.y + observation.bbox.height / 2,
+    x: observation.obb?.cx ?? observation.bbox.x + observation.bbox.width / 2,
+    y: observation.obb?.cy ?? observation.bbox.y + observation.bbox.height / 2,
   };
 }
 

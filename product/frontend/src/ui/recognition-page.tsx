@@ -31,6 +31,7 @@ import type {
   FrameObservationId,
   FrameRecognitionSnapshot,
   MeldGroupObservation,
+  NormalizedOrientedRect,
   NormalizedRect,
   RecognitionDebugCapture,
   RecognitionEvaluationTiming,
@@ -869,6 +870,7 @@ function ObservationBox({
     : null;
   const feedbackState = tile === null ? 'unresolved' : 'recognized';
   const label = tile === null ? '未解決' : tileAccessibleLabel(tile);
+  const oriented = observation.obb;
 
   return (
     <Box
@@ -876,7 +878,9 @@ function ObservationBox({
       data-testid="recognition-observation-box"
       data-recognition-state={feedbackState}
       style={{
-        ...rectStyle(observation.bbox),
+        ...(oriented === undefined
+          ? rectStyle(observation.bbox)
+          : orientedRectStyle(oriented)),
         border: tile === null
           ? '2px dashed #ffd43b'
           : '2px solid #51cf66',
@@ -893,7 +897,10 @@ function ObservationBox({
           position: 'absolute',
           left: '50%',
           bottom: 'calc(100% + 2px)',
-          transform: 'translateX(-50%)',
+          transform:
+            oriented === undefined
+              ? 'translateX(-50%)'
+              : `translateX(-50%) rotate(${-oriented.angleDeg}deg)`,
         }}
       >
         {tile === null ? <UnresolvedTileFace /> : <TileImage tile={tile} />}
@@ -935,10 +942,10 @@ function MeldGroupOverlay({
                 key={`${group.memberObservationIds.join('-')}-${previous.id}-${member.id}`}
                 data-testid="meld-group-connector"
                 data-overlay-kind="meld-connector"
-                x1={centerX(previous.bbox)}
-                y1={centerY(previous.bbox)}
-                x2={centerX(member.bbox)}
-                y2={centerY(member.bbox)}
+                x1={centerX(previous)}
+                y1={centerY(previous)}
+                x2={centerX(member)}
+                y2={centerY(member)}
                 stroke="#22b8cf"
                 strokeWidth="0.009"
                 strokeDasharray="0.014 0.008"
@@ -984,7 +991,7 @@ function MeldPreview({
       ? ['back', ...recognizedTiles, 'back']
       : recognizedTiles;
   const minY = Math.min(...members.map((member) => member.bbox.y));
-  const center = members.reduce((sum, member) => sum + centerX(member.bbox), 0) /
+  const center = members.reduce((sum, member) => sum + centerX(member), 0) /
     members.length;
   const interpretation = meldInterpretationLabel(group.interpretation.kind);
 
@@ -1610,12 +1617,24 @@ function rectStyle(rect: NormalizedRect) {
   };
 }
 
-function centerX(rect: NormalizedRect): number {
-  return rect.x + rect.width / 2;
+function orientedRectStyle(rect: NormalizedOrientedRect) {
+  return {
+    position: 'absolute' as const,
+    left: `${rect.cx * 100}%`,
+    top: `${rect.cy * 100}%`,
+    width: `${rect.width * 100}%`,
+    height: `${rect.height * 100}%`,
+    transform: `translate(-50%, -50%) rotate(${rect.angleDeg}deg)`,
+    transformOrigin: 'center',
+  };
 }
 
-function centerY(rect: NormalizedRect): number {
-  return rect.y + rect.height / 2;
+function centerX(observation: TileObservation): number {
+  return observation.obb?.cx ?? observation.bbox.x + observation.bbox.width / 2;
+}
+
+function centerY(observation: TileObservation): number {
+  return observation.obb?.cy ?? observation.bbox.y + observation.bbox.height / 2;
 }
 
 function meldInterpretationLabel(

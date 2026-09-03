@@ -62,6 +62,14 @@ export interface RecognitionDebugRect {
   readonly height: number;
 }
 
+export interface RecognitionDebugOrientedRect {
+  readonly cx: number;
+  readonly cy: number;
+  readonly width: number;
+  readonly height: number;
+  readonly angleDeg: number;
+}
+
 export interface RecognitionDebugDetection {
   readonly id: string;
   readonly detectionIndex: number;
@@ -69,6 +77,8 @@ export interface RecognitionDebugDetection {
   readonly region: RecognitionRegion;
   readonly compositeBox: RecognitionDebugRect;
   readonly sourceBox: RecognitionDebugRect;
+  readonly compositeOrientedBox?: RecognitionDebugOrientedRect;
+  readonly sourceOrientedBox?: RecognitionDebugOrientedRect;
   readonly classification: FrameRecognitionSnapshot['observations'][number]['classification'];
 }
 
@@ -90,12 +100,13 @@ export interface RecognitionDebugCapture {
     readonly encoding: 'base64-f32-le';
     readonly data: string;
   };
-  readonly detectorOutput: {
+  readonly detectorOutputs: readonly {
+    readonly name: string;
     readonly dims: readonly number[];
     readonly type: string;
     readonly encoding: 'base64-f32-le';
     readonly data: string;
-  };
+  }[];
   readonly detections: readonly RecognitionDebugDetection[];
   readonly snapshot: FrameRecognitionSnapshot;
 }

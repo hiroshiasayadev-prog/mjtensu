@@ -1,4 +1,7 @@
-export { createProductionNanoDetPostprocessor } from './detector/detection-postprocessor';
+export {
+  createProductionNanoDetPostprocessor,
+  createProductionRotatedFcosPostprocessor,
+} from './detector/detection-postprocessor';
 export {
   buildFixedComposite,
   FIXED_COMPOSITE_LAYOUT,
@@ -10,6 +13,7 @@ export {
 export type {
   CaptureRegion,
   CaptureRegions,
+  OrientedRect,
   Rect,
   RegionDetection,
   SemanticRegion,
@@ -19,6 +23,7 @@ export type { TileClassification } from './classifier/labels';
 export type {
   RecognitionDebugCapture,
   RecognitionDebugDetection,
+  RecognitionDebugOrientedRect,
   RecognitionDebugRect,
   RecognitionEvaluationTiming,
   RecognitionFrame,
@@ -57,6 +62,7 @@ export type {
   FrameRecognitionDraft,
   FrameRecognitionSnapshot,
   MeldGroupObservation,
+  NormalizedOrientedRect,
   NormalizedRect,
   RecognitionRegion,
   TileObservation,

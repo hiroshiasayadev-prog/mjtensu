@@ -21,10 +21,19 @@ export interface NormalizedRect {
   readonly height: number;
 }
 
+export interface NormalizedOrientedRect {
+  readonly cx: number;
+  readonly cy: number;
+  readonly width: number;
+  readonly height: number;
+  readonly angleDeg: number;
+}
+
 export interface ClassifiedRecognitionCandidate {
   readonly id: string;
   readonly region: RecognitionRegion;
   readonly bbox: NormalizedRect;
+  readonly obb?: NormalizedOrientedRect;
   readonly classification: TileClassification;
 }
 
@@ -32,6 +41,7 @@ export interface TileObservation {
   readonly id: FrameObservationId;
   readonly region: RecognitionRegion;
   readonly bbox: NormalizedRect;
+  readonly obb?: NormalizedOrientedRect;
   readonly classification: TileClassification;
 }
 

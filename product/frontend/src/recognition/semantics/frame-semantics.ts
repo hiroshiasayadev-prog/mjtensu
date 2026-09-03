@@ -46,6 +46,7 @@ function toObservation(
     id: candidate.id as FrameObservationId,
     region: candidate.region,
     bbox: { ...candidate.bbox },
+    ...(candidate.obb === undefined ? {} : { obb: { ...candidate.obb } }),
     classification: candidate.classification,
   };
 }
@@ -72,13 +73,13 @@ function compareObservationPosition(
   left: TileObservation,
   right: TileObservation,
 ): number {
-  const leftX = left.bbox.x + left.bbox.width / 2;
-  const rightX = right.bbox.x + right.bbox.width / 2;
+  const leftX = left.obb?.cx ?? left.bbox.x + left.bbox.width / 2;
+  const rightX = right.obb?.cx ?? right.bbox.x + right.bbox.width / 2;
   if (leftX !== rightX) {
     return leftX - rightX;
   }
-  const leftY = left.bbox.y + left.bbox.height / 2;
-  const rightY = right.bbox.y + right.bbox.height / 2;
+  const leftY = left.obb?.cy ?? left.bbox.y + left.bbox.height / 2;
+  const rightY = right.obb?.cy ?? right.bbox.y + right.bbox.height / 2;
   if (leftY !== rightY) {
     return leftY - rightY;
   }

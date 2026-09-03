@@ -1,69 +1,66 @@
 {
   "schemaVersion": 1,
-  "modelSetVersion": "recognition-v6-2026-09-03",
+  "modelSetVersion": "recognition-v8-2026-09-04",
   "models": {
     "detector": {
-      "artifact": "nanodet-plus-m-320-real-capture-ft10-l10.onnx",
-      "sourceRun": ".local/recognition/nanodet_runs/E1_plus_m_320_real_capture_ft10_l10_seed42/model_best",
-      "sha256": "9587a02dd1bbccfc14a925dc69c66b3c4a34ab628552b840ec113f7899dbf883",
-      "bytes": 5597449,
-      "runtimeSpec": "nanodet-plus-m-320-v1",
+      "artifact": "rotated-fcos-nano-s05-f64-obb120-gn.onnx",
+      "sourceRun": ".local/recognition/rotated_fcos_runs/rfcos_nano_s05_f64_obb120_gn_seed42",
+      "checkpoint": "model_best.pt",
+      "checkpointEpoch": 47,
+      "sha256": "6bb3b25ea2baa2dc641d5677fbfc8792e0a4e381bd2e0f4cf1dc05de4a38d1b0",
+      "bytes": 858340,
+      "runtimeSpec": "rotated-fcos-nano-320-v1",
       "inputShape": [
         1,
         3,
         320,
         320
       ],
-      "outputShape": [
-        1,
-        2125,
-        33
+      "outputShapes": [
+        [1, 8, 40, 40],
+        [1, 8, 20, 20],
+        [1, 8, 10, 10]
       ],
+      "normalization": {
+        "mean": [0.485, 0.456, 0.406],
+        "std": [0.229, 0.224, 0.225]
+      },
       "selectionEvidence": {
-        "runtimeThreshold": 0.35,
-        "realVal": {
-          "productionBaseline": {
-            "truePositives": 124,
-            "falsePositives": 3,
-            "falseNegatives": 4,
-            "f1": 0.9725,
-            "meldF1": 0.7273
+        "runtimeThreshold": 0.3,
+        "nmsIouThreshold": 0.45,
+        "validation": {
+          "truePositives": 394,
+          "falsePositives": 2,
+          "falseNegatives": 2,
+          "precision": 0.9949494949494949,
+          "recall": 0.9949494949494949,
+          "f1": 0.9949494949494949,
+          "rotatedIou": {
+            "p10": 0.7032915747043103,
+            "median": 0.8287468660800849,
+            "p90": 0.906166043864497,
+            "mean": 0.8142165076669621
           },
-          "selectedFineTune": {
-            "truePositives": 128,
-            "falsePositives": 3,
-            "falseNegatives": 0,
-            "f1": 0.9884,
-            "meldF1": 0.96
+          "angleErrorDeg": {
+            "p10": 0.711054164171219,
+            "median": 3.81548880902119,
+            "p90": 20.58534805774688,
+            "mean": 8.2260100270118
           }
         },
-        "compositeVal": {
-          "productionBaseline": {
-            "truePositives": 1044,
-            "falsePositives": 28,
-            "falseNegatives": 8,
-            "f1": 0.9831,
-            "meldF1": 0.9968
-          },
-          "selectedFineTune": {
-            "truePositives": 1045,
-            "falsePositives": 23,
-            "falseNegatives": 7,
-            "f1": 0.9858,
-            "meldF1": 0.9968
-          }
+        "onnxParity": {
+          "sampleCount": 8,
+          "rawAllclose": true,
+          "rawMaxAbsError": 0.000015735626220703125,
+          "decodedEquivalent": true
         }
       }
     },
     "tile-classifier": {
-      "artifact": "tile-c8-gray35-obb120-perspective.onnx",
-      "sourceRun": ".local/recognition/tile_shape_runs/gray35_obb120_perspective_seed42",
-      "checkpoint": "best.pt",
-      "checkpointEpoch": 40,
-      "checkpointSha256": "a06f696ff4adb6f74ad10c62270046773610a94b69e8413cec6c8ef0e0e57682",
-      "sha256": "f17de1508be0b9b6ebd17746d7a977241c5aa1b33d8aeadeba5b4b03c20fa31c",
-      "bytes": 6261185,
-      "runtimeSpec": "gray64-tile-35-v2",
+      "artifact": "mobile-tile-f8-r1.onnx",
+      "sha256": "5039c044a490b44e8c645ead5a3280293f78c3c43db9baabd9f07219ff883a7e",
+      "bytes": 3873724,
+      "runtimeSpec": "gray64-tile-35-v1",
       "inputShape": [
         "batch",
         1,
@@ -76,39 +73,27 @@
       ],
       "normalization": {
         "mean": [
-          0.6816653769847909
+          0.6815832403977466
         ],
         "std": [
-          0.2714782333298719
+          0.2725553681973969
         ]
       },
       "selectionEvidence": {
-        "trainingDataset": ".local/recognition/tile_classifier_datasets/gray35_jp500_seed42_obb120_jp189.sqlite",
-        "humanObbCaptures": 120,
-        "humanObbAnnotations": 1984,
-        "rotationAugmentDeg": 22.5,
-        "perspectiveAugment": 0.08,
-        "shearAugment": 0.08,
-        "stretchAugment": 0.12,
-        "projectiveAugmentProbability": 0.75,
-        "bestPrimaryScore": 0.9811608961303462,
-        "exportParity": {
-          "sampleCount": 16,
-          "predictionMismatches": 0,
-          "maxAbsError": 0.0000095367431640625
+        "investigation": "PRODUCT-INV-RECOGNITION-012",
+        "finalFeatureResolution": 8,
+        "lateRepeats": 1,
+        "manualMean": 0.9715625,
+        "manualWorst": 0.9533333333333334,
+        "cropRobustnessMean": 0.9666666666666667,
+        "cropRobustnessWorst": 0.96,
+        "cropRobustnessWorstCondition": "shift-x-plus-2px",
+        "iphoneWasmSimdMedianMs": {
+          "batch16": 39.84,
+          "batch24": 58.18
         },
-        "manualValidationAccuracy": {
-          "0deg": 0.9877800407331976,
-          "15deg": 0.9857433808553971,
-          "30deg": 0.9796334012219959,
-          "45deg": 0.9714867617107943
-        },
-        "jpValidationAccuracy": {
-          "0deg": 0.9995588235294117,
-          "15deg": 0.9997058823529412,
-          "30deg": 0.9994117647058823,
-          "45deg": 0.9985294117647059
-        }
+        "rollbackFrom": "recognition-v6-2026-09-03",
+        "rollbackReason": "Live iPhone debug measured 284 ms base-classifier inference for 19 candidates with the full C8 OBB120 perspective model."
       }
     },
     "red-five-classifier": {

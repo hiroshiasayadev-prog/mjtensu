@@ -67,7 +67,7 @@ describe('production recognition one-frame composition', () => {
     expect(tensorDims(base.runCalls[0])).toEqual([3, 1, 64, 64]);
     expect(tensorDims(redFive.runCalls[0])).toEqual([1, 3, 64, 64]);
     expect(firstTensorValue(base.runCalls[0])).toBeCloseTo(
-      (128 / 255 - 0.6816653769847909) / 0.2714782333298719,
+      (128 / 255 - 0.6815832403977466) / 0.2725553681973969,
     );
     expect(firstTensorValue(redFive.runCalls[0])).toBeCloseTo(
       (128 / 255 - 0.66025093606229934) / 0.30491469480493394,
@@ -104,6 +104,41 @@ describe('production recognition one-frame composition', () => {
     expect(timings[0]?.cropExtractionMs).toBeGreaterThanOrEqual(0);
     expect(timings[0]?.baseClassifierPreprocessingMs).toBeGreaterThanOrEqual(0);
     expect(timings[0]?.baseClassifierInferenceMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('passes all three RotatedFCOS feature outputs to detector postprocess', async () => {
+    const stride8 = tensorOutput(new Float32Array(1), [1, 8, 40, 40]);
+    const stride16 = tensorOutput(new Float32Array(1), [1, 8, 20, 20]);
+    const stride32 = tensorOutput(new Float32Array(1), [1, 8, 10, 10]);
+    const detector = new NamedOutputInferenceSession({
+      stride8,
+      stride16,
+      stride32,
+    });
+    const base = new FakeInferenceSession([]);
+    const redFive = new FakeInferenceSession([]);
+    const received: unknown[] = [];
+    const pipeline = createProductionRecognitionPipeline({
+      modelRuntime: fakeModelInspection(
+        { detector, base, redFive },
+        'rotated-fcos-nano-320-v1',
+      ),
+      classifierNormalizationOverride: testNormalization,
+      detectorPostprocessor: {
+        process(output) {
+          received.push(output);
+          return [];
+        },
+      },
+      platform: fakePipelinePlatform(),
+    });
+
+    await pipeline.evaluate(frame());
+
+    expect(detector.runCalls).toHaveLength(1);
+    expect(received).toEqual([[stride8, stride16, stride32]]);
+    expect(base.runCalls).toHaveLength(0);
+    expect(redFive.runCalls).toHaveLength(0);
   });
 
   it('does not invoke either classifier when the detector yields no candidates', async () => {
@@ -144,7 +179,9 @@ describe('production recognition one-frame composition', () => {
       debugCaptureBuilder: (input) => {
         expect(input.frame).toBe(inputFrame);
         expect(input.detectorInput).toHaveLength(3 * 320 * 320);
-        expect(input.detectorOutput).toBe(detectorOutput);
+        expect(input.detectorOutputs).toEqual([
+          { name: 'output', tensor: detectorOutput },
+        ]);
         expect(input.modelSetVersion).toBe('fixture-model-set');
         return debugCapture;
       },
@@ -620,6 +657,29 @@ function logitsFor(label: (typeof baseLabels)[number]): Float32Array {
   return logits;
 }
 
+class NamedOutputInferenceSession implements RecognitionInferenceSession {
+  readonly inputNames = ['input'];
+  readonly outputNames: readonly string[];
+  readonly runCalls: Readonly<Record<string, unknown>>[] = [];
+
+  constructor(private readonly outputs: Readonly<Record<string, TensorOutput>>) {
+    this.outputNames = Object.keys(outputs);
+  }
+
+  createFloat32Tensor(data: Float32Array, dims: readonly number[]): unknown {
+    return { data, dims };
+  }
+
+  async run(
+    feeds: Readonly<Record<string, unknown>>,
+  ): Promise<Readonly<Record<string, unknown>>> {
+    this.runCalls.push(feeds);
+    return this.outputs;
+  }
+
+  async dispose(): Promise<void> {}
+}
+
 class FakeInferenceSession implements RecognitionInferenceSession {
   readonly inputNames = ['input'];
   readonly outputNames = ['output'];
@@ -652,14 +712,22 @@ class FakeInferenceSession implements RecognitionInferenceSession {
   async dispose(): Promise<void> {}
 }
 
-function fakeModelInspection(sessions: {
-  readonly detector: RecognitionInferenceSession;
-  readonly base: RecognitionInferenceSession;
-  readonly redFive: RecognitionInferenceSession;
-}): RecognitionModelRuntimeInspection {
+function fakeModelInspection(
+  sessions: {
+    readonly detector: RecognitionInferenceSession;
+    readonly base: RecognitionInferenceSession;
+    readonly redFive: RecognitionInferenceSession;
+  },
+  detectorRuntimeSpec: 'nanodet-plus-m-320-v1' | 'rotated-fcos-nano-320-v1' =
+    'nanodet-plus-m-320-v1',
+): RecognitionModelRuntimeInspection {
   return {
     getInitializedModel(role) {
-      return initializedModel(role, sessionForRole(role, sessions));
+      return initializedModel(
+        role,
+        sessionForRole(role, sessions),
+        detectorRuntimeSpec,
+      );
     },
     getDiagnostics() {
       return [];
@@ -688,10 +756,12 @@ function sessionForRole(
 function initializedModel(
   role: RecognitionModelRole,
   session: RecognitionInferenceSession,
+  detectorRuntimeSpec: 'nanodet-plus-m-320-v1' | 'rotated-fcos-nano-320-v1' =
+    'nanodet-plus-m-320-v1',
 ): InitializedRecognitionModel {
   const runtimeSpec = {
-    detector: 'nanodet-plus-m-320-v1',
-    'tile-classifier': 'gray64-tile-35-v2',
+    detector: detectorRuntimeSpec,
+    'tile-classifier': 'gray64-tile-35-v1',
     'red-five-classifier': 'c8-red-five-v1',
   } as const;
   return {

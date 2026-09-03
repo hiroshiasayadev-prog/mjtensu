@@ -20,6 +20,10 @@ const RUNTIME_SPEC_DESCRIPTORS = {
     runtimeSpec: 'nanodet-plus-m-320-v1',
     role: 'detector',
   },
+  'rotated-fcos-nano-320-v1': {
+    runtimeSpec: 'rotated-fcos-nano-320-v1',
+    role: 'detector',
+  },
   'gray64-tile-35-v1': {
     runtimeSpec: 'gray64-tile-35-v1',
     role: 'tile-classifier',

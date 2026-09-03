@@ -1,6 +1,7 @@
 import {
   SEMANTIC_REGIONS,
   type CaptureRegions,
+  type OrientedRect,
   type Rect,
   type SemanticRegion,
 } from './types';
@@ -78,8 +79,21 @@ export function assignSemanticRegion(
   captureRegions?: CaptureRegions,
 ): SemanticRegion | null {
   assertRect(box, 'detection rectangle');
-  const centerX = box.x + box.width / 2;
-  const centerY = box.y + box.height / 2;
+  return assignSemanticRegionByCenter(
+    box.x + box.width / 2,
+    box.y + box.height / 2,
+    captureRegions,
+  );
+}
+
+export function assignSemanticRegionByCenter(
+  centerX: number,
+  centerY: number,
+  captureRegions?: CaptureRegions,
+): SemanticRegion | null {
+  if (!Number.isFinite(centerX) || !Number.isFinite(centerY)) {
+    throw new Error('Detection center must be finite.');
+  }
 
   for (const region of SEMANTIC_REGIONS) {
     if (captureRegions !== undefined && !captureRegions[region].enabled) {
@@ -136,6 +150,32 @@ export function compositeRectToSource(
   };
 }
 
+export function compositeOrientedRectToSource(
+  compositeBox: OrientedRect,
+  region: SemanticRegion,
+  captureRegions: CaptureRegions,
+): OrientedRect {
+  const source = captureRegions[region].sourceRect;
+  const destination = FIXED_COMPOSITE_LAYOUT.regions[region];
+  assertOrientedRect(compositeBox, 'composite oriented detection rectangle');
+  assertRect(source, `${region} source rectangle`);
+  assertCompatibleAspectRatio(source, region);
+
+  const scaleX = source.width / destination.width;
+  const scaleY = source.height / destination.height;
+  if (Math.abs(scaleX - scaleY) > ASPECT_RATIO_TOLERANCE) {
+    throw new Error(`${region} composite mapping must use a uniform scale for OBB geometry.`);
+  }
+  const scale = (scaleX + scaleY) / 2;
+  return {
+    cx: source.x + (compositeBox.cx - destination.x) * scale,
+    cy: source.y + (compositeBox.cy - destination.y) * scale,
+    width: compositeBox.width * scale,
+    height: compositeBox.height * scale,
+    angleDeg: compositeBox.angleDeg,
+  };
+}
+
 function containsPoint(rect: Rect, x: number, y: number): boolean {
   return (
     x >= rect.x &&
@@ -151,6 +191,20 @@ function intersectRects(left: Rect, right: Rect): Rect {
   const farX = Math.max(x, Math.min(left.x + left.width, right.x + right.width));
   const farY = Math.max(y, Math.min(left.y + left.height, right.y + right.height));
   return { x, y, width: farX - x, height: farY - y };
+}
+
+function assertOrientedRect(rect: OrientedRect, label: string): void {
+  if (
+    !Number.isFinite(rect.cx) ||
+    !Number.isFinite(rect.cy) ||
+    !Number.isFinite(rect.width) ||
+    !Number.isFinite(rect.height) ||
+    !Number.isFinite(rect.angleDeg) ||
+    rect.width <= 0 ||
+    rect.height <= 0
+  ) {
+    throw new Error(`${label} must have finite coordinates, angle, and positive dimensions.`);
+  }
 }
 
 function assertRect(rect: Rect, label: string): void {

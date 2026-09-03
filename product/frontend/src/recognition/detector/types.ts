@@ -13,6 +13,14 @@ export interface Rect {
   readonly height: number;
 }
 
+export interface OrientedRect {
+  readonly cx: number;
+  readonly cy: number;
+  readonly width: number;
+  readonly height: number;
+  readonly angleDeg: number;
+}
+
 export interface CaptureRegion {
   readonly enabled: boolean;
   readonly sourceRect: Rect;
@@ -37,4 +45,6 @@ export interface DecodedDetection {
 export interface RegionDetection extends DecodedDetection {
   readonly region: SemanticRegion;
   readonly sourceBox: Rect;
+  readonly orientedBox?: OrientedRect;
+  readonly sourceOrientedBox?: OrientedRect;
 }

@@ -13,19 +13,18 @@ const PROVENANCE_PATH = resolve(VENDOR_MODEL_DIR, 'provenance.json');
 
 const expectedModels = {
   detector: {
-    artifact: 'nanodet-plus-m-320-real-capture-ft10-l10.onnx',
-    sha256: '9587a02dd1bbccfc14a925dc69c66b3c4a34ab628552b840ec113f7899dbf883',
-    bytes: 5597449,
-    runtimeSpec: 'nanodet-plus-m-320-v1',
+    artifact: 'rotated-fcos-nano-s05-f64-obb120-gn.onnx',
+    sha256: '6bb3b25ea2baa2dc641d5677fbfc8792e0a4e381bd2e0f4cf1dc05de4a38d1b0',
+    bytes: 858340,
+    runtimeSpec: 'rotated-fcos-nano-320-v1',
     sourceRun:
-      '.local/recognition/nanodet_runs/E1_plus_m_320_real_capture_ft10_l10_seed42/model_best',
+      '.local/recognition/rotated_fcos_runs/rfcos_nano_s05_f64_obb120_gn_seed42',
   },
   'tile-classifier': {
-    artifact: 'tile-c8-gray35-obb120-perspective.onnx',
-    sha256: 'f17de1508be0b9b6ebd17746d7a977241c5aa1b33d8aeadeba5b4b03c20fa31c',
-    bytes: 6261185,
-    runtimeSpec: 'gray64-tile-35-v2',
-    sourceRun: '.local/recognition/tile_shape_runs/gray35_obb120_perspective_seed42',
+    artifact: 'mobile-tile-f8-r1.onnx',
+    sha256: '5039c044a490b44e8c645ead5a3280293f78c3c43db9baabd9f07219ff883a7e',
+    bytes: 3873724,
+    runtimeSpec: 'gray64-tile-35-v1',
   },
   'red-five-classifier': {
     artifact: 'red-five-c8-rgb-warmaug.onnx',
@@ -41,7 +40,7 @@ describe('production Recognition model artifacts', () => {
       PRODUCTION_RECOGNITION_MODEL_SET,
     );
     expect(PRODUCTION_RECOGNITION_MODEL_SET.modelSetVersion).toBe(
-      'recognition-v6-2026-09-03',
+      'recognition-v8-2026-09-04',
     );
 
     for (const [role, expected] of Object.entries(expectedModels)) {

@@ -10,15 +10,22 @@ import {
 } from './classifier/runtime';
 import {
   createProductionNanoDetPostprocessor,
-  type NanoDetDetectionPostprocessor,
+  createProductionRotatedFcosPostprocessor,
+  type DetectorDetectionPostprocessor,
 } from './detector/detection-postprocessor';
 import { buildFixedComposite } from './detector/fixed-composite';
 import {
   NANODET_INPUT_SIZE,
   preprocessCompositeCanvas,
 } from './detector/nanodet';
+import {
+  ROTATED_FCOS_INPUT_SIZE,
+  ROTATED_FCOS_OUTPUT_NAMES,
+  preprocessRotatedFcosCompositeCanvas,
+} from './detector/rotated-fcos';
 import type {
   CaptureRegions,
+  OrientedRect,
   Rect,
   RegionDetection,
   SemanticRegion,
@@ -45,6 +52,7 @@ import { buildFrameRecognitionSnapshot } from './semantics/frame-semantics';
 import type {
   ClassifiedRecognitionCandidate,
   FrameRecognitionSnapshot,
+  NormalizedOrientedRect,
   NormalizedRect,
   RecognitionRegion,
 } from './semantics/types';
@@ -56,8 +64,11 @@ export interface ProductionClassifierNormalization {
 
 export interface RecognitionPipelinePlatform {
   buildComposite(frame: RecognitionFrame, regions: CaptureRegions): HTMLCanvasElement;
-  preprocessComposite(composite: HTMLCanvasElement): Float32Array;
-  extractCrop(frame: RecognitionFrame, box: Rect): ClassifierCropImage;
+  preprocessComposite(
+    composite: HTMLCanvasElement,
+    runtimeSpec: RecognitionModelRuntimeSpec,
+  ): Float32Array;
+  extractCrop(frame: RecognitionFrame, box: OrientedRect): ClassifierCropImage;
 }
 
 export interface RecognitionDebugCaptureBuilderInput {
@@ -65,7 +76,7 @@ export interface RecognitionDebugCaptureBuilderInput {
   readonly composite: HTMLCanvasElement;
   readonly captureRegions: CaptureRegions;
   readonly detectorInput: Float32Array;
-  readonly detectorOutput: TensorOutput;
+  readonly detectorOutputs: readonly { readonly name: string; readonly tensor: TensorOutput }[];
   readonly detections: readonly RegionDetection[];
   readonly classifications: readonly TileClassification[];
   readonly snapshot: FrameRecognitionSnapshot;
@@ -80,7 +91,7 @@ export interface ProductionRecognitionPipelineDependencies {
   readonly modelRuntime: RecognitionModelRuntimeInspection;
   /** Test-only/internal seam. Production composition resolves this from runtimeSpec. */
   readonly classifierNormalizationOverride?: ProductionClassifierNormalization;
-  readonly detectorPostprocessor?: NanoDetDetectionPostprocessor;
+  readonly detectorPostprocessor?: DetectorDetectionPostprocessor;
   readonly platform?: RecognitionPipelinePlatform;
   readonly now?: () => number;
   readonly onEvaluationTiming?: (timing: RecognitionEvaluationTiming) => void;
@@ -109,7 +120,8 @@ export function createProductionRecognitionPipeline(
       redFiveClassifierModel.runtimeSpec,
     );
   const detectorPostprocessor =
-    dependencies.detectorPostprocessor ?? createProductionNanoDetPostprocessor();
+    dependencies.detectorPostprocessor ??
+    createDetectorPostprocessor(detectorModel.runtimeSpec);
   const platform = dependencies.platform ?? browserPipelinePlatform;
   const now = dependencies.now ?? monotonicNow;
   const debugCaptureBuilder =
@@ -147,7 +159,10 @@ export function createProductionRecognitionPipeline(
     let composite: HTMLCanvasElement;
     try {
       composite = platform.buildComposite(frame, captureRegions);
-      detectorInput = platform.preprocessComposite(composite);
+      detectorInput = platform.preprocessComposite(
+        composite,
+        detectorModel.runtimeSpec,
+      );
     } catch (error) {
       if (isRecognitionRuntimeError(error)) {
         throw error;
@@ -157,14 +172,20 @@ export function createProductionRecognitionPipeline(
     const detectorPreprocessingFinishedAt = now();
 
     const detectorInferenceStartedAt = now();
-    const detectorOutput = await runDetector(detector, detectorInput);
+    const detectorOutputs = await runDetector(
+      detector,
+      detectorInput,
+      detectorModel.runtimeSpec,
+    );
     const detectorInferenceFinishedAt = now();
 
     const detectorPostprocessingStartedAt = now();
     let detections: readonly RegionDetection[];
     try {
       detections = detectorPostprocessor.process(
-        detectorOutput,
+        detectorOutputs.length === 1
+          ? detectorOutputs[0]!.tensor
+          : detectorOutputs.map(({ tensor }) => tensor),
         captureRegions,
       );
     } catch (error) {
@@ -179,7 +200,10 @@ export function createProductionRecognitionPipeline(
     let crops: readonly ClassifierCropImage[];
     try {
       crops = detections.map((detection) =>
-        platform.extractCrop(frame, detection.sourceBox),
+        platform.extractCrop(
+          frame,
+          detection.sourceOrientedBox ?? rectToOrientedRect(detection.sourceBox),
+        ),
       );
     } catch (error) {
       if (isRecognitionRuntimeError(error)) {
@@ -212,6 +236,9 @@ export function createProductionRecognitionPipeline(
           id: detection.id,
           region: toRecognitionRegion(detection.region),
           bbox: normalizeRect(detection.sourceBox, frame),
+          ...(detection.sourceOrientedBox === undefined
+            ? {}
+            : { obb: normalizeOrientedRect(detection.sourceOrientedBox, frame) }),
           classification,
         };
       },
@@ -247,7 +274,7 @@ export function createProductionRecognitionPipeline(
             composite,
             captureRegions,
             detectorInput,
-            detectorOutput,
+            detectorOutputs,
             detections,
             classifications,
             snapshot,
@@ -300,8 +327,15 @@ const browserPipelinePlatform: RecognitionPipelinePlatform = {
     return buildFixedComposite(frame.source, regions);
   },
 
-  preprocessComposite(composite) {
-    return preprocessCompositeCanvas(composite);
+  preprocessComposite(composite, runtimeSpec) {
+    switch (runtimeSpec) {
+      case 'nanodet-plus-m-320-v1':
+        return preprocessCompositeCanvas(composite);
+      case 'rotated-fcos-nano-320-v1':
+        return preprocessRotatedFcosCompositeCanvas(composite);
+      default:
+        throw modelIncompatible('detector');
+    }
   },
 
   extractCrop(frame, box) {
@@ -317,17 +351,12 @@ const browserPipelinePlatform: RecognitionPipelinePlatform = {
     if (context === null) {
       throw new Error('Recognition crop 2D context is unavailable.');
     }
-    context.drawImage(
-      frame.source,
-      box.x,
-      box.y,
-      box.width,
-      box.height,
-      0,
-      0,
-      width,
-      height,
-    );
+    context.fillStyle = 'rgb(0, 0, 0)';
+    context.fillRect(0, 0, width, height);
+    context.translate(width / 2, height / 2);
+    context.rotate((-box.angleDeg * Math.PI) / 180);
+    context.drawImage(frame.source, -box.cx, -box.cy);
+    context.setTransform(1, 0, 0, 1, 0, 0);
     return {
       width,
       height,
@@ -389,12 +418,13 @@ function buildBrowserRecognitionDebugCapture(
       encoding: 'base64-f32-le',
       data: float32ToBase64(input.detectorInput),
     },
-    detectorOutput: {
-      dims: [...input.detectorOutput.dims],
-      type: input.detectorOutput.type,
-      encoding: 'base64-f32-le',
-      data: float32ToBase64(requireFloat32TensorData(input.detectorOutput)),
-    },
+    detectorOutputs: input.detectorOutputs.map(({ name, tensor }) => ({
+      name,
+      dims: [...tensor.dims],
+      type: tensor.type,
+      encoding: 'base64-f32-le' as const,
+      data: float32ToBase64(requireFloat32TensorData(tensor)),
+    })),
     detections: input.detections.map((detection, index) => {
       const classification = input.classifications[index];
       if (classification === undefined) {
@@ -407,6 +437,12 @@ function buildBrowserRecognitionDebugCapture(
         region: toRecognitionRegion(detection.region),
         compositeBox: { ...detection.box },
         sourceBox: { ...detection.sourceBox },
+        ...(detection.orientedBox === undefined
+          ? {}
+          : { compositeOrientedBox: { ...detection.orientedBox } }),
+        ...(detection.sourceOrientedBox === undefined
+          ? {}
+          : { sourceOrientedBox: { ...detection.sourceOrientedBox } }),
         classification,
       };
     }),
@@ -467,20 +503,17 @@ function float32ToBase64(values: Float32Array): string {
 async function runDetector(
   session: RecognitionInferenceSession,
   input: Float32Array,
-): Promise<TensorOutput> {
-  if (input.length !== 3 * NANODET_INPUT_SIZE * NANODET_INPUT_SIZE) {
+  runtimeSpec: RecognitionModelRuntimeSpec,
+): Promise<readonly { readonly name: string; readonly tensor: TensorOutput }[]> {
+  const inputSize = detectorInputSize(runtimeSpec);
+  if (input.length !== 3 * inputSize * inputSize) {
     throw modelIncompatible('detector');
   }
   const inputName = firstName(session.inputNames, 'detector');
-  const outputName = firstName(session.outputNames, 'detector');
+  const outputNames = detectorOutputNames(runtimeSpec, session.outputNames);
   let outputs: Readonly<Record<string, unknown>>;
   try {
-    const tensor = session.createFloat32Tensor(input, [
-      1,
-      3,
-      NANODET_INPUT_SIZE,
-      NANODET_INPUT_SIZE,
-    ]);
+    const tensor = session.createFloat32Tensor(input, [1, 3, inputSize, inputSize]);
     outputs = await session.run({ [inputName]: tensor });
   } catch (error) {
     if (isRecognitionRuntimeError(error)) {
@@ -489,11 +522,43 @@ async function runDetector(
     throw inferenceFailure('detector', error);
   }
 
-  const output = outputs[outputName];
-  if (!isTensorOutput(output)) {
-    throw modelIncompatible('detector');
+  return outputNames.map((name) => {
+    const output = outputs[name];
+    if (!isTensorOutput(output)) {
+      throw modelIncompatible('detector');
+    }
+    return { name, tensor: output };
+  });
+}
+
+function detectorInputSize(runtimeSpec: RecognitionModelRuntimeSpec): number {
+  switch (runtimeSpec) {
+    case 'nanodet-plus-m-320-v1':
+      return NANODET_INPUT_SIZE;
+    case 'rotated-fcos-nano-320-v1':
+      return ROTATED_FCOS_INPUT_SIZE;
+    default:
+      throw modelIncompatible('detector');
   }
-  return output;
+}
+
+function detectorOutputNames(
+  runtimeSpec: RecognitionModelRuntimeSpec,
+  sessionOutputNames: readonly string[],
+): readonly string[] {
+  switch (runtimeSpec) {
+    case 'nanodet-plus-m-320-v1':
+      return [firstName(sessionOutputNames, 'detector')];
+    case 'rotated-fcos-nano-320-v1':
+      if (
+        !ROTATED_FCOS_OUTPUT_NAMES.every((name) => sessionOutputNames.includes(name))
+      ) {
+        throw modelIncompatible('detector');
+      }
+      return ROTATED_FCOS_OUTPUT_NAMES;
+    default:
+      throw modelIncompatible('detector');
+  }
 }
 
 function createClassifierSessionAdapter(
@@ -549,6 +614,19 @@ function toCaptureRegions(frame: RecognitionFrame): CaptureRegions {
   };
 }
 
+function createDetectorPostprocessor(
+  runtimeSpec: RecognitionModelRuntimeSpec,
+): DetectorDetectionPostprocessor {
+  switch (runtimeSpec) {
+    case 'nanodet-plus-m-320-v1':
+      return createProductionNanoDetPostprocessor();
+    case 'rotated-fcos-nano-320-v1':
+      return createProductionRotatedFcosPostprocessor();
+    default:
+      throw modelIncompatible('detector');
+  }
+}
+
 function denormalizeRect(rect: NormalizedRect, frame: RecognitionFrame): Rect {
   return {
     x: rect.x * frame.sourceSize.width,
@@ -564,6 +642,29 @@ function normalizeRect(rect: Rect, frame: RecognitionFrame): NormalizedRect {
     y: rect.y / frame.sourceSize.height,
     width: rect.width / frame.sourceSize.width,
     height: rect.height / frame.sourceSize.height,
+  };
+}
+
+function normalizeOrientedRect(
+  rect: OrientedRect,
+  frame: RecognitionFrame,
+): NormalizedOrientedRect {
+  return {
+    cx: rect.cx / frame.sourceSize.width,
+    cy: rect.cy / frame.sourceSize.height,
+    width: rect.width / frame.sourceSize.width,
+    height: rect.height / frame.sourceSize.height,
+    angleDeg: rect.angleDeg,
+  };
+}
+
+function rectToOrientedRect(rect: Rect): OrientedRect {
+  return {
+    cx: rect.x + rect.width / 2,
+    cy: rect.y + rect.height / 2,
+    width: rect.width,
+    height: rect.height,
+    angleDeg: 0,
   };
 }
 

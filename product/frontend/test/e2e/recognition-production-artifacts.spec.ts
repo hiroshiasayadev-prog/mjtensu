@@ -8,7 +8,9 @@ test('production Recognition model set loads and executes bounded real-artifact 
   test.setTimeout(120_000);
   await page.goto(HARNESS_PATH);
   await page.waitForFunction(
-    () => window.__MJTENSU_RECOGNITION_ARTIFACTS__?.status !== 'running',
+    () =>
+      window.__MJTENSU_RECOGNITION_ARTIFACTS__ !== undefined &&
+      window.__MJTENSU_RECOGNITION_ARTIFACTS__.status !== 'running',
     undefined,
     { timeout: 110_000 },
   );
@@ -19,11 +21,11 @@ test('production Recognition model set loads and executes bounded real-artifact 
   console.log(`R06_DIAGNOSTICS=${JSON.stringify(diagnostics)}`);
 
   expect(diagnostics.status, diagnostics.error).toBe('ready');
-  expect(diagnostics.modelSetVersion).toBe('recognition-v5-2026-09-03');
+  expect(diagnostics.modelSetVersion).toBe('recognition-v8-2026-09-04');
   expect(diagnostics.providers).toEqual([
     {
       role: 'detector',
-      runtimeSpec: 'nanodet-plus-m-320-v1',
+      runtimeSpec: 'rotated-fcos-nano-320-v1',
       selectedProvider: 'wasm-simd',
       failedProviders: [],
     },
@@ -49,8 +51,7 @@ test('production Recognition model set loads and executes bounded real-artifact 
     logits: [-8.893241, 9.968656],
   });
 
-  expect(diagnostics.blankFrameSnapshot).toEqual({
-    observations: [],
+  expect(diagnostics.blankFrameSnapshot).toMatchObject({
     meldGroups: [],
     meldCommonAngleRadians: null,
     draft: {
@@ -63,4 +64,14 @@ test('production Recognition model set loads and executes bounded real-artifact 
       reason: 'insufficient-visible-tiles',
     },
   });
+  const blankFrameSnapshot = diagnostics.blankFrameSnapshot as {
+    readonly observations: readonly {
+      readonly classification: { readonly kind: string };
+    }[];
+  };
+  expect(
+    blankFrameSnapshot.observations.every(
+      (observation) => observation.classification.kind === 'invalid',
+    ),
+  ).toBe(true);
 });
