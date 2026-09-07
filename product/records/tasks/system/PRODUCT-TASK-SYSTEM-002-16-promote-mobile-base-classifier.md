@@ -7,6 +7,7 @@
 - **depends_on**:
   - PRODUCT-INV-RECOGNITION-011
   - PRODUCT-INV-RECOGNITION-012
+  - PRODUCT-INV-RECOGNITION-013
 - **outputs**:
   - resolution-preserving `mobile-tile-f8-r1` production base-classifier binding
   - updated production model-set/provenance identity
@@ -87,4 +88,6 @@ Direct iPhone 13 WASM-SIMD, one-thread measurement confirms that f8-r1 remains m
 
 The production model set is therefore rewired to `mobile-tile-f8-r1.onnx` as `recognition-v5-2026-09-03`. The user-verified SHA-256 is `5039c044a490b44e8c645ead5a3280293f78c3c43db9baabd9f07219ff883a7e`; the artifact size is `3,873,724` bytes. The runtime contract remains `gray64-tile-35-v1`, with unchanged normalization, label order, dynamic-batch shape, provider preference, and red-five specialist.
 
-This replacement is still **pending live production-pipeline acceptance**. I16 remains `in_progress` until the v5 build is exercised on the iPhone hand/crop distribution that exposed the v4 standard-MobileNet regression and the result confirms that the practical fine-grained errors are materially improved.
+The v5 live production-pipeline check did **not** satisfy semantic acceptance. f8-r1 is reliable when the tiles are close to front-facing, but oblique camera views still make fine-grained manzu identity unstable, including `6m -> 5m/7m`. Its measured live timing remains in the expected deployment class (about `43 ms` base inference for 18 candidates in the observed frame), so the remaining blocker is accuracy under view-angle distortion rather than target-device inference cost.
+
+INV-012 is therefore closed as an architecture investigation: preserving late `8 x 8` spatial resolution improves the offline tradeoff but is insufficient under the existing `random360` training distribution. PRODUCT-INV-RECOGNITION-013 now owns the separate perspective/foreshortening-aware augmentation question. I16 remains `in_progress` pending the INV-013 disposition and subsequent live acceptance or rollback decision.
