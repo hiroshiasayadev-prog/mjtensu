@@ -21,6 +21,10 @@ from torch import nn
 
 from tile_shape_classifier import DEFAULT_C8_FIELDS, build_model, describe_model
 from classifier_geometric_augmentation import projective_augment_batch
+from resolution_preserving_mobile_models import (
+    build_resolution_preserving_mobile_classifier,
+    describe_resolution_preserving_mobile_classifier,
+)
 
 
 DEFAULT_SEED = 42
@@ -85,7 +89,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--repository-root", type=Path, default=repository_root)
     parser.add_argument("--database", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--model", choices=("c8", "plain"), default="c8")
+    parser.add_argument(
+        "--model",
+        choices=("c8", "plain", "mobile-tile-f8-r1"),
+        default="c8",
+    )
     parser.add_argument("--c8-fields", type=int, nargs="+", default=list(DEFAULT_C8_FIELDS))
     parser.add_argument("--epochs", type=int, default=DEFAULT_EPOCHS)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
@@ -203,12 +211,22 @@ def main() -> None:
             f"found {class_count} classes"
         )
 
-    model = build_model(
-        args.model,
-        class_count=class_count,
-        c8_fields=tuple(args.c8_fields),
-    ).to(device)
-    model_description = describe_model(model, args.model)
+    if args.model == "mobile-tile-f8-r1":
+        model = build_resolution_preserving_mobile_classifier(
+            args.model,
+            class_count=class_count,
+        ).to(device)
+        model_description = describe_resolution_preserving_mobile_classifier(
+            model,
+            args.model,
+        )
+    else:
+        model = build_model(
+            args.model,
+            class_count=class_count,
+            c8_fields=tuple(args.c8_fields),
+        ).to(device)
+        model_description = describe_model(model, args.model)
 
     config = {
         "database": str(database),

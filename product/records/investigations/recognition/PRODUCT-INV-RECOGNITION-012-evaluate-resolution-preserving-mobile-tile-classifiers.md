@@ -1,6 +1,6 @@
 # PRODUCT-INV-RECOGNITION-012: Evaluate resolution-preserving mobile tile classifiers
 
-- **status**: in_progress
+- **status**: completed
 - **date**: 2026-09-02
 - **area**: recognition
 - **depends_on**:
@@ -200,11 +200,15 @@ For f8-r1 the worst deterministic crop-perturbation condition was `shift-x-plus-
 
 The isolated iPhone benchmark used production-equivalent WASM-SIMD with `numThreads=1`, `wasmProxy=false`, 10 warmup runs, and 50 measurement runs. At production-sized batches f8-r1 is slower than the standard MobileNet speed reference but remains clearly faster than Plain, while f8-r2 loses that deployment advantage and is slower than Plain.
 
-## Provisional decision
+## Decision
 
-Select `mobile-tile-f8-r1` as the production finalist and reject f8-r2 for promotion. f8-r1 gives the better measured deployment tradeoff: substantially stronger dense-angle/crop robustness than the standard MobileNet candidate while retaining a meaningful iPhone latency advantage over Plain. The standard MobileNet remains rejected because live iPhone recognition exposed fine-grained manzu identity errors despite its superior isolated latency.
+Select `mobile-tile-f8-r1` as the best architecture/deployment tradeoff produced by this investigation and reject f8-r2 for promotion. f8-r1 gives substantially stronger dense-angle/crop robustness than the standard MobileNet candidate while retaining a meaningful iPhone latency advantage over Plain. The standard MobileNet remains rejected because live iPhone recognition exposed fine-grained manzu identity errors despite its superior isolated latency.
 
-The investigation remains `in_progress` until f8-r1 is exercised through the actual production Recognition pipeline on the live crop distribution that exposed the standard-MobileNet regression. A successful isolated benchmark is not sufficient to close INV-012.
+The subsequent v5 live iPhone check showed an important boundary on this result: f8-r1 behaves well when the tiles are close to front-facing, but oblique camera views still produce unstable fine-grained manzu identity, including `6m -> 5m/7m`. This means preserving an `8 x 8` late feature map improved the offline architecture metrics but did **not** by itself solve the production angle-dependent failure.
+
+That live result closes the architectural question rather than extending it. INV-012 intentionally kept augmentation fixed at `random360`; changing the image-formation model now would confound the architecture comparison. The remaining unmeasured lower-resolution/deeper matrix points are no longer decision-relevant enough to justify continuing the sweep: the cheapest useful 8x8-preserving finalist already demonstrates that late spatial preservation alone is insufficient, while f8-r2 already loses the desired mobile latency advantage.
+
+Perspective/foreshortening-aware augmentation and evaluation are therefore moved to PRODUCT-INV-RECOGNITION-013. INV-012 is complete with the conclusion that **late spatial preservation is helpful offline but insufficient for oblique live-view robustness under the existing 2D random-rotation training distribution**.
 
 ## Non-goals
 
