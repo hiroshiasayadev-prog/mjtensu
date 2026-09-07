@@ -17,6 +17,7 @@ from tools.recognition.build_tile_crop_dataset import (
     configure_output_database,
     crop_axis_aligned_bbox,
     extract_rotated_crop,
+    manual_annotation_is_usable,
     normalize_jp_tile_label,
 )
 
@@ -46,6 +47,26 @@ class NormalizeJpTileLabelTests(unittest.TestCase):
 
     def test_supercategory_is_not_a_tile(self) -> None:
         self.assertIsNone(normalize_jp_tile_label("mahjong-tiles"))
+
+
+class ManualReviewStateTests(unittest.TestCase):
+    def test_complete_annotation_is_usable_without_review_metadata(self) -> None:
+        row = {"annotation_status": "complete", "annotation_json": "{}"}
+        self.assertTrue(manual_annotation_is_usable(row))
+
+    def test_human_reviewed_draft_is_usable(self) -> None:
+        row = {
+            "annotation_status": "draft",
+            "annotation_json": json.dumps({"review": {"state": "human_reviewed"}}),
+        }
+        self.assertTrue(manual_annotation_is_usable(row))
+
+    def test_model_suggested_draft_is_not_usable(self) -> None:
+        row = {
+            "annotation_status": "draft",
+            "annotation_json": json.dumps({"review": {"state": "model_suggested"}}),
+        }
+        self.assertFalse(manual_annotation_is_usable(row))
 
 
 class ManualAssignmentTests(unittest.TestCase):

@@ -587,6 +587,7 @@ class CaptureDatabase:
                     capture_task.task_order,
                     capture_task.task_json,
                     COALESCE(capture_annotation.status, 'unannotated') AS annotation_status,
+                    capture_annotation.annotation_json,
                     capture_annotation.updated_at
                 FROM capture
                 JOIN capture_task ON capture_task.id = capture.task_id
@@ -599,6 +600,18 @@ class CaptureDatabase:
             result: list[dict[str, Any]] = []
             for row in rows:
                 task = json.loads(row["task_json"])
+                review_state = None
+                review_source = None
+                if row["annotation_json"] is not None:
+                    annotation_document = json.loads(row["annotation_json"])
+                    review = annotation_document.get("review") if isinstance(annotation_document, dict) else None
+                    if isinstance(review, dict) and review.get("state") in {
+                        "model_suggested",
+                        "human_reviewed",
+                    }:
+                        review_state = str(review["state"])
+                        source = review.get("source")
+                        review_source = None if source is None else str(source)
                 result.append(
                     {
                         "captureId": str(row["capture_id"]),
@@ -616,6 +629,8 @@ class CaptureDatabase:
                         "annotationUpdatedAt": (
                             None if row["updated_at"] is None else str(row["updated_at"])
                         ),
+                        "reviewState": review_state,
+                        "reviewSource": review_source,
                     }
                 )
             return result

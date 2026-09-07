@@ -95,14 +95,26 @@ class DatabaseTest(unittest.TestCase):
 
             captures = database.annotation_capture_list(CAMPAIGN_ID)
             self.assertEqual("draft", captures[0]["annotationStatus"])
+            self.assertIsNone(captures[0]["reviewState"])
+            self.assertIsNone(captures[0]["reviewSource"])
             detail = database.annotation_capture("cap_annotation")
             self.assertIsNotNone(detail)
             assert detail is not None
             self.assertEqual(document, detail["annotation"]["document"])
 
-            database.save_annotation("cap_annotation", "complete", 1, document)
+            reviewed_document = {
+                **document,
+                "review": {
+                    "state": "human_reviewed",
+                    "source": "annotation_tool",
+                    "reviewedAt": "2026-09-03T00:00:00+00:00",
+                },
+            }
+            database.save_annotation("cap_annotation", "complete", 1, reviewed_document)
             updated = database.annotation_capture_list(CAMPAIGN_ID)
             self.assertEqual("complete", updated[0]["annotationStatus"])
+            self.assertEqual("human_reviewed", updated[0]["reviewState"])
+            self.assertEqual("annotation_tool", updated[0]["reviewSource"])
 
     def test_undo_last_capture_reopens_task(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

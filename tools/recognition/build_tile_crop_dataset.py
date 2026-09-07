@@ -625,14 +625,15 @@ def build_manual_source(
                 capture_task.brightness,
                 capture_task.shadow,
                 capture_task.task_json,
+                capture_annotation.status AS annotation_status,
                 capture_annotation.annotation_json
             FROM capture
             JOIN capture_task ON capture_task.id = capture.task_id
             JOIN capture_annotation ON capture_annotation.capture_id = capture.id
-            WHERE capture_annotation.status = 'complete'
             ORDER BY capture_task.task_order
             """
         ).fetchall()
+        rows = [row for row in rows if manual_annotation_is_usable(row)]
     finally:
         source_connection.close()
 
@@ -714,6 +715,14 @@ def build_manual_source(
         "crop_count": total_count,
         "label_counts": dict(sorted(label_counts.items())),
     }
+
+
+def manual_annotation_is_usable(row: sqlite3.Row) -> bool:
+    if str(row["annotation_status"]) == "complete":
+        return True
+    document = json.loads(str(row["annotation_json"]))
+    review = document.get("review") if isinstance(document, dict) else None
+    return isinstance(review, dict) and review.get("state") == "human_reviewed"
 
 
 def iter_manual_capture_jobs(
@@ -1188,6 +1197,7 @@ def manual_rows_fingerprint(
             "brightness",
             "shadow",
             "task_json",
+            "annotation_status",
             "annotation_json",
         ):
             value = row[column]
