@@ -1,0 +1,64 @@
+{
+  "schema": "mjtensu.mldb/evaluation-protocol/v1",
+  "id": "rotated-fcos-standard-v1",
+  "status": "sealed",
+  "task": "mahjong-tile-rotated-detection-v1",
+  "name": "Standard rotated FCOS evaluation",
+  "description": "Self-contained rotated detector evaluation over the immutable MLDB validation split.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "10a26bd2515ad4370217bcd036802739a0f71f3ac0a23e8fe5ef0b616bea1651"
+  },
+  "parameters": {
+    "batch_size": {
+      "default": 8
+    },
+    "score_threshold": {
+      "default": 0.2
+    },
+    "nms_iou_threshold": {
+      "default": 0.45
+    },
+    "match_iou_threshold": {
+      "default": 0.5
+    },
+    "max_detections": {
+      "default": 64
+    },
+    "amp": {
+      "default": true
+    },
+    "tf32": {
+      "default": true
+    }
+  },
+  "outputs": {
+    "metrics": {
+      "precision": {
+        "type": "number"
+      },
+      "recall": {
+        "type": "number"
+      },
+      "f1": {
+        "type": "number"
+      },
+      "rotated_iou_mean": {
+        "type": "number"
+      },
+      "angle_error_deg_mean": {
+        "type": "number"
+      },
+      "tp": {
+        "type": "number"
+      },
+      "fp": {
+        "type": "number"
+      },
+      "fn": {
+        "type": "number"
+      }
+    },
+    "artifacts": {}
+  }
+}

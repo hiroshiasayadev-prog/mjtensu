@@ -87,6 +87,7 @@ Validation of concrete sample columns and target/class-index agreement belongs t
 | Corpus sibling placement | `spec:mldb.repository.layout`. |
 | Task semantics | `spec:mldb.catalog.task_format`. |
 | Image-classification SQLite sample contract | `spec:mldb.catalog.image_classification_corpus`. |
+| Rotated-object-detection SQLite sample contract | `spec:mldb.catalog.rotated_object_detection_corpus`. |
 | Builder implementation details | Corpus sibling `.py` implementation. |
 | How splits are consumed during training or evaluation | Training and evaluation topics. |
 
@@ -96,5 +97,6 @@ Validation of concrete sample columns and target/class-index agreement belongs t
 |---|---|
 | `spec:mldb.catalog` | Parent catalog Index. |
 | `spec:mldb.catalog.task_format` | Defines the referenced semantic Task. |
+| `spec:mldb.catalog.rotated_object_detection_corpus` | Concrete SQLite contract for rotated detection. |
 | `spec:mldb.repository.layout` | Defines Corpus sibling placement. |
 | `spec:mldb.runtime.asset_resolution` | Resolves the Corpus and verifies applicable integrity before consumption. |

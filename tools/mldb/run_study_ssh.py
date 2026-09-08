@@ -19,7 +19,6 @@ from mldb.src.repository._local_filesystem import LocalFilesystem
 from mldb.src.repository.layout import RepositoryLayout
 from mldb.src.study.run import StudyRunStatus
 
-from tools.mldb.bootstrap_tile_shape import CORPUS_ID, STUDY_ID
 
 
 def _queue_now() -> str:
@@ -39,33 +38,21 @@ class _NoRetryPolicy:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Launch the real tile-shape smoke Study and execute it over SSH."
+        description="Launch any authored MLDB Study and execute it over SSH."
     )
     parser.add_argument("--host", required=True)
+    parser.add_argument("--study-id", required=True)
     parser.add_argument("--repo-root", type=Path, default=REPO_ROOT)
     parser.add_argument("--remote-root", default=".cache/mjtensu-mldb-worker")
     parser.add_argument("--remote-python", default="/srv/bugrat/data-lv/mjtensu/nanodet/nanodet/.venv/bin/python")
     parser.add_argument("--heartbeat-seconds", type=float, default=60.0)
-    parser.add_argument("--max-worker-invocations", type=int, default=8)
+    parser.add_argument("--max-worker-invocations", type=int, default=100000)
     return parser.parse_args()
-
-
-def _ensure_bootstrap(repo_root: Path) -> None:
-    layout = RepositoryLayout(repo_root)
-    if layout.corpus_artifact_path(CORPUS_ID).is_file():
-        return
-    subprocess.run(
-        [sys.executable, str(repo_root / "tools" / "mldb" / "bootstrap_tile_shape.py")],
-        cwd=repo_root,
-        check=True,
-    )
 
 
 def main() -> None:
     args = parse_args()
     repo_root = args.repo_root.resolve()
-    _ensure_bootstrap(repo_root)
-
     # Refuse to allocate a Study Run until the GPU host is reachable/authenticated.
     subprocess.run(["ssh", args.host, "true"], check=True)
 
@@ -75,7 +62,7 @@ def main() -> None:
     retry_policy = _NoRetryPolicy()
 
     launched = execute_study(
-        StudyId(STUDY_ID),
+        StudyId(args.study_id),
         date.today(),
         _runtime_now(),
         layout,

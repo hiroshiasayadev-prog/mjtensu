@@ -1,0 +1,49 @@
+{
+  "schema": "mjtensu.mldb/architecture/v1",
+  "id": "rotated-fcos-nano-s05-f64-v1",
+  "status": "sealed",
+  "task": "mahjong-tile-rotated-detection-v1",
+  "name": "Rotated FCOS Nano ShuffleNet 0.5x F64",
+  "family": "rotated-fcos-nano",
+  "description": "ShuffleNetV2 0.5x backbone with 64-channel FPN and shared two-layer depthwise-separable rotated FCOS head using GroupNorm.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sha256": "86914300e0005ce79ba61c37a63074f26b85abec4b2e0aa25a8746e31a96fa9f"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        3,
+        320,
+        320
+      ]
+    },
+    "output": {
+      "kind": "rotated-fcos-dense",
+      "levels": [
+        {
+          "stride": 8,
+          "channels": 8
+        },
+        {
+          "stride": 16,
+          "channels": 8
+        },
+        {
+          "stride": 32,
+          "channels": 8
+        }
+      ]
+    }
+  },
+  "structure": {
+    "summary": "ShuffleNetV2-0.5x + FPN64 + shared DW-separable FCOS head",
+    "traits": [
+      "rgb",
+      "rotated-detection",
+      "group-normalization"
+    ]
+  }
+}

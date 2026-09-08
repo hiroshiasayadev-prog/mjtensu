@@ -1,6 +1,6 @@
 {
   "schema": "mjtensu.mldb/architecture/v1",
-  "id": "tile-plain-gray35-v1",
+  "id": "tile-plain-gray35-v2",
   "status": "sealed",
   "task": "tile-shape-classification-35-v1",
   "name": "Plain gray35 classifier",

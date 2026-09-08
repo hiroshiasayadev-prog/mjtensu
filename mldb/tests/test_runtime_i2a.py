@@ -151,6 +151,70 @@ class RuntimeResolutionTests(unittest.TestCase):
         with self.assertRaises(ValidationFailedError):
             resolve_corpus(corpus_id, self.layout, self.fs)
 
+    def _make_rotated_corpus(self, *, label: str = "tile", obb=None) -> CorpusId:
+        task_id = TaskId("detector-task-v1")
+        self._write_json(
+            self.layout.task_metadata_path(task_id),
+            {
+                "schema": "mjtensu.mldb/task/v1",
+                "id": str(task_id),
+                "name": "detector",
+                "problem_type": "rotated-object-detection",
+                "description": "rotated detector",
+                "input": {"semantic_unit": "image"},
+                "target": {
+                    "type": "rotated-object-detection",
+                    "labels": ["tile"],
+                    "geometry": {"format": "cx-cy-w-h-angle-deg", "angle_period_deg": 180},
+                },
+                "semantics": {},
+                "scope": {"includes": ["tiles"], "excludes": []},
+            },
+        )
+        corpus_id = CorpusId("obb-v1")
+        artifact = self.layout.corpus_artifact_path(corpus_id)
+        connection = sqlite3.connect(artifact)
+        connection.execute(
+            "CREATE TABLE samples (sample_id TEXT, split TEXT, annotations_json TEXT, pixels BLOB)"
+        )
+        annotations = [{"label": label, "obb": obb or [1.0, 1.0, 1.0, 2.0, 0.0]}]
+        connection.execute(
+            "INSERT INTO samples VALUES (?, ?, ?, ?)",
+            ("s1", "train", json.dumps(annotations), bytes(range(12))),
+        )
+        connection.commit(); connection.close()
+        data = artifact.read_bytes()
+        self._write_json(
+            self.layout.corpus_metadata_path(corpus_id),
+            {
+                "schema": "mjtensu.mldb/corpus/v1",
+                "id": str(corpus_id),
+                "task": str(task_id),
+                "artifact": {"format": "sqlite", "sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)},
+                "data": {"schema": "mjtensu.mldb/rotated-object-detection-corpus/v1", "table": "samples"},
+                "representation": {"kind": "image", "dtype": "uint8", "shape": [3, 2, 2], "payload_column": "pixels"},
+                "builder": {"parameters": {}},
+                "splits": {"train": 1},
+            },
+        )
+        self.layout.corpus_builder_path(corpus_id).write_text("# builder\n", encoding="utf-8")
+        return corpus_id
+
+    def test_rotated_detection_corpus_resolves(self) -> None:
+        corpus_id = self._make_rotated_corpus()
+        handle = resolve_corpus(corpus_id, self.layout, self.fs)
+        self.assertEqual("mjtensu.mldb/rotated-object-detection-corpus/v1", handle.metadata.data.schema)
+
+    def test_rotated_detection_corpus_rejects_unknown_label(self) -> None:
+        corpus_id = self._make_rotated_corpus(label="unknown")
+        with self.assertRaises(ValidationFailedError):
+            resolve_corpus(corpus_id, self.layout, self.fs)
+
+    def test_rotated_detection_corpus_rejects_invalid_obb(self) -> None:
+        corpus_id = self._make_rotated_corpus(obb=[1.0, 1.0, -1.0, 2.0, 0.0])
+        with self.assertRaises(ValidationFailedError):
+            resolve_corpus(corpus_id, self.layout, self.fs)
+
     def test_architecture_resolution_and_executable_hash(self) -> None:
         architecture_id = ArchitectureId("plain-v1")
         implementation = self.layout.architecture_implementation_path(architecture_id)

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import math
 import sqlite3
 from pathlib import Path
 from typing import TYPE_CHECKING, Mapping
@@ -11,7 +13,7 @@ from ..catalog.architecture import (
     ArchitectureStructure, validate_architecture_metadata,
 )
 from ..catalog.corpus import Corpus, CorpusArtifact, CorpusDataSpec, validate_corpus
-from ..catalog.task import CategoricalTarget, Task, TaskInput, TaskScope, validate_task
+from ..catalog.task import (CategoricalTarget, RotatedObjectDetectionGeometry, RotatedObjectDetectionTarget, Task, TaskInput, TaskScope, validate_task)
 from ..common.errors import NotFoundError, ValidationFailedError, ValidationIssue, ValidationReport
 from ..common.ids import (
     ArchitectureId, CorpusId, EvaluationProtocolId, ModelId, StudyId, TaskId,
@@ -214,15 +216,35 @@ def _normalize_task(raw: Mapping[str, object]) -> Task:
     inp = _mapping(_required(raw, "input"), "input")
     target = _mapping(_required(raw, "target"), "target")
     scope = _mapping(_required(raw, "scope"), "scope")
+    target_type = target.get("type")
+    if target_type == "categorical":
+        normalized_target = CategoricalTarget(
+            type="categorical",
+            labels=tuple(_sequence(_required(target, "labels"), "target.labels")),
+        )
+    elif target_type == "rotated-object-detection":
+        geometry = _mapping(_required(target, "geometry"), "target.geometry")
+        normalized_target = RotatedObjectDetectionTarget(
+            type="rotated-object-detection",
+            labels=tuple(_sequence(_required(target, "labels"), "target.labels")),
+            geometry=RotatedObjectDetectionGeometry(
+                format=_required(geometry, "format"),
+                angle_period_deg=_required(geometry, "angle_period_deg"),
+            ),
+        )
+    else:
+        normalized_target = dict(target)
     return Task(
         schema=_required(raw, "schema"), id=TaskId(_required(raw, "id")),
         name=_required(raw, "name"), problem_type=_required(raw, "problem_type"),
         description=_required(raw, "description"),
         input=TaskInput(semantic_unit=_required(inp, "semantic_unit")),
-        target=CategoricalTarget(type=_required(target, "type"), labels=tuple(_sequence(_required(target, "labels"), "target.labels"))),
+        target=normalized_target,
         semantics=_mapping(_required(raw, "semantics"), "semantics"),
-        scope=TaskScope(includes=tuple(_sequence(_required(scope, "includes"), "scope.includes")),
-                        excludes=tuple(_sequence(_required(scope, "excludes"), "scope.excludes"))),
+        scope=TaskScope(
+            includes=tuple(_sequence(_required(scope, "includes"), "scope.includes")),
+            excludes=tuple(_sequence(_required(scope, "excludes"), "scope.excludes")),
+        ),
     )
 
 
@@ -377,6 +399,9 @@ def _quote_identifier(value: str) -> str:
 
 
 def _validate_corpus_sqlite(corpus: Corpus, task: Task, artifact_path: Path) -> None:
+    if corpus.data.schema == "mjtensu.mldb/rotated-object-detection-corpus/v1":
+        _validate_rotated_detection_corpus_sqlite(corpus, task, artifact_path)
+        return
     if corpus.data.schema != "mjtensu.mldb/image-classification-corpus/v1":
         _fail("corpus.data.schema.unsupported", "Unsupported concrete Corpus data schema.", "data.schema")
     representation = corpus.representation
@@ -409,6 +434,12 @@ def _validate_corpus_sqlite(corpus: Corpus, task: Task, artifact_path: Path) -> 
         empty_split = connection.execute(f"SELECT 1 FROM {table} WHERE split IS NULL OR split = '' LIMIT 1").fetchone()
         if empty_split is not None:
             _fail("corpus.split.invalid", "split must be non-empty for every sample.", "split")
+        if not isinstance(task.target, CategoricalTarget):
+            _fail(
+                "corpus.task.target.incompatible",
+                "Image-classification Corpus requires a categorical Task target.",
+                "task",
+            )
         labels = task.target.labels
         label_to_index = {label: index for index, label in enumerate(labels)}
         payload_sql = _quote_identifier(payload_column)
@@ -422,6 +453,133 @@ def _validate_corpus_sqlite(corpus: Corpus, task: Task, artifact_path: Path) -> 
         actual_splits = dict(connection.execute(f"SELECT split, COUNT(*) FROM {table} GROUP BY split").fetchall())
         if actual_splits != dict(corpus.splits):
             _fail("corpus.splits.mismatch", "Corpus split summary disagrees with canonical sample table.", "splits")
+    except sqlite3.Error as error:
+        _fail("corpus.sqlite.invalid", f"Invalid canonical SQLite artifact: {error}")
+    finally:
+        connection.close()
+
+
+def _validate_rotated_detection_corpus_sqlite(
+    corpus: Corpus,
+    task: Task,
+    artifact_path: Path,
+) -> None:
+    target = task.target
+    if not isinstance(target, RotatedObjectDetectionTarget):
+        _fail(
+            "corpus.task.target.incompatible",
+            "Rotated detection Corpus requires a rotated-object-detection Task.",
+            "task",
+        )
+    representation = corpus.representation
+    if representation.get("kind") != "image" or representation.get("dtype") != "uint8":
+        _fail(
+            "corpus.representation.unsupported",
+            "Rotated detection v1 requires image/uint8 representation.",
+            "representation",
+        )
+    payload_column = representation.get("payload_column")
+    shape = representation.get("shape")
+    if not isinstance(payload_column, str) or not payload_column:
+        _fail(
+            "corpus.representation.payload_column.invalid",
+            "payload_column must be a non-empty string.",
+            "representation.payload_column",
+        )
+    if (
+        not isinstance(shape, list)
+        or len(shape) != 3
+        or any(type(dimension) is not int or dimension <= 0 for dimension in shape)
+    ):
+        _fail(
+            "corpus.representation.shape.invalid",
+            "Rotated detection shape must be positive [C,H,W].",
+            "representation.shape",
+        )
+    element_count = shape[0] * shape[1] * shape[2]
+    try:
+        connection = sqlite3.connect(f"{artifact_path.resolve().as_uri()}?mode=ro", uri=True)
+    except sqlite3.Error as error:
+        _fail(
+            "corpus.sqlite.open_failed",
+            f"Could not open canonical SQLite artifact read-only: {error}",
+        )
+    try:
+        table = _quote_identifier(corpus.data.table)
+        info = connection.execute(f"PRAGMA table_info({table})").fetchall()
+        columns = {row[1] for row in info}
+        required = {"sample_id", "split", "annotations_json", payload_column}
+        missing = required - columns
+        if missing:
+            _fail(
+                "corpus.sqlite.columns.missing",
+                f"Required sample columns are missing: {sorted(missing)!r}.",
+            )
+        duplicate = connection.execute(
+            f"SELECT sample_id FROM {table} GROUP BY sample_id HAVING COUNT(*) > 1 LIMIT 1"
+        ).fetchone()
+        if duplicate is not None:
+            _fail(
+                "corpus.sample_id.duplicate",
+                "sample_id must be unique within the Corpus.",
+                "sample_id",
+            )
+        empty_split = connection.execute(
+            f"SELECT 1 FROM {table} WHERE split IS NULL OR split = '' LIMIT 1"
+        ).fetchone()
+        if empty_split is not None:
+            _fail(
+                "corpus.split.invalid",
+                "split must be non-empty for every sample.",
+                "split",
+            )
+        payload_sql = _quote_identifier(payload_column)
+        rows = connection.execute(
+            f"SELECT annotations_json, typeof({payload_sql}), length({payload_sql}) FROM {table}"
+        )
+        labels = frozenset(target.labels)
+        for annotations_raw, storage_type, payload_size in rows:
+            if storage_type != "blob" or payload_size != element_count:
+                _fail(
+                    "corpus.payload.mismatch",
+                    "Image payload is not the declared uint8 BLOB shape.",
+                    f"representation.{payload_column}",
+                )
+            try:
+                annotations = json.loads(annotations_raw)
+            except (TypeError, json.JSONDecodeError) as error:
+                _fail(
+                    "corpus.annotations.invalid",
+                    f"annotations_json is invalid JSON: {error}",
+                    "annotations_json",
+                )
+            if not isinstance(annotations, list):
+                _fail(
+                    "corpus.annotations.invalid",
+                    "annotations_json must be a JSON array.",
+                    "annotations_json",
+                )
+            for annotation in annotations:
+                if not isinstance(annotation, dict):
+                    _fail("corpus.annotation.invalid", "Detection annotation must be an object.", "annotations_json")
+                label = annotation.get("label")
+                obb = annotation.get("obb")
+                if label not in labels:
+                    _fail("corpus.annotation.label.invalid", "Detection annotation label is outside Task labels.", "annotations_json")
+                if not isinstance(obb, list) or len(obb) != 5:
+                    _fail("corpus.annotation.obb.invalid", "Detection annotation OBB must contain five values.", "annotations_json")
+                values = [float(value) for value in obb]
+                if not all(math.isfinite(value) for value in values) or values[2] <= 0.0 or values[3] <= 0.0:
+                    _fail("corpus.annotation.obb.invalid", "Detection annotation OBB must be finite with positive size.", "annotations_json")
+        actual_splits = dict(
+            connection.execute(f"SELECT split, COUNT(*) FROM {table} GROUP BY split").fetchall()
+        )
+        if actual_splits != dict(corpus.splits):
+            _fail(
+                "corpus.splits.mismatch",
+                "Corpus split summary disagrees with canonical sample table.",
+                "splits",
+            )
     except sqlite3.Error as error:
         _fail("corpus.sqlite.invalid", f"Invalid canonical SQLite artifact: {error}")
     finally:

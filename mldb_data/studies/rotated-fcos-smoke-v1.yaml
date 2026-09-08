@@ -1,0 +1,41 @@
+{
+  "schema": "mjtensu.mldb/study/v1",
+  "id": "rotated-fcos-smoke-v1",
+  "status": "sealed",
+  "name": "Rotated FCOS detector smoke",
+  "description": "One-epoch end-to-end smoke Study for the self-contained rotated FCOS detector on the immutable human-reviewed OBB Corpus.",
+  "model": {
+    "train": {
+      "corpus": "rotated-obb-human-review-v1",
+      "protocol": "rotated-fcos-standard-v1",
+      "architectures": [
+        "rotated-fcos-nano-s05-f64-v1"
+      ],
+      "parameters": {
+        "epochs": {
+          "values": [
+            1
+          ]
+        },
+        "batch_size": {
+          "values": [
+            8
+          ]
+        }
+      },
+      "seeds": [
+        42
+      ]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "human-obb-val",
+      "corpus": "rotated-obb-human-review-v1",
+      "protocol": "rotated-fcos-standard-v1",
+      "parameters": {
+        "batch_size": 8
+      }
+    }
+  ]
+}

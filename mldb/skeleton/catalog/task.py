@@ -74,6 +74,26 @@ class CategoricalTarget:
 
 
 @dataclass(frozen=True, slots=True)
+class RotatedObjectDetectionGeometry:
+    """Rotated rectangle geometry contract for detection targets."""
+
+    format: Literal["cx-cy-w-h-angle-deg"]
+    angle_period_deg: int
+
+
+@dataclass(frozen=True, slots=True)
+class RotatedObjectDetectionTarget:
+    """Object labels plus rotated-rectangle geometry semantics."""
+
+    type: Literal["rotated-object-detection"]
+    labels: tuple[str, ...]
+    geometry: RotatedObjectDetectionGeometry
+
+
+TaskTarget: TypeAlias = CategoricalTarget | RotatedObjectDetectionTarget | Mapping[str, object]
+
+
+@dataclass(frozen=True, slots=True)
 class TaskScope:
     """Explicit semantic inclusion and exclusion boundary for one Task."""
 
@@ -85,9 +105,10 @@ class TaskScope:
 class Task:
     """One MLDB Task semantic prediction contract.
 
-    The current Task v1 target structure specified by Design Records is categorical.
-    Future non-categorical target structures require an explicit contract addition;
-    this skeleton does not invent a generic target schema in advance.
+    `target` remains open for non-categorical Task structures that are not globally
+    standardized by Task v1. Categorical Tasks use :class:CategoricalTarget so their
+    normative ordered label ABI remains explicit. Other target mappings are preserved
+    without imposing a global target-type enum.
 
     ``semantics`` stores Task-owned target meaning without standardizing Task-local
     semantic keys. It must not be used for Corpus representation, training policy,
@@ -100,7 +121,7 @@ class Task:
     problem_type: TaskProblemType
     description: str
     input: TaskInput
-    target: CategoricalTarget
+    target: TaskTarget
     semantics: TaskSemantics
     scope: TaskScope
 

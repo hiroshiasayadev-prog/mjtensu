@@ -1,13 +1,13 @@
 {
   "schema": "mjtensu.mldb/train-protocol/v1",
-  "id": "tile-shape-train-gpu-v1",
+  "id": "tile-shape-train-gpu-v3",
   "status": "sealed",
   "task": "tile-shape-classification-35-v1",
-  "name": "Tile shape GPU training",
-  "description": "Reuse the existing cached SQLite tile-classifier training loop.",
+  "name": "Tile shape full-feature self-contained GPU training",
+  "description": "Self-contained tile classifier training preserving the full v1 public augmentation and cache parameter surface.",
   "implementation": {
     "entrypoint": "train",
-    "sha256": "6990d691b57eeb3512fd2c925325b2815fa36b6ab94bc5d5b0a25322c87dceec"
+    "sha256": "c2a1cf0dc9d0fc0c7097808f0371489f292ac58a2f14053064126e4cd83e9dec"
   },
   "parameters": {
     "epochs": {

@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Literal
 
+from ..catalog.task import CategoricalTarget
 from .interface import EvaluationResult, UnavailableOutput
 from .protocol import EvaluationArtifactDeclaration, EvaluationOutputs
 
@@ -267,17 +268,22 @@ def _validate_declared_format(path: Path, artifact_format: str) -> None:
 
 
 def _task_labels(task: TaskHandle) -> frozenset[str]:
-    try:
-        labels = task.metadata.target.labels
-    except AttributeError as exc:
+    target = task.metadata.target
+    if isinstance(target, CategoricalTarget):
+        labels = target.labels
+    elif isinstance(target, Mapping) and target.get("type") == "categorical":
+        raw_labels = target.get("labels")
+        if not isinstance(raw_labels, (list, tuple)):
+            raw_labels = ()
+        labels = tuple(raw_labels)
+    elif hasattr(target, "labels"):
+        labels = tuple(getattr(target, "labels"))
+    else:
+        labels = ()
+    if not labels or not all(isinstance(label, str) for label in labels):
         raise _ArtifactInvalid(
             "schema-validation-failed",
             "Categorical artifact validation requires Task categorical labels.",
-        ) from exc
-    if not isinstance(labels, tuple) or not all(isinstance(label, str) for label in labels):
-        raise _ArtifactInvalid(
-            "schema-validation-failed",
-            "Task categorical labels are not available in the expected validated shape.",
         )
     return frozenset(labels)
 

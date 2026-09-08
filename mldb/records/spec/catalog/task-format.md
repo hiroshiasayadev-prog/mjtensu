@@ -38,6 +38,8 @@ For a categorical Task, `target.labels` is the normative ordered label vocabular
 
 The zero-based array position of a categorical label is its canonical class index for that Task version.
 
+For `target.type: rotated-object-detection`, the concrete target structure is defined by `spec:mldb.catalog.rotated_object_detection_task`.
+
 ## Rules
 
 - The Task ID must match the canonical filename basename defined by `spec:mldb.repository.layout`.
@@ -84,3 +86,4 @@ Generic Task validation does not impose a global enum for `problem_type`, semant
 | `spec:mldb.catalog` | Parent catalog Index. |
 | `spec:mldb.repository.layout` | Defines Task file placement. |
 | `spec:mldb.runtime.asset_resolution` | Defines typed Task lookup. |
+| `spec:mldb.catalog.rotated_object_detection_task` | Defines the concrete rotated-detection target structure. |

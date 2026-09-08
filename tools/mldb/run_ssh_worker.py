@@ -43,14 +43,6 @@ from mldb.src.repository._local_filesystem import LocalFilesystem
 from mldb.src.repository.layout import RepositoryLayout
 
 
-SUPPORT_FILES = (
-    "tools/recognition/train_tile_shape_classifier.py",
-    "tools/recognition/tile_shape_classifier.py",
-    "tools/recognition/classifier_geometric_augmentation.py",
-    "tools/recognition/resolution_preserving_mobile_models.py",
-    "tools/recognition/mobile_classifier_experiment_models.py",
-)
-
 
 def _now_queue() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
@@ -145,12 +137,10 @@ def _remote_shell(parts: list[str]) -> str:
 
 
 def _copy_runtime(repo_root: Path, host: str, remote_run: str) -> None:
-    _run(["ssh", host, f"mkdir -p {shlex.quote(remote_run)}/package/mldb {shlex.quote(remote_run)}/package/tools/recognition {shlex.quote(remote_run)}/assets {shlex.quote(remote_run)}/result"])
+    _run(["ssh", host, f"mkdir -p {shlex.quote(remote_run)}/package/mldb {shlex.quote(remote_run)}/assets {shlex.quote(remote_run)}/result"])
     _run(["scp", str(repo_root / "mldb" / "__init__.py"), f"{host}:{remote_run}/package/mldb/"])
     _run(["scp", "-r", str(repo_root / "mldb" / "src"), f"{host}:{remote_run}/package/mldb/"])
     _run(["scp", str(repo_root / "tools" / "mldb" / "remote_attempt.py"), f"{host}:{remote_run}/"])
-    support = [str(repo_root / relative) for relative in SUPPORT_FILES]
-    _run(["scp", *support, f"{host}:{remote_run}/package/tools/recognition/"])
 
 
 def _ensure_remote_asset(

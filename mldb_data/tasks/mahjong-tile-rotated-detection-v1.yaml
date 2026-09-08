@@ -1,0 +1,27 @@
+schema: mjtensu.mldb/task/v1
+id: mahjong-tile-rotated-detection-v1
+name: Mahjong tile rotated detection
+problem_type: rotated-object-detection
+description: >
+  Detect visible Japanese mahjong tile instances as rotated rectangles on the
+  fixed 320x320 semantic recognition composite.
+input:
+  semantic_unit: fixed-semantic-screen-image
+target:
+  type: rotated-object-detection
+  labels:
+    - mahjong_tile
+  geometry:
+    format: cx-cy-w-h-angle-deg
+    angle_period_deg: 180
+semantics:
+  object: visible-mahjong-tile
+  angle_equivalence_deg: 180
+scope:
+  includes:
+    - tiles in completed-hand region
+    - tiles in dora-indicators region
+    - tiles in melds region
+  excludes:
+    - tile identity classification
+    - concealed or non-visible tiles

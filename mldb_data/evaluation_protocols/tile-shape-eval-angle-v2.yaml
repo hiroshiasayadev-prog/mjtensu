@@ -1,13 +1,13 @@
 {
   "schema": "mjtensu.mldb/evaluation-protocol/v1",
-  "id": "tile-shape-eval-angle-v1",
+  "id": "tile-shape-eval-angle-v2",
   "status": "sealed",
   "task": "tile-shape-classification-35-v1",
-  "name": "Tile shape angle evaluation",
-  "description": "Evaluate manual/jp validation accuracy across configured angles.",
+  "name": "Tile shape self-contained angle evaluation",
+  "description": "Self-contained post-training evaluation of manual and JP validation accuracy across a fixed public angle list.",
   "implementation": {
     "entrypoint": "evaluate",
-    "sha256": "2518d26c8b3bbae4a47ad79c456d43298fc491b08af9b35f005eda1573ba73df"
+    "sha256": "ef6d5586c0b592dc1c95173ebf5dd4be3be80354c70bd295308ddc986caeac90"
   },
   "parameters": {
     "batch_size": {
@@ -26,12 +26,6 @@
     },
     "tf32": {
       "default": true
-    },
-    "cache_device": {
-      "default": "auto"
-    },
-    "cache_vram_fraction": {
-      "default": 0.5
     }
   },
   "outputs": {

@@ -18,6 +18,8 @@ This area owns Task, Corpus, and Architecture contracts. Training procedures, le
 | Task format | Contract | `spec:mldb.catalog.task_format` | YAML contract for semantic prediction Tasks and categorical target ordering. |
 | Corpus format | Contract | `spec:mldb.catalog.corpus_format` | YAML contract for immutable materialized Corpora and artifact integrity metadata. |
 | Image-classification Corpus | Contract | `spec:mldb.catalog.image_classification_corpus` | SQLite sample-table contract for `mjtensu.mldb/image-classification-corpus/v1`. |
+| Rotated detection Task target | Contract | `spec:mldb.catalog.rotated_object_detection_task` | Concrete semantic target contract for labeled rotated rectangles. |
+| Rotated detection Corpus | Contract | `spec:mldb.catalog.rotated_object_detection_corpus` | Self-contained SQLite image/OBB contract for rotated detection. |
 | Architecture format | Contract | `spec:mldb.catalog.architecture_format` | YAML identity, lifecycle, Task binding, interface summary, and implementation integrity for Architectures. |
 | Architecture build interface | Contract | `spec:mldb.catalog.architecture_build` | PyTorch `build()` request, response, and failure boundary. |
 

@@ -111,6 +111,14 @@ def resolve_corpus(
     ``shape``, and payload column must describe the materialized payload rather than an
     alternative runtime reinterpretation.
 
+    For ``mjtensu.mldb/rotated-object-detection-corpus/v1``, successful resolution
+    requires ``sample_id``, ``split``, ``annotations_json``, and the declared image
+    payload column. The representation is a self-contained ``uint8`` image BLOB, and
+    each annotation must satisfy the referenced rotated-detection Task label vocabulary
+    and its ``cx-cy-w-h-angle-deg`` geometry contract. The Worker must therefore need
+    only the assigned immutable Corpus bytes rather than repository-relative source
+    image paths or another mutable annotation store.
+
     For a referenced categorical Task, every canonical sample row must have ``target``
     equal to one of the Task's normative ordered labels, and ``class_index`` must equal
     the zero-based position of that exact ``target`` in the ordered label tuple. Unknown
