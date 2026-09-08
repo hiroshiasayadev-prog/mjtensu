@@ -1,0 +1,37 @@
+{
+  "schema": "mjtensu.mldb/corpus/v1",
+  "id": "gray35-jp500-seed42-v3-jp189-v1",
+  "task": "tile-shape-classification-35-v1",
+  "artifact": {
+    "format": "sqlite",
+    "sha256": "6d1743b560141e0edeaa5730a76be0aa6ea721f17fcf26ebbf1b9d530e4b579b",
+    "bytes": 126447616
+  },
+  "data": {
+    "schema": "mjtensu.mldb/image-classification-corpus/v1",
+    "table": "sample"
+  },
+  "representation": {
+    "kind": "image",
+    "dtype": "uint8",
+    "payload_column": "image_gray_u8",
+    "shape": [
+      64,
+      64
+    ]
+  },
+  "builder": {
+    "parameters": {
+      "source": ".local/recognition/tile_classifier_datasets/gray35_jp500_seed42_v3_jp189.sqlite"
+    }
+  },
+  "splits": {
+    "jp_val": 6800,
+    "manual_val": 450,
+    "train": 19593
+  },
+  "description": "gray35 jp500 seed42 v3 jp189 classifier dataset",
+  "origin": {
+    "source_database": ".local/recognition/tile_classifier_datasets/gray35_jp500_seed42_v3_jp189.sqlite"
+  }
+}

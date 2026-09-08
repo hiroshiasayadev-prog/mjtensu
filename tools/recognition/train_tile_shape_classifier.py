@@ -19,12 +19,20 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from tile_shape_classifier import DEFAULT_C8_FIELDS, build_model, describe_model
-from classifier_geometric_augmentation import projective_augment_batch
-from resolution_preserving_mobile_models import (
-    build_resolution_preserving_mobile_classifier,
-    describe_resolution_preserving_mobile_classifier,
-)
+try:
+    from tile_shape_classifier import DEFAULT_C8_FIELDS, build_model, describe_model
+    from classifier_geometric_augmentation import projective_augment_batch
+    from resolution_preserving_mobile_models import (
+        build_resolution_preserving_mobile_classifier,
+        describe_resolution_preserving_mobile_classifier,
+    )
+except ModuleNotFoundError:  # package-style import for MLDB protocol reuse
+    from tools.recognition.tile_shape_classifier import DEFAULT_C8_FIELDS, build_model, describe_model
+    from tools.recognition.classifier_geometric_augmentation import projective_augment_batch
+    from tools.recognition.resolution_preserving_mobile_models import (
+        build_resolution_preserving_mobile_classifier,
+        describe_resolution_preserving_mobile_classifier,
+    )
 
 
 DEFAULT_SEED = 42

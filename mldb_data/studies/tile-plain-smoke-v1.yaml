@@ -1,0 +1,41 @@
+{
+  "schema": "mjtensu.mldb/study/v1",
+  "id": "tile-plain-smoke-v1",
+  "status": "sealed",
+  "name": "Plain tile classifier smoke",
+  "description": "One-epoch end-to-end smoke Study on the real gray35 corpus.",
+  "model": {
+    "train": {
+      "corpus": "gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-shape-train-gpu-v1",
+      "architectures": [
+        "tile-plain-gray35-v1"
+      ],
+      "parameters": {
+        "epochs": {
+          "values": [
+            1
+          ]
+        },
+        "batch_size": {
+          "values": [
+            256
+          ]
+        }
+      },
+      "seeds": [
+        42
+      ]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "angle-holdout",
+      "corpus": "gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-shape-eval-angle-v1",
+      "parameters": {
+        "batch_size": 1024
+      }
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "schema": "mjtensu.mldb/architecture/v1",
+  "id": "tile-plain-gray35-v1",
+  "status": "sealed",
+  "task": "tile-shape-classification-35-v1",
+  "name": "Plain gray35 classifier",
+  "family": "plain-cnn",
+  "description": "Existing four-stage grayscale CNN baseline.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sha256": "1708dc35bd4247c3befa3bae1b8ccc1cbc5d92cc382d5b3a3f268e685cb82dfc"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        1,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "Conv32-64-128-192 with max-pooling and 256-unit head",
+    "traits": [
+      "grayscale",
+      "baseline"
+    ]
+  }
+}

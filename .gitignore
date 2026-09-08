@@ -35,3 +35,12 @@ product/frontend/dist/
 product/frontend/.vite/
 product/frontend/playwright-report/
 product/frontend/test-results/
+
+# MLDB generated runtime state and materialized artifacts
+/mldb_data/corpora/*.sqlite
+/mldb_data/corpora/*.sqlite-*
+/mldb_data/training_runs/
+/mldb_data/evaluation_runs/
+/mldb_data/study_runs/
+/mldb_data/models/
+/mldb_data/**/__pycache__/
