@@ -13,41 +13,66 @@ jobs:
       - X64
 
     steps:
-      - name: Locate ClearML agent container
+      - name: Locate running ClearML agent
         run: |
           set -euo pipefail
           AGENT="$(docker ps --filter 'name=clearml-agent' --format '{{.ID}}' | head -n1)"
           test -n "$AGENT"
           echo "AGENT=$AGENT" >> "$GITHUB_ENV"
-
-      - name: Verify static Docker CLI repair is present
+          echo "PROJECT=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$AGENT")" >> "$GITHUB_ENV"
+          echo "SERVICE=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.service" }}' "$AGENT")" >> "$GITHUB_ENV"
+          echo "PROJECT_DIR=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$AGENT")" >> "$GITHUB_ENV"
+          echo "CONFIG_FILES=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' "$AGENT")" >> "$GITHUB_ENV"
+      - name: Install static Docker CLI in agent image layer
         run: |
           set -euo pipefail
-          docker exec "$AGENT" /usr/local/bin/docker --version
+          TMP="$(mktemp -d)"
+          curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-27.5.1.tgz -o "$TMP/docker.tgz"
+          tar -xzf "$TMP/docker.tgz" -C "$TMP"
+          docker cp "$TMP/docker/docker" "$AGENT:/usr/local/bin/docker"
+          docker exec "$AGENT" chmod 0755 /usr/local/bin/docker
           docker exec "$AGENT" /usr/local/bin/docker version >/dev/null
-      - name: Upgrade ClearML agent package
+          rm -rf "$TMP"
+
+      - name: Install compatible ClearML agent
         run: |
           set -euo pipefail
-          docker exec "$AGENT" sh -lc 'python3 -m pip install --upgrade clearml-agent==3.0.3'
+          docker exec "$AGENT" sh -lc 'python3 -m pip install --upgrade clearml-agent==1.9.3'
+          docker exec "$AGENT" python3 -c "import pkg_resources; assert pkg_resources.get_distribution('clearml-agent').version == '1.9.3'"
 
-      - name: Verify ClearML agent package metadata
+      - name: Validate Compose ownership metadata
         run: |
           set -euo pipefail
-          docker exec "$AGENT" python3 -c "import pkg_resources; assert pkg_resources.get_distribution('clearml-agent').version == '3.0.3'"
-
-      - name: Restart ClearML agent container
+          test -n "$PROJECT"
+          test -n "$SERVICE"
+          test -d "$PROJECT_DIR"
+          test -n "$CONFIG_FILES"
+      - name: Commit repaired agent image
         run: |
           set -euo pipefail
-          docker restart "$AGENT" >/dev/null
+          docker commit "$AGENT" mldb-clearml-agent:w009 >/dev/null
 
-      - name: Confirm ClearML agent container remains running
+      - name: Write Compose override
+        run: |
+          set -euo pipefail
+          cat > "$PROJECT_DIR/docker-compose.w009-agent.yml" <<EOF
+          services:
+            $SERVICE:
+              image: mldb-clearml-agent:w009
+          EOF
+
+      - name: Recreate ClearML agent from repaired image
+        run: |
+          set -euo pipefail
+          IFS=',' read -ra FILES <<< "$CONFIG_FILES"
+          ARGS=()
+          for f in "${FILES[@]}"; do ARGS+=( -f "$f" ); done
+          docker compose -p "$PROJECT" "${ARGS[@]}" -f "$PROJECT_DIR/docker-compose.w009-agent.yml" up -d "$SERVICE"
+      - name: Verify recreated ClearML agent runtime
         run: |
           set -euo pipefail
           sleep 5
-          test "$(docker inspect -f '{{.State.Running}}' "$AGENT")" = "true"
-
-      - name: Verify repaired runtime after restart
-        run: |
-          set -euo pipefail
-          docker exec "$AGENT" /usr/local/bin/docker version >/dev/null
-          docker exec "$AGENT" python3 -c "import pkg_resources; assert pkg_resources.get_distribution('clearml-agent').version == '3.0.3'"
+          NEW="$(docker ps --filter "label=com.docker.compose.project=$PROJECT" --filter "label=com.docker.compose.service=$SERVICE" --format '{{.ID}}' | head -n1)"
+          test -n "$NEW"
+          docker exec "$NEW" /usr/local/bin/docker version >/dev/null
+          docker exec "$NEW" python3 -c "import pkg_resources; assert pkg_resources.get_distribution('clearml-agent').version == '1.9.3'"
