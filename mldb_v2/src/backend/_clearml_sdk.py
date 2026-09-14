@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -25,9 +26,15 @@ from mldb_v2.src.backend._clearml_observation import (
     _stage_key_from_input,
 )
 from mldb_v2.src.backend._config import BackendConfig
+from mldb_v2.src.common.ids import EntityKind
+from mldb_v2.src.repository.resolution import CanonicalRepositoryResolver
+from mldb_v2.src.study._plan_build import _validate_study_plan
+from mldb_v2.src.training.model import _validate_model
+from mldb_v2.src.training.training_result import _validate_training_result
 
 _MLDB_CONFIG = "mldb"
 _RUNTIME_CONFIG = "mldb.runtime"
+_RUNTIME_SNAPSHOTS_CONFIG = "mldb.runtime_snapshots"
 _PROJECTION_CONFIG = "mldb.runtime_projection"
 _ACTIVE_STATUSES = {"created", "queued", "in_progress", "publishing"}
 _TERMINAL_STATUSES = {"completed", "published", "closed", "failed", "stopped"}
@@ -53,6 +60,7 @@ class ClearMLSDKSettings:
     access_key: str | None = field(default=None, repr=False)
     secret_key: str | None = field(default=None, repr=False)
     repository: str | None = None
+    local_repository_root: str | None = None
     docker_image: str | None = None
     docker_env_file: str | None = None
     docker_gpu: str | None = None
@@ -68,7 +76,7 @@ class ClearMLSDKSettings:
 
     def __post_init__(self) -> None:
         for name in (
-            "api_host", "web_host", "files_host", "repository",
+            "api_host", "web_host", "files_host", "repository", "local_repository_root",
             "docker_image", "docker_env_file", "docker_gpu", "s3_endpoint_url", "s3_region",
             "runtime_data_root", "artifact_uri_prefix",
         ):
@@ -97,6 +105,170 @@ def _optional_string(options: Mapping[str, object], name: str) -> str | None:
 def _string_option(options: Mapping[str, object], name: str, default: str) -> str:
     value = _optional_string(options, name)
     return default if value is None else value
+
+
+def _local_runtime_root(settings: ClearMLSDKSettings) -> Path | None:
+    if settings.local_repository_root is None:
+        return None
+    repository_root = Path(settings.local_repository_root).resolve()
+    configured = settings.runtime_data_root or "mldb_data"
+    path = Path(configured)
+    return path if path.is_absolute() else repository_root / path
+
+
+def _build_runtime_snapshots(
+    settings: ClearMLSDKSettings, stage_input: Mapping[str, object]
+) -> dict[str, object] | None:
+    root = _local_runtime_root(settings)
+    if root is None:
+        return None
+    resolver = CanonicalRepositoryResolver(root)
+    plan_id = cast(str, stage_input["plan"])
+    plan = _validate_study_plan(
+        resolver.resolve(kind=EntityKind.STUDY_PLAN, entity_id=plan_id)
+    )
+    if plan["id"] != plan_id:
+        raise ClearMLSDKError("runtime StudyPlan id does not match StageInput")
+    if plan["content_sha256"] != stage_input["plan_sha256"]:
+        raise ClearMLSDKError("runtime StudyPlan digest does not match StageInput")
+    if plan["source_commit"] != stage_input["source_commit"]:
+        raise ClearMLSDKError("runtime StudyPlan source_commit does not match StageInput")
+    snapshots: dict[str, object] = {"study_plan": dict(plan)}
+    if stage_input["kind"] == "evaluation":
+        runtime_model = stage_input["runtime_model"]
+        if type(runtime_model) is not dict:
+            raise ClearMLSDKError("evaluation StageInput runtime_model is missing")
+        model_id = cast(str, runtime_model["model"])
+        training_result_id = cast(str, runtime_model["training_result"])
+        model = _validate_model(
+            dict(resolver.resolve(kind=EntityKind.MODEL, entity_id=model_id)),
+            expected_id=model_id,
+        )
+        training_result = _validate_training_result(
+            dict(
+                resolver.resolve(
+                    kind=EntityKind.TRAINING_RESULT, entity_id=training_result_id
+                )
+            ),
+            expected_id=training_result_id,
+        )
+        if model["training_result"] != training_result_id:
+            raise ClearMLSDKError("runtime Model training_result does not match StageInput")
+        if training_result["status"] != "completed" or training_result["result"] is None:
+            raise ClearMLSDKError("runtime TrainingResult is not completed")
+        if training_result["result"]["model"] != model_id:
+            raise ClearMLSDKError("runtime TrainingResult model does not match StageInput")
+        if training_result["result"]["weights"] != runtime_model["weights"]:
+            raise ClearMLSDKError("runtime TrainingResult weights do not match StageInput")
+        if training_result["task"] != runtime_model["task"]:
+            raise ClearMLSDKError("runtime TrainingResult task does not match StageInput")
+        if training_result["architecture"] != runtime_model["architecture"]:
+            raise ClearMLSDKError("runtime TrainingResult architecture does not match StageInput")
+        snapshots["training_result"] = dict(training_result)
+        snapshots["model"] = dict(model)
+    return snapshots
+
+
+def _snapshot_path(root: Path, *, domain: str, entity_id: str) -> Path:
+    namespace, local_id = entity_id.split("/", 1)
+    return root / namespace / domain / f"{local_id}.yaml"
+
+
+def _write_runtime_snapshot(path: Path, document: Mapping[str, object]) -> None:
+    record = dict(document)
+    payload = (
+        json.dumps(record, ensure_ascii=False, allow_nan=False, indent=2) + "\n"
+    ).encode("utf-8")
+    if path.exists():
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise ClearMLSDKError("existing runtime snapshot is malformed") from error
+        if existing != record:
+            raise ClearMLSDKError("existing runtime snapshot conflicts with Task snapshot")
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_bytes(payload)
+        os.replace(temporary, path)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _materialize_runtime_snapshots(
+    *,
+    runtime_root: Path,
+    pinned_root: Path,
+    stage_input: Mapping[str, object],
+    snapshots: Mapping[str, object],
+) -> None:
+    expected = {"study_plan"}
+    if stage_input["kind"] == "evaluation":
+        expected |= {"training_result", "model"}
+    if set(snapshots) != expected:
+        raise ClearMLSDKError("runtime snapshot bundle fields do not match stage kind")
+
+    plan_raw = snapshots["study_plan"]
+    if not isinstance(plan_raw, Mapping):
+        raise ClearMLSDKError("runtime StudyPlan snapshot is malformed")
+    plan = _validate_study_plan(plan_raw)
+    if (
+        plan["id"] != stage_input["plan"]
+        or plan["content_sha256"] != stage_input["plan_sha256"]
+        or plan["source_commit"] != stage_input["source_commit"]
+    ):
+        raise ClearMLSDKError("runtime StudyPlan snapshot does not match StageInput")
+
+    namespace = cast(str, stage_input["study_result"]).split("/", 1)[0]
+    pinned_namespace = pinned_root / namespace / "namespace.yaml"
+    runtime_namespace = runtime_root / namespace / "namespace.yaml"
+    if not runtime_namespace.exists():
+        if not pinned_namespace.is_file():
+            raise ClearMLSDKError("pinned namespace is missing for runtime snapshots")
+        runtime_namespace.parent.mkdir(parents=True, exist_ok=True)
+        runtime_namespace.write_bytes(pinned_namespace.read_bytes())
+    _write_runtime_snapshot(
+        _snapshot_path(runtime_root, domain="study_plans", entity_id=cast(str, plan["id"])),
+        plan,
+    )
+
+    if stage_input["kind"] != "evaluation":
+        return
+    runtime_model = stage_input["runtime_model"]
+    if type(runtime_model) is not dict:
+        raise ClearMLSDKError("evaluation StageInput runtime_model is missing")
+    training_raw = snapshots["training_result"]
+    model_raw = snapshots["model"]
+    training = _validate_training_result(
+        dict(cast(Mapping[str, object], training_raw)),
+        expected_id=cast(str, runtime_model["training_result"]),
+    )
+    model = _validate_model(
+        dict(cast(Mapping[str, object], model_raw)),
+        expected_id=cast(str, runtime_model["model"]),
+    )
+    if model["training_result"] != training["id"]:
+        raise ClearMLSDKError("runtime Model snapshot lineage is inconsistent")
+    if training["status"] != "completed" or training["result"] is None:
+        raise ClearMLSDKError("runtime TrainingResult snapshot is not completed")
+    if training["result"]["model"] != model["id"]:
+        raise ClearMLSDKError("runtime TrainingResult snapshot model is inconsistent")
+    if training["result"]["weights"] != runtime_model["weights"]:
+        raise ClearMLSDKError("runtime TrainingResult snapshot weights are inconsistent")
+    _write_runtime_snapshot(
+        _snapshot_path(
+            runtime_root, domain="training_results", entity_id=cast(str, training["id"])
+        ),
+        training,
+    )
+    _write_runtime_snapshot(
+        _snapshot_path(runtime_root, domain="models", entity_id=cast(str, model["id"])),
+        model,
+    )
 
 
 def _load_task_class() -> Any:
@@ -199,6 +371,7 @@ class ClearMLSDKAdapter:
             access_key=_optional_string(options, "access_key"),
             secret_key=_optional_string(options, "secret_key"),
             repository=_optional_string(options, "repository"),
+            local_repository_root=_optional_string(options, "local_repository_root"),
             docker_image=_optional_string(options, "docker_image"),
             docker_env_file=_optional_string(options, "docker_env_file"),
             docker_gpu=_optional_string(options, "docker_gpu"),
@@ -285,6 +458,8 @@ class ClearMLSDKAdapter:
         return records
 
     def create_task(self, request: ClearMLCreateRequest) -> str | None:
+        stage_input = _restore_stage_input(request.launch.stage_input_json)
+        runtime_snapshots = _build_runtime_snapshots(self._settings, stage_input)
         Task = self._Task()
         kwargs: dict[str, object] = {
             "project_name": request.project,
@@ -335,6 +510,11 @@ class ClearMLSDKAdapter:
             name=_MLDB_CONFIG,
             config_dict=dict(request.configuration),
         )
+        if runtime_snapshots is not None:
+            task.set_configuration_object(
+                name=_RUNTIME_SNAPSHOTS_CONFIG,
+                config_dict=runtime_snapshots,
+            )
         task.set_configuration_object(
             name=_RUNTIME_CONFIG,
             config_dict={
@@ -555,6 +735,15 @@ def _run_remote_harness() -> None:
         "MLDB_V2_RUNTIME_DATA_ROOT"
     ) or "mldb_data"
     runtime_data_root = _runtime_path(repository_root, cast(str, runtime_value))
+    runtime_snapshots = _configuration(task, _RUNTIME_SNAPSHOTS_CONFIG)
+    if runtime_snapshots is None:
+        raise ClearMLSDKError("remote harness runtime snapshots are missing")
+    _materialize_runtime_snapshots(
+        runtime_root=runtime_data_root,
+        pinned_root=pinned_data_root,
+        stage_input=stage_input,
+        snapshots=runtime_snapshots,
+    )
     work_root = _runtime_path(
         repository_root,
         cast(str, runtime.get("work_root") or ".mldb-v2-clearml"),

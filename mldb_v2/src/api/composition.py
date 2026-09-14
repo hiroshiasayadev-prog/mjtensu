@@ -51,8 +51,12 @@ def _configured_default_backend(environment: Mapping[str, str]) -> str | None:
     return value
 
 
-def _clearml_backend_config(environment: Mapping[str, str]) -> BackendConfig:
+def _clearml_backend_config(
+    environment: Mapping[str, str], *, repository_root: str | Path | None = None
+) -> BackendConfig:
     options: dict[str, object] = {}
+    if repository_root is not None:
+        options["local_repository_root"] = str(Path(repository_root).resolve())
     for environment_name, option_name in (
         ("CLEARML_API_HOST", "api_host"),
         ("CLEARML_WEB_HOST", "web_host"),
@@ -147,7 +151,11 @@ def compose_application(
         object_bytes=_ObjectByteAccess(
             _LazyS3ObjectByteTransport(_s3_transport_config(runtime_environment))
         ),
-        backend_configs={"clearml": _clearml_backend_config(runtime_environment)},
+        backend_configs={
+            "clearml": _clearml_backend_config(
+                runtime_environment, repository_root=repository_root
+            )
+        },
         mldb_tests_root=Path(repository_root) / "mldb_tests",
     )
     return ApplicationComposition(
