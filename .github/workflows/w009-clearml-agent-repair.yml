@@ -39,8 +39,12 @@ jobs:
         run: |
           set -euo pipefail
           docker restart "$AGENT" >/dev/null
+
+      - name: Confirm ClearML agent container remains running
+        run: |
+          set -euo pipefail
           sleep 5
-          docker ps --filter "id=$AGENT" --format '{{.Status}}' | grep -q '^Up '
+          test "$(docker inspect -f '{{.State.Running}}' "$AGENT")" = "true"
 
       - name: Verify repaired runtime after restart
         run: |
