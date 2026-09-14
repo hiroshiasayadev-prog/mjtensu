@@ -110,6 +110,7 @@ def test_existing_runtime_configuration_mapping_matches_consumers() -> None:
         "MLDB_V2_CLEARML_REPOSITORY": "https://github.com/example/repo.git",
         "MLDB_V2_CLEARML_DOCKER_IMAGE": "python:3.10-slim-bookworm",
         "MLDB_V2_CLEARML_DOCKER_ENV_FILE": "/srv/bugrat/clearml/.env",
+        "MLDB_V2_CLEARML_DOCKER_GPU": "all",
         "MLDB_V2_RUNTIME_DATA_ROOT": "runtime-data",
         "MLDB_V2_ARTIFACT_URI_PREFIX": "s3://bucket/prefix/",
         "MLDB_S3_ENDPOINT_URL": "https://s3.example.invalid",
@@ -131,6 +132,7 @@ def test_existing_runtime_configuration_mapping_matches_consumers() -> None:
     assert settings.repository == "https://github.com/example/repo.git"
     assert settings.docker_image == "python:3.10-slim-bookworm"
     assert settings.docker_env_file == "/srv/bugrat/clearml/.env"
+    assert settings.docker_gpu == "all"
     assert settings.s3_endpoint_url == environment["MLDB_S3_ENDPOINT_URL"]
     assert settings.s3_region == environment["MLDB_S3_REGION"]
     assert settings.runtime_data_root == "runtime-data"

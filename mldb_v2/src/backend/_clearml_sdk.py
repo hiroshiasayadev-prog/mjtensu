@@ -55,6 +55,7 @@ class ClearMLSDKSettings:
     repository: str | None = None
     docker_image: str | None = None
     docker_env_file: str | None = None
+    docker_gpu: str | None = None
     s3_endpoint_url: str | None = None
     s3_region: str | None = None
     script: str = "mldb_v2/src/backend/_clearml_sdk.py"
@@ -68,7 +69,7 @@ class ClearMLSDKSettings:
     def __post_init__(self) -> None:
         for name in (
             "api_host", "web_host", "files_host", "repository",
-            "docker_image", "docker_env_file", "s3_endpoint_url", "s3_region",
+            "docker_image", "docker_env_file", "docker_gpu", "s3_endpoint_url", "s3_region",
             "runtime_data_root", "artifact_uri_prefix",
         ):
             value = getattr(self, name)
@@ -200,6 +201,7 @@ class ClearMLSDKAdapter:
             repository=_optional_string(options, "repository"),
             docker_image=_optional_string(options, "docker_image"),
             docker_env_file=_optional_string(options, "docker_env_file"),
+            docker_gpu=_optional_string(options, "docker_gpu"),
             s3_endpoint_url=_optional_string(options, "s3_endpoint_url"),
             s3_region=_optional_string(options, "s3_region"),
             script=_string_option(options, "script", "mldb_v2/src/backend/_clearml_sdk.py"),
@@ -300,13 +302,16 @@ class ClearMLSDKAdapter:
             return None
         task_id = _task_id(task)
         if self._settings.docker_image is not None:
-            docker_arguments = [
+            docker_arguments: list[str] = []
+            if self._settings.docker_gpu is not None:
+                docker_arguments.extend(["--gpus", self._settings.docker_gpu])
+            docker_arguments.extend([
                 "-e", "AWS_ACCESS_KEY_ID",
                 "-e", "AWS_SECRET_ACCESS_KEY",
                 "-e", "AWS_SESSION_TOKEN",
                 "-e", "MINIO_ROOT_USER",
                 "-e", "MINIO_ROOT_PASSWORD",
-            ]
+            ])
             if self._settings.docker_env_file is not None:
                 docker_arguments.append(f"--env-file={self._settings.docker_env_file}")
             task.set_base_docker(

@@ -82,3 +82,9 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi >/dev/null
+
+      - name: Verify worker storage credentials are available
+        run: |
+          set -euo pipefail
+          NEW="$(docker ps --filter "label=com.docker.compose.project=$PROJECT" --filter "label=com.docker.compose.service=$SERVICE" --format '{{.ID}}' | head -n1)"
+          docker exec "$NEW" sh -lc 'test -n "$MINIO_ROOT_USER" && test -n "$MINIO_ROOT_PASSWORD"'

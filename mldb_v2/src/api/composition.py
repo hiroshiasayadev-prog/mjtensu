@@ -69,6 +69,7 @@ def _clearml_backend_config(environment: Mapping[str, str]) -> BackendConfig:
         ("MLDB_V2_CLEARML_REPOSITORY", "repository"),
         ("MLDB_V2_CLEARML_DOCKER_IMAGE", "docker_image"),
         ("MLDB_V2_CLEARML_DOCKER_ENV_FILE", "docker_env_file"),
+        ("MLDB_V2_CLEARML_DOCKER_GPU", "docker_gpu"),
         ("MLDB_S3_ENDPOINT_URL", "s3_endpoint_url"),
         ("MLDB_S3_REGION", "s3_region"),
     ):
