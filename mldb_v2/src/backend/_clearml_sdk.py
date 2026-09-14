@@ -300,11 +300,15 @@ class ClearMLSDKAdapter:
             return None
         task_id = _task_id(task)
         if self._settings.docker_image is not None:
-            docker_arguments = (
-                [f"--env-file={self._settings.docker_env_file}"]
-                if self._settings.docker_env_file is not None
-                else None
-            )
+            docker_arguments = [
+                "-e", "AWS_ACCESS_KEY_ID",
+                "-e", "AWS_SECRET_ACCESS_KEY",
+                "-e", "AWS_SESSION_TOKEN",
+                "-e", "MINIO_ROOT_USER",
+                "-e", "MINIO_ROOT_PASSWORD",
+            ]
+            if self._settings.docker_env_file is not None:
+                docker_arguments.append(f"--env-file={self._settings.docker_env_file}")
             task.set_base_docker(
                 docker_image=self._settings.docker_image,
                 docker_arguments=docker_arguments,

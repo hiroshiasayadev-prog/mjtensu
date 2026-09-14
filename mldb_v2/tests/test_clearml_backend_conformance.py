@@ -503,7 +503,14 @@ def test_production_sdk_adapter_uses_lazy_credentials_searchable_metadata_and_qu
     assert FakeSDKTask.create_calls[0]["script"] == "mldb_v2/src/backend/_clearml_sdk.py"
     assert FakeSDKTask.docker_calls == [{
         "docker_image": "python:3.10-slim-bookworm",
-        "docker_arguments": ["--env-file=/srv/bugrat/clearml/.env"],
+        "docker_arguments": [
+            "-e", "AWS_ACCESS_KEY_ID",
+            "-e", "AWS_SECRET_ACCESS_KEY",
+            "-e", "AWS_SESSION_TOKEN",
+            "-e", "MINIO_ROOT_USER",
+            "-e", "MINIO_ROOT_PASSWORD",
+            "--env-file=/srv/bugrat/clearml/.env",
+        ],
     }]
     assert FakeSDKTask.package_calls and "torch==2.5.1" in FakeSDKTask.package_calls[0]
     assert FakeSDKTask.tasks[0].configs["mldb.runtime"]["s3_endpoint_url"] == "https://s3.invalid"
