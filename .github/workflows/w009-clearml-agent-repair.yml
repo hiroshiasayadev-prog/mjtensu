@@ -102,6 +102,10 @@ jobs:
           if [ "$STATE" != "running" ]; then
             echo "::error title=ClearML worker state::state=$STATE exit=$EXIT_CODE oom=$OOM restarts=$RESTARTS"
             echo "::error title=ClearML worker command::entrypoint=$ENTRYPOINT cmd=$CMD"
+            ERR="$(docker logs --tail 100 "$NEW" 2>&1 | grep -Ei 'error|exception|traceback|usage:|unrecognized|no such|not found|failed|missing|credential|config' | tail -n 8 | tr '\n' ' ' | sed -E 's/([A-Za-z_]*(SECRET|PASSWORD|TOKEN|ACCESS_KEY)[A-Za-z_]*=)[^ ]+/\1[REDACTED]/Ig' | cut -c1-800 || true)"
+            if [ -n "$ERR" ]; then
+              echo "::error title=ClearML worker log::$ERR"
+            fi
             exit 1
           fi
           docker exec "$NEW" /usr/local/bin/docker version >/dev/null
@@ -128,6 +132,10 @@ jobs:
           if [ "$STATE" != "running" ]; then
             echo "::error title=ClearML worker state::state=$STATE exit=$EXIT_CODE oom=$OOM restarts=$RESTARTS"
             echo "::error title=ClearML worker command::entrypoint=$ENTRYPOINT cmd=$CMD"
+            ERR="$(docker logs --tail 100 "$NEW" 2>&1 | grep -Ei 'error|exception|traceback|usage:|unrecognized|no such|not found|failed|missing|credential|config' | tail -n 8 | tr '\n' ' ' | sed -E 's/([A-Za-z_]*(SECRET|PASSWORD|TOKEN|ACCESS_KEY)[A-Za-z_]*=)[^ ]+/\1[REDACTED]/Ig' | cut -c1-800 || true)"
+            if [ -n "$ERR" ]; then
+              echo "::error title=ClearML worker log::$ERR"
+            fi
             exit 1
           fi
           docker exec "$NEW" sh -lc 'test -n "$MINIO_ROOT_USER" && test -n "$MINIO_ROOT_PASSWORD"'
