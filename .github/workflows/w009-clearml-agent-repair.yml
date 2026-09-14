@@ -128,6 +128,23 @@ jobs:
           docker exec "$NEW" /usr/local/bin/docker version >/dev/null
           docker exec "$NEW" python3 -c "import pkg_resources; assert pkg_resources.get_distribution('clearml-agent').version == '1.9.3'"
 
+      - name: Diagnose agent after verification
+        if: always()
+        run: |
+          set -euo pipefail
+          NEW="$(docker ps -a --filter "label=com.docker.compose.project=$PROJECT" --filter "label=com.docker.compose.service=$SERVICE" --format '{{.ID}}' | head -n1)"
+          if [ -z "$NEW" ]; then
+            echo "::error title=ClearML worker diagnostic::container not found"
+            exit 0
+          fi
+          STATE="$(docker inspect -f '{{.State.Status}}' "$NEW")"
+          EXIT_CODE="$(docker inspect -f '{{.State.ExitCode}}' "$NEW")"
+          OOM="$(docker inspect -f '{{.State.OOMKilled}}' "$NEW")"
+          RESTARTS="$(docker inspect -f '{{.RestartCount}}' "$NEW")"
+          echo "::error title=ClearML worker postcheck::state=$STATE exit=$EXIT_CODE oom=$OOM restarts=$RESTARTS"
+          ERR="$(docker logs --tail 120 "$NEW" 2>&1 | grep -Ei 'error|exception|traceback|usage:|unrecognized|no such|not found|failed|missing|credential|config|killed' | tail -n 12 | tr '\n' ' ' | sed -E 's/([A-Za-z_]*(SECRET|PASSWORD|TOKEN|ACCESS_KEY)[A-Za-z_]*=)[^ ]+/\1[REDACTED]/Ig' | cut -c1-1000 || true)"
+          if [ -n "$ERR" ]; then echo "::error title=ClearML worker postlog::$ERR"; fi
+
       - name: Verify GPU container runtime
         run: |
           set -euo pipefail
