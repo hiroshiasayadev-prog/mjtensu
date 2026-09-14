@@ -60,6 +60,8 @@ jobs:
           services:
             PLACEHOLDER_SERVICE:
               image: mldb-clearml-agent:w009
+              volumes:
+                - /tmp:/tmp
               environment:
                 MINIO_ROOT_USER: ${MINIO_ROOT_USER}
                 MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
