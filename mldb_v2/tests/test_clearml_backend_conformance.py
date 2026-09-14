@@ -519,6 +519,7 @@ def test_production_sdk_adapter_uses_lazy_credentials_searchable_metadata_and_qu
         docker_image="python:3.10-slim-bookworm",
         docker_env_file="/srv/bugrat/clearml/.env",
         docker_gpu="all",
+        docker_shm_size="2g",
         s3_endpoint_url="https://s3.invalid",
         s3_region="test-region",
     )
@@ -534,6 +535,7 @@ def test_production_sdk_adapter_uses_lazy_credentials_searchable_metadata_and_qu
         "docker_image": "python:3.10-slim-bookworm",
         "docker_arguments": [
             "--gpus", "all",
+            "--shm-size", "2g",
             "-e", "AWS_ACCESS_KEY_ID",
             "-e", "AWS_SECRET_ACCESS_KEY",
             "-e", "AWS_SESSION_TOKEN",
