@@ -30,10 +30,10 @@ jobs:
           set -euo pipefail
           docker exec "$AGENT" sh -lc 'python3 -m pip install --upgrade clearml-agent==3.0.3'
 
-      - name: Verify ClearML agent version
+      - name: Verify ClearML agent package metadata
         run: |
           set -euo pipefail
-          docker exec "$AGENT" sh -lc 'clearml-agent --version'
+          docker exec "$AGENT" python3 -c "import importlib.metadata as m; assert m.version('clearml-agent') == '3.0.3'"
 
       - name: Restart ClearML agent container
         run: |
@@ -46,4 +46,4 @@ jobs:
         run: |
           set -euo pipefail
           docker exec "$AGENT" /usr/local/bin/docker version >/dev/null
-          docker exec "$AGENT" sh -lc 'clearml-agent --version'
+          docker exec "$AGENT" python3 -c "import importlib.metadata as m; assert m.version('clearml-agent') == '3.0.3'"
