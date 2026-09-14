@@ -80,6 +80,15 @@ jobs:
           ARGS=()
           for f in "${FILES[@]}"; do ARGS+=( -f "$f" ); done
           docker compose -p "$PROJECT" "${ARGS[@]}" -f "$PROJECT_DIR/docker-compose.w009-agent.yml" stop "$SERVICE" || true
+          HOST_MOUNT="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$AGENT" | sed -n -e 's/^CLEARML_AGENT_DOCKER_HOST_MOUNT=//p' -e 's/^CLEARML_AGENT_K8S_HOST_MOUNT=//p' -e 's/^TRAINS_AGENT_DOCKER_HOST_MOUNT=//p' -e 's/^TRAINS_AGENT_K8S_HOST_MOUNT=//p' | head -n1)"
+          LOCK_ROOT=/tmp
+          if [ -n "$HOST_MOUNT" ]; then LOCK_ROOT="${HOST_MOUNT%%:*}"; fi
+          echo "clearml_singleton_root=$LOCK_ROOT"
+          for lock in "$LOCK_ROOT"/.clearmlagent_*.tmp; do
+            [ -f "$lock" ] || continue
+            if [ "$(head -n1 "$lock" 2>/dev/null || true)" = "$WORKER_ID" ]; then rm -f "$lock"; fi
+          done
+          rm -f "$LOCK_ROOT"/_.clearmlagent_global.lock
           for lock in /tmp/.clearmlagent_*.tmp; do
             [ -f "$lock" ] || continue
             if [ "$(head -n1 "$lock" 2>/dev/null || true)" = "$WORKER_ID" ]; then rm -f "$lock"; fi
