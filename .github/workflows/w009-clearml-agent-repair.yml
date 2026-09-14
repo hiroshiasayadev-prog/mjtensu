@@ -16,7 +16,7 @@ jobs:
       - name: Discover ClearML Compose service
         run: |
           set -euo pipefail
-          AGENT="$(docker ps --filter 'name=clearml-agent' --format '{{.ID}}' | head -n1)"
+          AGENT="$(docker ps -a --filter 'name=clearml-agent' --format '{{.ID}}' | head -n1)"
           test -n "$AGENT"
           echo "AGENT=$AGENT" >> "$GITHUB_ENV"
           echo "BASE_IMAGE=$(docker inspect -f '{{.Config.Image}}' "$AGENT")" >> "$GITHUB_ENV"
@@ -60,6 +60,7 @@ jobs:
           services:
             PLACEHOLDER_SERVICE:
               image: mldb-clearml-agent:w009
+              restart: unless-stopped
               volumes:
                 - /tmp:/tmp
               environment:
@@ -77,6 +78,8 @@ jobs:
           export MINIO_ROOT_PASSWORD="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$OBJECTSTORE" | sed -n 's/^MINIO_ROOT_PASSWORD=//p' | head -n1)"
           test -n "$MINIO_ROOT_USER"
           test -n "$MINIO_ROOT_PASSWORD"
+          echo "::add-mask::$MINIO_ROOT_USER"
+          echo "::add-mask::$MINIO_ROOT_PASSWORD"
           IFS=',' read -ra FILES <<< "$CONFIG_FILES"
           ARGS=()
           for f in "${FILES[@]}"; do ARGS+=( -f "$f" ); done
@@ -97,8 +100,18 @@ jobs:
           set -euo pipefail
           docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi >/dev/null
 
-      - name: Verify worker storage credentials are available
+      - name: Verify worker stays online and has storage credentials
         run: |
           set -euo pipefail
-          NEW="$(docker ps --filter "label=com.docker.compose.project=$PROJECT" --filter "label=com.docker.compose.service=$SERVICE" --format '{{.ID}}' | head -n1)"
+          sleep 15
+          NEW="$(docker ps -a --filter "label=com.docker.compose.project=$PROJECT" --filter "label=com.docker.compose.service=$SERVICE" --format '{{.ID}}' | head -n1)"
+          test -n "$NEW"
+          STATE="$(docker inspect -f '{{.State.Status}}' "$NEW")"
+          EXIT_CODE="$(docker inspect -f '{{.State.ExitCode}}' "$NEW")"
+          docker inspect -f 'entrypoint={{json .Config.Entrypoint}} cmd={{json .Config.Cmd}} restart={{.HostConfig.RestartPolicy.Name}}' "$NEW"
+          echo "agent_state=$STATE exit_code=$EXIT_CODE"
+          if [ "$STATE" != "running" ]; then
+            docker logs --tail 120 "$NEW" || true
+            exit 1
+          fi
           docker exec "$NEW" sh -lc 'test -n "$MINIO_ROOT_USER" && test -n "$MINIO_ROOT_PASSWORD"'
