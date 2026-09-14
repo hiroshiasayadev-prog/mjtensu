@@ -53,6 +53,13 @@ jobs:
           docker run --rm --entrypoint /usr/local/bin/docker mldb-clearml-agent:w009 --version
           docker run --rm --entrypoint python3 mldb-clearml-agent:w009 -c "import pkg_resources; assert pkg_resources.get_distribution('clearml-agent').version == '1.9.3'"
 
+      - name: Locate existing storage env file
+        run: |
+          set -euo pipefail
+          STORAGE_ENV="$(find /srv/bugrat -maxdepth 4 -type f \( -name '.env' -o -name '*.env' \)             -exec sh -c 'grep -q "^MINIO_ROOT_USER=" "$1" && grep -q "^MINIO_ROOT_PASSWORD=" "$1"' _ {} \;             -print -quit)"
+          test -n "$STORAGE_ENV"
+          echo "STORAGE_ENV=$STORAGE_ENV" >> "$GITHUB_ENV"
+
       - name: Write Compose override
         run: |
           set -euo pipefail
@@ -60,6 +67,8 @@ jobs:
           services:
             $SERVICE:
               image: mldb-clearml-agent:w009
+              env_file:
+                - $STORAGE_ENV
           EOF
 
       - name: Recreate ClearML agent from repaired image
