@@ -25,6 +25,7 @@ from mldb_v2.src.backend._clearml_observation import (
 from mldb_v2.src.backend._clearml_sdk import (
     ClearMLSDKAdapter,
     ClearMLSDKSettings,
+    _configuration,
 )
 from mldb_v2.src.backend._config import BackendConfig
 from mldb_v2.src.backend._registry import BackendRegistry
@@ -337,6 +338,33 @@ def test_duplicate_ownership_remains_bounded_through_concrete_backend() -> None:
     client.records.append(deepcopy(client.records[0]))
     with pytest.raises(RuntimeError, match="multiple ClearML Tasks"):
         backend.observe(stage_key=_stage_key_from_input(stage_input))
+
+
+def test_sdk_configuration_recursively_normalizes_mapping_subclasses() -> None:
+    class NestedConfigTask:
+        def get_configuration_object_as_dict(self, name):
+            assert name == "mldb.runtime_snapshots"
+            return OrderedDict(
+                {
+                    "study_plan": OrderedDict(
+                        {
+                            "pins": [
+                                OrderedDict({"kind": "study", "id": "demo/study"})
+                            ]
+                        }
+                    )
+                }
+            )
+
+    normalized = _configuration(NestedConfigTask(), "mldb.runtime_snapshots")
+
+    assert normalized is not None
+    assert type(normalized) is dict
+    plan = normalized["study_plan"]
+    assert type(plan) is dict
+    pins = plan["pins"]
+    assert type(pins) is list
+    assert type(pins[0]) is dict
 
 
 class FakeSDKTask:

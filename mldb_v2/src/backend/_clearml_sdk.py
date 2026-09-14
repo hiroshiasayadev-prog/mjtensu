@@ -316,7 +316,17 @@ def _configuration(task: object, name: str) -> dict[str, object] | None:
         return None
     if not isinstance(raw, Mapping) or any(type(key) is not str for key in raw):
         raise ClearMLSDKError(f"ClearML configuration {name!r} is malformed")
-    return dict(raw)
+    try:
+        normalized = json.loads(
+            json.dumps(raw, ensure_ascii=False, allow_nan=False)
+        )
+    except (TypeError, ValueError, json.JSONDecodeError) as error:
+        raise ClearMLSDKError(
+            f"ClearML configuration {name!r} is not canonical JSON-compatible"
+        ) from error
+    if type(normalized) is not dict:
+        raise ClearMLSDKError(f"ClearML configuration {name!r} is malformed")
+    return normalized
 
 
 def _project_name(task: object) -> str | None:
