@@ -53,31 +53,34 @@ jobs:
           docker run --rm --entrypoint /usr/local/bin/docker mldb-clearml-agent:w009 --version
           docker run --rm --entrypoint python3 mldb-clearml-agent:w009 -c "import pkg_resources; assert pkg_resources.get_distribution('clearml-agent').version == '1.9.3'"
 
-      - name: Locate existing storage env file
-        run: |
-          set -euo pipefail
-          STORAGE_ENV="$(find /srv/bugrat -maxdepth 4 -type f \( -name '.env' -o -name '*.env' \)             -exec sh -c 'grep -q "^MINIO_ROOT_USER=" "$1" && grep -q "^MINIO_ROOT_PASSWORD=" "$1"' _ {} \;             -print -quit)"
-          test -n "$STORAGE_ENV"
-          echo "STORAGE_ENV=$STORAGE_ENV" >> "$GITHUB_ENV"
-
       - name: Write Compose override
         run: |
           set -euo pipefail
-          cat > "$PROJECT_DIR/docker-compose.w009-agent.yml" <<EOF
+          cat > "$PROJECT_DIR/docker-compose.w009-agent.yml" <<'EOF'
           services:
-            $SERVICE:
+            PLACEHOLDER_SERVICE:
               image: mldb-clearml-agent:w009
-              env_file:
-                - $STORAGE_ENV
+              environment:
+                MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+                MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
           EOF
+          sed -i "s/PLACEHOLDER_SERVICE/$SERVICE/" "$PROJECT_DIR/docker-compose.w009-agent.yml"
 
-      - name: Recreate ClearML agent from repaired image
+      - name: Recreate ClearML agent with object-store credentials
         run: |
           set -euo pipefail
+          OBJECTSTORE="$(docker ps --filter 'name=mldb-objectstore' --format '{{.ID}}' | head -n1)"
+          test -n "$OBJECTSTORE"
+          export MINIO_ROOT_USER="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$OBJECTSTORE" | sed -n 's/^MINIO_ROOT_USER=//p' | head -n1)"
+          export MINIO_ROOT_PASSWORD="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$OBJECTSTORE" | sed -n 's/^MINIO_ROOT_PASSWORD=//p' | head -n1)"
+          test -n "$MINIO_ROOT_USER"
+          test -n "$MINIO_ROOT_PASSWORD"
           IFS=',' read -ra FILES <<< "$CONFIG_FILES"
           ARGS=()
           for f in "${FILES[@]}"; do ARGS+=( -f "$f" ); done
           docker compose -p "$PROJECT" "${ARGS[@]}" -f "$PROJECT_DIR/docker-compose.w009-agent.yml" up -d "$SERVICE"
+          unset MINIO_ROOT_USER MINIO_ROOT_PASSWORD
+
       - name: Verify recreated agent runtime
         run: |
           set -euo pipefail
