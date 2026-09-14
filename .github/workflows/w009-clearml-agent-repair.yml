@@ -33,7 +33,7 @@ jobs:
       - name: Verify ClearML agent version
         run: |
           set -euo pipefail
-          docker exec "$AGENT" sh -lc 'python3 -m clearml_agent --version'
+          docker exec "$AGENT" sh -lc 'clearml-agent --version'
 
       - name: Restart ClearML agent container
         run: |
@@ -46,4 +46,4 @@ jobs:
         run: |
           set -euo pipefail
           docker exec "$AGENT" /usr/local/bin/docker version >/dev/null
-          docker exec "$AGENT" sh -lc 'python3 -m clearml_agent --version'
+          docker exec "$AGENT" sh -lc 'clearml-agent --version'
