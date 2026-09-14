@@ -77,3 +77,8 @@ jobs:
           test -n "$NEW"
           docker exec "$NEW" /usr/local/bin/docker version >/dev/null
           docker exec "$NEW" python3 -c "import pkg_resources; assert pkg_resources.get_distribution('clearml-agent').version == '1.9.3'"
+
+      - name: Verify GPU container runtime
+        run: |
+          set -euo pipefail
+          docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi >/dev/null
