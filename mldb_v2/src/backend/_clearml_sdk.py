@@ -31,6 +31,14 @@ _RUNTIME_CONFIG = "mldb.runtime"
 _PROJECTION_CONFIG = "mldb.runtime_projection"
 _ACTIVE_STATUSES = {"created", "queued", "in_progress", "publishing"}
 _TERMINAL_STATUSES = {"completed", "published", "closed", "failed", "stopped"}
+_REMOTE_PACKAGES = (
+    "clearml==2.1.12",
+    "boto3==1.43.93",
+    "PyYAML==6.0.3",
+    "numpy==1.26.4",
+    "torch==2.5.1",
+    "torchvision==0.20.1",
+)
 
 
 class ClearMLSDKError(RuntimeError):
@@ -45,6 +53,10 @@ class ClearMLSDKSettings:
     access_key: str | None = field(default=None, repr=False)
     secret_key: str | None = field(default=None, repr=False)
     repository: str | None = None
+    docker_image: str | None = None
+    docker_env_file: str | None = None
+    s3_endpoint_url: str | None = None
+    s3_region: str | None = None
     script: str = "mldb_v2/src/backend/_clearml_sdk.py"
     working_directory: str = "."
     pinned_data_root: str = "mldb_data"
@@ -56,6 +68,7 @@ class ClearMLSDKSettings:
     def __post_init__(self) -> None:
         for name in (
             "api_host", "web_host", "files_host", "repository",
+            "docker_image", "docker_env_file", "s3_endpoint_url", "s3_region",
             "runtime_data_root", "artifact_uri_prefix",
         ):
             value = getattr(self, name)
@@ -185,6 +198,10 @@ class ClearMLSDKAdapter:
             access_key=_optional_string(options, "access_key"),
             secret_key=_optional_string(options, "secret_key"),
             repository=_optional_string(options, "repository"),
+            docker_image=_optional_string(options, "docker_image"),
+            docker_env_file=_optional_string(options, "docker_env_file"),
+            s3_endpoint_url=_optional_string(options, "s3_endpoint_url"),
+            s3_region=_optional_string(options, "s3_region"),
             script=_string_option(options, "script", "mldb_v2/src/backend/_clearml_sdk.py"),
             working_directory=_string_option(options, "working_directory", "."),
             pinned_data_root=_string_option(options, "pinned_data_root", "mldb_data"),
@@ -282,6 +299,17 @@ class ClearMLSDKAdapter:
         if task is None:
             return None
         task_id = _task_id(task)
+        if self._settings.docker_image is not None:
+            docker_arguments = (
+                [f"--env-file={self._settings.docker_env_file}"]
+                if self._settings.docker_env_file is not None
+                else None
+            )
+            task.set_base_docker(
+                docker_image=self._settings.docker_image,
+                docker_arguments=docker_arguments,
+            )
+        task.set_packages(list(_REMOTE_PACKAGES))
 
         properties = [
             {"name": key, "value": value}
@@ -304,6 +332,8 @@ class ClearMLSDKAdapter:
                 "pinned_data_root": self._settings.pinned_data_root,
                 "runtime_data_root": self._settings.runtime_data_root,
                 "artifact_uri_prefix": self._settings.artifact_uri_prefix,
+                "s3_endpoint_url": self._settings.s3_endpoint_url,
+                "s3_region": self._settings.s3_region,
                 "work_root": self._settings.work_root,
             },
         )
@@ -450,7 +480,7 @@ def _remote_artifact_prefix(runtime: Mapping[str, object]) -> str:
     )
 
 
-def _remote_object_bytes():
+def _remote_object_bytes(runtime: Mapping[str, object]):
     from mldb_v2.src.storage.object_bytes import _ObjectByteAccess
     from mldb_v2.src.storage.s3_transport import (
         _S3TransportConfig,
@@ -459,9 +489,17 @@ def _remote_object_bytes():
 
     access_key = os.environ.get("AWS_ACCESS_KEY_ID") or os.environ.get("MINIO_ROOT_USER")
     secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY") or os.environ.get("MINIO_ROOT_PASSWORD")
+    runtime_endpoint = runtime.get("s3_endpoint_url")
+    runtime_region = runtime.get("s3_region")
     config = _S3TransportConfig(
-        endpoint_url=os.environ.get("MLDB_S3_ENDPOINT_URL"),
-        region_name=os.environ.get("MLDB_S3_REGION"),
+        endpoint_url=(
+            runtime_endpoint if type(runtime_endpoint) is str and runtime_endpoint
+            else os.environ.get("MLDB_S3_ENDPOINT_URL")
+        ),
+        region_name=(
+            runtime_region if type(runtime_region) is str and runtime_region
+            else os.environ.get("MLDB_S3_REGION")
+        ),
         access_key_id=access_key,
         secret_access_key=secret_key,
         session_token=os.environ.get("AWS_SESSION_TOKEN"),
@@ -532,7 +570,7 @@ def _run_remote_harness() -> None:
         repository_root=repository_root,
         pinned_mldb_data_root=pinned_data_root,
         runtime_mldb_data_root=runtime_data_root,
-        object_bytes=_remote_object_bytes(),
+        object_bytes=_remote_object_bytes(runtime),
         corpus_destination_root=attempt_root / "corpus",
         work_dir=attempt_root / "work",
         training_weights_uri=weights_uri,
