@@ -90,8 +90,16 @@ jobs:
         run: |
           set -euo pipefail
           sleep 5
-          NEW="$(docker ps --filter "label=com.docker.compose.project=$PROJECT" --filter "label=com.docker.compose.service=$SERVICE" --format '{{.ID}}' | head -n1)"
+          NEW="$(docker ps -a --filter "label=com.docker.compose.project=$PROJECT" --filter "label=com.docker.compose.service=$SERVICE" --format '{{.ID}}' | head -n1)"
           test -n "$NEW"
+          STATE="$(docker inspect -f '{{.State.Status}}' "$NEW")"
+          EXIT_CODE="$(docker inspect -f '{{.State.ExitCode}}' "$NEW")"
+          docker inspect -f 'entrypoint={{json .Config.Entrypoint}} cmd={{json .Config.Cmd}} restart={{.HostConfig.RestartPolicy.Name}}' "$NEW"
+          echo "agent_state=$STATE exit_code=$EXIT_CODE"
+          if [ "$STATE" != "running" ]; then
+            docker logs --tail 120 "$NEW" || true
+            exit 1
+          fi
           docker exec "$NEW" /usr/local/bin/docker version >/dev/null
           docker exec "$NEW" python3 -c "import pkg_resources; assert pkg_resources.get_distribution('clearml-agent').version == '1.9.3'"
 
