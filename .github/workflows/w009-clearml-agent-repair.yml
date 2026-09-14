@@ -23,16 +23,28 @@ jobs:
           echo "SERVICE=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.service" }}' "$AGENT")" >> "$GITHUB_ENV"
           echo "PROJECT_DIR=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$AGENT")" >> "$GITHUB_ENV"
           echo "CONFIG_FILES=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' "$AGENT")" >> "$GITHUB_ENV"
-      - name: Install static Docker CLI in agent image layer
+      - name: Download static Docker CLI
         run: |
           set -euo pipefail
-          TMP="$(mktemp -d)"
-          curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-27.5.1.tgz -o "$TMP/docker.tgz"
-          tar -xzf "$TMP/docker.tgz" -C "$TMP"
-          docker cp "$TMP/docker/docker" "$AGENT:/usr/local/bin/docker"
+          mkdir -p /tmp/w009-docker-cli
+          curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-27.5.1.tgz -o /tmp/w009-docker-cli/docker.tgz
+          tar -xzf /tmp/w009-docker-cli/docker.tgz -C /tmp/w009-docker-cli
+
+      - name: Copy static Docker CLI into agent
+        run: |
+          set -euo pipefail
+          docker cp /tmp/w009-docker-cli/docker/docker "$AGENT:/usr/local/bin/docker"
           docker exec "$AGENT" chmod 0755 /usr/local/bin/docker
+
+      - name: Execute static Docker CLI binary
+        run: |
+          set -euo pipefail
+          docker exec "$AGENT" /usr/local/bin/docker --version
+
+      - name: Query daemon with static Docker CLI
+        run: |
+          set -euo pipefail
           docker exec "$AGENT" /usr/local/bin/docker version >/dev/null
-          rm -rf "$TMP"
 
       - name: Install compatible ClearML agent
         run: |
