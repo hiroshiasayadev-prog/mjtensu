@@ -64,6 +64,7 @@ class ClearMLSDKSettings:
     docker_image: str | None = None
     docker_env_file: str | None = None
     docker_gpu: str | None = None
+    docker_shm_size: str | None = None
     s3_endpoint_url: str | None = None
     s3_region: str | None = None
     script: str = "mldb_v2/src/backend/_clearml_sdk.py"
@@ -77,7 +78,7 @@ class ClearMLSDKSettings:
     def __post_init__(self) -> None:
         for name in (
             "api_host", "web_host", "files_host", "repository", "local_repository_root",
-            "docker_image", "docker_env_file", "docker_gpu", "s3_endpoint_url", "s3_region",
+            "docker_image", "docker_env_file", "docker_gpu", "docker_shm_size", "s3_endpoint_url", "s3_region",
             "runtime_data_root", "artifact_uri_prefix",
         ):
             value = getattr(self, name)
@@ -385,6 +386,7 @@ class ClearMLSDKAdapter:
             docker_image=_optional_string(options, "docker_image"),
             docker_env_file=_optional_string(options, "docker_env_file"),
             docker_gpu=_optional_string(options, "docker_gpu"),
+            docker_shm_size=_optional_string(options, "docker_shm_size"),
             s3_endpoint_url=_optional_string(options, "s3_endpoint_url"),
             s3_region=_optional_string(options, "s3_region"),
             script=_string_option(options, "script", "mldb_v2/src/backend/_clearml_sdk.py"),
@@ -490,6 +492,8 @@ class ClearMLSDKAdapter:
             docker_arguments: list[str] = []
             if self._settings.docker_gpu is not None:
                 docker_arguments.extend(["--gpus", self._settings.docker_gpu])
+            if self._settings.docker_shm_size is not None:
+                docker_arguments.extend(["--shm-size", self._settings.docker_shm_size])
             docker_arguments.extend([
                 "-e", "AWS_ACCESS_KEY_ID",
                 "-e", "AWS_SECRET_ACCESS_KEY",
