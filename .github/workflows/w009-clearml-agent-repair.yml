@@ -74,16 +74,24 @@ jobs:
           set -euo pipefail
           OBJECTSTORE="$(docker ps --filter 'name=mldb-objectstore' --format '{{.ID}}' | head -n1)"
           test -n "$OBJECTSTORE"
+          WORKER_ID="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$AGENT" | sed -n 's/^CLEARML_WORKER_ID=//p' | head -n1)"
+          test -n "$WORKER_ID"
+          IFS=',' read -ra FILES <<< "$CONFIG_FILES"
+          ARGS=()
+          for f in "${FILES[@]}"; do ARGS+=( -f "$f" ); done
+          docker compose -p "$PROJECT" "${ARGS[@]}" -f "$PROJECT_DIR/docker-compose.w009-agent.yml" stop "$SERVICE" || true
+          for lock in /tmp/.clearmlagent_*.tmp; do
+            [ -f "$lock" ] || continue
+            if [ "$(head -n1 "$lock" 2>/dev/null || true)" = "$WORKER_ID" ]; then rm -f "$lock"; fi
+          done
+          rm -f /tmp/_.clearmlagent_global.lock
           export MINIO_ROOT_USER="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$OBJECTSTORE" | sed -n 's/^MINIO_ROOT_USER=//p' | head -n1)"
           export MINIO_ROOT_PASSWORD="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$OBJECTSTORE" | sed -n 's/^MINIO_ROOT_PASSWORD=//p' | head -n1)"
           test -n "$MINIO_ROOT_USER"
           test -n "$MINIO_ROOT_PASSWORD"
           echo "::add-mask::$MINIO_ROOT_USER"
           echo "::add-mask::$MINIO_ROOT_PASSWORD"
-          IFS=',' read -ra FILES <<< "$CONFIG_FILES"
-          ARGS=()
-          for f in "${FILES[@]}"; do ARGS+=( -f "$f" ); done
-          docker compose -p "$PROJECT" "${ARGS[@]}" -f "$PROJECT_DIR/docker-compose.w009-agent.yml" up -d "$SERVICE"
+          docker compose -p "$PROJECT" "${ARGS[@]}" -f "$PROJECT_DIR/docker-compose.w009-agent.yml" up -d --force-recreate "$SERVICE"
           unset MINIO_ROOT_USER MINIO_ROOT_PASSWORD
 
       - name: Verify recreated agent runtime
