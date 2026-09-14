@@ -94,10 +94,14 @@ jobs:
           test -n "$NEW"
           STATE="$(docker inspect -f '{{.State.Status}}' "$NEW")"
           EXIT_CODE="$(docker inspect -f '{{.State.ExitCode}}' "$NEW")"
-          docker inspect -f 'entrypoint={{json .Config.Entrypoint}} cmd={{json .Config.Cmd}} restart={{.HostConfig.RestartPolicy.Name}}' "$NEW"
-          echo "agent_state=$STATE exit_code=$EXIT_CODE"
+          OOM="$(docker inspect -f '{{.State.OOMKilled}}' "$NEW")"
+          RESTARTS="$(docker inspect -f '{{.RestartCount}}' "$NEW")"
+          ENTRYPOINT="$(docker inspect -f '{{json .Config.Entrypoint}}' "$NEW")"
+          CMD="$(docker inspect -f '{{json .Config.Cmd}}' "$NEW")"
+          echo "agent_state=$STATE exit_code=$EXIT_CODE oom=$OOM restarts=$RESTARTS"
           if [ "$STATE" != "running" ]; then
-            docker logs --tail 120 "$NEW" || true
+            echo "::error title=ClearML worker state::state=$STATE exit=$EXIT_CODE oom=$OOM restarts=$RESTARTS"
+            echo "::error title=ClearML worker command::entrypoint=$ENTRYPOINT cmd=$CMD"
             exit 1
           fi
           docker exec "$NEW" /usr/local/bin/docker version >/dev/null
@@ -116,10 +120,14 @@ jobs:
           test -n "$NEW"
           STATE="$(docker inspect -f '{{.State.Status}}' "$NEW")"
           EXIT_CODE="$(docker inspect -f '{{.State.ExitCode}}' "$NEW")"
-          docker inspect -f 'entrypoint={{json .Config.Entrypoint}} cmd={{json .Config.Cmd}} restart={{.HostConfig.RestartPolicy.Name}}' "$NEW"
-          echo "agent_state=$STATE exit_code=$EXIT_CODE"
+          OOM="$(docker inspect -f '{{.State.OOMKilled}}' "$NEW")"
+          RESTARTS="$(docker inspect -f '{{.RestartCount}}' "$NEW")"
+          ENTRYPOINT="$(docker inspect -f '{{json .Config.Entrypoint}}' "$NEW")"
+          CMD="$(docker inspect -f '{{json .Config.Cmd}}' "$NEW")"
+          echo "agent_state=$STATE exit_code=$EXIT_CODE oom=$OOM restarts=$RESTARTS"
           if [ "$STATE" != "running" ]; then
-            docker logs --tail 120 "$NEW" || true
+            echo "::error title=ClearML worker state::state=$STATE exit=$EXIT_CODE oom=$OOM restarts=$RESTARTS"
+            echo "::error title=ClearML worker command::entrypoint=$ENTRYPOINT cmd=$CMD"
             exit 1
           fi
           docker exec "$NEW" sh -lc 'test -n "$MINIO_ROOT_USER" && test -n "$MINIO_ROOT_PASSWORD"'
