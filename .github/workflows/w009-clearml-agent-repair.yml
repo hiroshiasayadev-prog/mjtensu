@@ -64,6 +64,7 @@ jobs:
               volumes:
                 - /tmp:/tmp
               environment:
+                CLEARML_AGENT_DOCKER_HOST_MOUNT: /tmp:/tmp
                 MINIO_ROOT_USER: ${MINIO_ROOT_USER}
                 MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
           EOF
