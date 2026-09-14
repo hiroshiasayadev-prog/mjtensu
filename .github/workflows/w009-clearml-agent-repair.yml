@@ -16,26 +16,36 @@ jobs:
       - name: Locate ClearML agent container
         run: docker ps --format '{{.Names}} {{.Image}}' | grep -i clearml | grep -i agent
 
-      - name: Copy host Docker CLI into ClearML agent
+      - name: Download static Docker CLI
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-27.5.1.tgz -o "$tmp/docker.tgz"
+          tar -xzf "$tmp/docker.tgz" -C "$tmp"
+          "$tmp/docker/docker" --version
+          cp "$tmp/docker/docker" /tmp/w009-docker-cli
+          chmod +x /tmp/w009-docker-cli
+
+      - name: Install static Docker CLI in ClearML agent
         run: |
           set -euo pipefail
           agent="$(docker ps --format '{{.Names}} {{.Image}}' | awk 'tolower($0) ~ /clearml/ && tolower($0) ~ /agent/ {print $1; exit}')"
-          docker cp "$(command -v docker)" "$agent:/usr/local/bin/docker"
+          docker cp /tmp/w009-docker-cli "$agent:/usr/local/bin/docker"
           docker exec "$agent" chmod +x /usr/local/bin/docker
 
-      - name: Execute copied Docker CLI binary
+      - name: Execute static Docker CLI binary
         run: |
           set -euo pipefail
           agent="$(docker ps --format '{{.Names}} {{.Image}}' | awk 'tolower($0) ~ /clearml/ && tolower($0) ~ /agent/ {print $1; exit}')"
           docker exec "$agent" /usr/local/bin/docker --version
 
-      - name: Query daemon with copied Docker CLI
+      - name: Query daemon with static Docker CLI
         run: |
           set -euo pipefail
           agent="$(docker ps --format '{{.Names}} {{.Image}}' | awk 'tolower($0) ~ /clearml/ && tolower($0) ~ /agent/ {print $1; exit}')"
           docker exec "$agent" /usr/local/bin/docker version
 
-      - name: Confirm agent PATH selects copied CLI
+      - name: Confirm agent PATH selects static CLI
         run: |
           set -euo pipefail
           agent="$(docker ps --format '{{.Names}} {{.Image}}' | awk 'tolower($0) ~ /clearml/ && tolower($0) ~ /agent/ {print $1; exit}')"
