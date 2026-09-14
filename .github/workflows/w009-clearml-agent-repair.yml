@@ -144,6 +144,10 @@ jobs:
           echo "::error title=ClearML worker postcheck::state=$STATE exit=$EXIT_CODE oom=$OOM restarts=$RESTARTS"
           ERR="$(docker logs --tail 120 "$NEW" 2>&1 | grep -Ei 'error|exception|traceback|usage:|unrecognized|no such|not found|failed|missing|credential|config|killed' | tail -n 12 | tr '\n' ' ' | sed -E 's/([A-Za-z_]*(SECRET|PASSWORD|TOKEN|ACCESS_KEY)[A-Za-z_]*=)[^ ]+/\1[REDACTED]/Ig' | cut -c1-1000 || true)"
           if [ -n "$ERR" ]; then echo "::error title=ClearML worker postlog::$ERR"; fi
+          ENV_NAMES="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$NEW" | cut -d= -f1 | grep -E '^(CLEARML|TRAINS)_(API|WEB|FILES|WORKER|AGENT)' | sort | tr '\n' ',' || true)"
+          echo "::notice title=ClearML worker env names::$ENV_NAMES"
+          TAIL="$(docker logs --tail 40 "$NEW" 2>&1 | sed -E 's/([A-Za-z_]*(SECRET|PASSWORD|TOKEN|ACCESS_KEY)[A-Za-z_]*=)[^ ]+/\1[REDACTED]/Ig' | tr '\n' ' ' | cut -c1-1400 || true)"
+          if [ -n "$TAIL" ]; then echo "::notice title=ClearML worker tail::$TAIL"; fi
 
       - name: Verify GPU container runtime
         run: |
