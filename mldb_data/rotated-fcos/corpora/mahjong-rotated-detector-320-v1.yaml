@@ -1,0 +1,33 @@
+{
+  "schema": "mjtensu.mldb-v2/corpus/v1",
+  "id": "rotated-fcos/mahjong-rotated-detector-320-v1",
+  "status": "sealed",
+  "task": "rotated-fcos/mahjong-tile-rotated-detection-v1",
+  "description": "V2 example migrated from the current augmented-train plus human-reviewed validation detector corpus.",
+  "storage": {
+    "root_uri": "s3://mldb-corpora/rotated-fcos/mahjong-rotated-detector-320-v1"
+  },
+  "manifest": {
+    "file": "mahjong-rotated-detector-320-v1.manifest.jsonl",
+    "sha256": "21d544791e17749051cb8bbfc1fe6f98ba3154f5ddd678cc24eefaec1b7c1622",
+    "entries": 1
+  },
+  "representation": {
+    "kind": "sqlite-rotated-object-detection",
+    "file": "dataset.sqlite",
+    "table": "sample",
+    "image_column": "image_chw_u8",
+    "annotations_column": "annotations_json",
+    "dtype": "uint8",
+    "shape": [
+      3,
+      320,
+      320
+    ],
+    "geometry": "cx-cy-w-h-angle-deg"
+  },
+  "splits": {
+    "train": 384,
+    "val": 24
+  }
+}

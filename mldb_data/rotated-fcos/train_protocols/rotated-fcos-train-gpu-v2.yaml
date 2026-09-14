@@ -1,0 +1,98 @@
+{
+  "schema": "mjtensu.mldb-v2/train-protocol/v1",
+  "id": "rotated-fcos/rotated-fcos-train-gpu-v2",
+  "status": "sealed",
+  "task": "rotated-fcos/mahjong-tile-rotated-detection-v1",
+  "name": "Rotated FCOS GPU training example",
+  "description": "V2 draft example preserving the current spatial-screen training conditions.",
+  "implementation": {
+    "entrypoint": "train",
+    "sha256": "ccabb6c437fb520b88ec0470f17d9f54655820bd9d51bd0e4053ed9107bf4441"
+  },
+  "parameters": {
+    "epochs": {
+      "default": 80,
+      "type": "integer",
+      "minimum": 1
+    },
+    "batch_size": {
+      "default": 32,
+      "type": "integer",
+      "minimum": 1
+    },
+    "workers": {
+      "default": 8,
+      "type": "integer",
+      "minimum": 0
+    },
+    "learning_rate": {
+      "default": 0.0003,
+      "type": "number",
+      "minimum": 1e-07
+    },
+    "weight_decay": {
+      "default": 0.0001,
+      "type": "number",
+      "minimum": 0.0
+    },
+    "warmup_epochs": {
+      "default": 3.0,
+      "type": "number",
+      "minimum": 0.0
+    },
+    "freeze_backbone_epochs": {
+      "default": 3,
+      "type": "integer",
+      "minimum": 0
+    },
+    "center_radius": {
+      "default": 1.5,
+      "type": "number",
+      "minimum": 0.0
+    },
+    "pretrained_backbone": {
+      "default": true,
+      "type": "boolean"
+    },
+    "train_split": {
+      "default": "train",
+      "type": "string"
+    },
+    "validation_split": {
+      "default": "val",
+      "type": "string"
+    },
+    "score_threshold": {
+      "default": 0.2,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "nms_iou_threshold": {
+      "default": 0.45,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "match_iou_threshold": {
+      "default": 0.5,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "max_detections": {
+      "default": 64,
+      "type": "integer",
+      "minimum": 1
+    },
+    "early_stop_patience": {
+      "default": 20,
+      "type": "integer",
+      "minimum": 0
+    },
+    "amp": {
+      "default": true,
+      "type": "boolean"
+    }
+  }
+}

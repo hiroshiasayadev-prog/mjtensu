@@ -1,0 +1,35 @@
+{
+  "schema": "mjtensu.mldb-v2/task/v1",
+  "id": "rotated-fcos/mahjong-tile-rotated-detection-v1",
+  "name": "Mahjong tile rotated detection",
+  "problem_type": "rotated-object-detection",
+  "description": "Detect every Mahjong tile in the fixed 320x320 semantic composite and regress its oriented rectangle.",
+  "input": {
+    "semantic_unit": "fixed-semantic-composite-image"
+  },
+  "target": {
+    "type": "rotated-object-detection",
+    "labels": [
+      "mahjong_tile"
+    ],
+    "geometry": {
+      "format": "cx-cy-w-h-angle-deg",
+      "angle_period_deg": 180
+    }
+  },
+  "semantics": {
+    "obb_canonicalization": "short side is width; angle has 180-degree period",
+    "class_policy": "all tile faces share one detector class"
+  },
+  "scope": {
+    "includes": [
+      "completed hand",
+      "dora indicators",
+      "melds"
+    ],
+    "excludes": [
+      "tile identity classification"
+    ]
+  },
+  "status": "sealed"
+}

@@ -1,0 +1,86 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "rotated-fcos/rotated-fcos-standard-v1",
+  "status": "sealed",
+  "task": "rotated-fcos/mahjong-tile-rotated-detection-v1",
+  "name": "Rotated FCOS standard holdout evaluation",
+  "description": "Precision/recall, rotated IoU, and OBB angle error at a selectable detector operating point.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "3d379c15c6b97d82e1af5459301074f882f12003b3b81e7012ee60da97094e1b"
+  },
+  "parameters": {
+    "split": {
+      "default": "val",
+      "type": "string"
+    },
+    "batch_size": {
+      "default": 32,
+      "type": "integer",
+      "minimum": 1
+    },
+    "workers": {
+      "default": 8,
+      "type": "integer",
+      "minimum": 0
+    },
+    "score_threshold": {
+      "default": 0.2,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "nms_iou_threshold": {
+      "default": 0.45,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "match_iou_threshold": {
+      "default": 0.5,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "max_detections": {
+      "default": 64,
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "metrics": {
+    "precision": {
+      "type": "number",
+      "required": true
+    },
+    "recall": {
+      "type": "number",
+      "required": true
+    },
+    "f1": {
+      "type": "number",
+      "required": true
+    },
+    "rotated_iou_mean": {
+      "type": "number",
+      "required": true
+    },
+    "rotated_iou_p10": {
+      "type": "number",
+      "required": true
+    },
+    "angle_error_mean_deg": {
+      "type": "number",
+      "required": true
+    },
+    "angle_error_p90_deg": {
+      "type": "number",
+      "required": true
+    },
+    "matched_count": {
+      "type": "integer",
+      "required": true
+    }
+  },
+  "artifacts": {}
+}

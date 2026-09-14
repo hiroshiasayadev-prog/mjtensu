@@ -1,0 +1,70 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-angle-robustness-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Tile shape angle robustness example",
+  "description": "Evaluate one learned classifier over authored angle sets; demonstrates array-valued Evaluation parameters.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "34beb5a6ab7af1a402c7b2fa40341633a7fdcea6605a6d246d305f045b4ab318"
+  },
+  "parameters": {
+    "batch_size": {
+      "default": 1024,
+      "type": "integer",
+      "minimum": 2
+    },
+    "eval_angles": {
+      "default": [
+        0.0,
+        15.0,
+        30.0,
+        45.0
+      ],
+      "type": "array"
+    },
+    "amp": {
+      "default": true,
+      "type": "boolean"
+    },
+    "tf32": {
+      "default": true,
+      "type": "boolean"
+    },
+    "cache_device": {
+      "default": "auto",
+      "type": "string",
+      "enum": [
+        "auto",
+        "cpu",
+        "cuda"
+      ]
+    },
+    "cache_vram_fraction": {
+      "default": 0.5,
+      "type": "number",
+      "minimum": 0.01,
+      "maximum": 0.79
+    }
+  },
+  "metrics": {
+    "manual_accuracy_0deg": {
+      "type": "number",
+      "required": true
+    },
+    "jp_accuracy_0deg": {
+      "type": "number",
+      "required": true
+    },
+    "manual_angle_mean": {
+      "type": "number",
+      "required": true
+    },
+    "jp_angle_mean": {
+      "type": "number",
+      "required": true
+    }
+  },
+  "artifacts": {}
+}

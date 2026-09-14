@@ -1,0 +1,6 @@
+{
+  "schema": "mjtensu.mldb-v2/namespace/v1",
+  "id": "tile-classifier",
+  "name": "Tile Classifier",
+  "description": "Mahjong tile-shape classifier experiments, including rotation and projective robustness."
+}
