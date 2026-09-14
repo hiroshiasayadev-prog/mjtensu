@@ -23,17 +23,18 @@ jobs:
           echo "SERVICE=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.service" }}' "$AGENT")" >> "$GITHUB_ENV"
           echo "PROJECT_DIR=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$AGENT")" >> "$GITHUB_ENV"
           echo "CONFIG_FILES=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' "$AGENT")" >> "$GITHUB_ENV"
-      - name: Download static Docker CLI
+      - name: Extract Docker CLI from official image
         run: |
           set -euo pipefail
-          mkdir -p /tmp/w009-docker-cli
-          curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-27.5.1.tgz -o /tmp/w009-docker-cli/docker.tgz
-          tar -xzf /tmp/w009-docker-cli/docker.tgz -C /tmp/w009-docker-cli
+          docker pull docker:27.5.1-cli >/dev/null
+          CLI_SOURCE="$(docker create docker:27.5.1-cli)"
+          docker cp "$CLI_SOURCE:/usr/local/bin/docker" /tmp/w009-docker-cli
+          docker rm "$CLI_SOURCE" >/dev/null
 
       - name: Copy static Docker CLI into agent
         run: |
           set -euo pipefail
-          docker cp /tmp/w009-docker-cli/docker/docker "$AGENT:/usr/local/bin/docker"
+          docker cp /tmp/w009-docker-cli "$AGENT:/usr/local/bin/docker"
           docker exec "$AGENT" chmod 0755 /usr/local/bin/docker
 
       - name: Execute static Docker CLI binary
