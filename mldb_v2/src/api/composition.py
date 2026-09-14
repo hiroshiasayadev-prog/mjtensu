@@ -64,6 +64,14 @@ def _clearml_backend_config(environment: Mapping[str, str]) -> BackendConfig:
         if value is not None:
             options[option_name] = value
 
+    for environment_name, option_name in (
+        ("MLDB_V2_CLEARML_QUEUE", "queue"),
+        ("MLDB_V2_CLEARML_REPOSITORY", "repository"),
+    ):
+        value = _optional_environment_value(environment, environment_name)
+        if value is not None:
+            options[option_name] = value
+
     runtime_data_root = _optional_environment_value(
         environment, "MLDB_V2_RUNTIME_DATA_ROOT"
     )
