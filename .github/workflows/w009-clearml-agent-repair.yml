@@ -1,0 +1,28 @@
+name: W009 ClearML Agent Docker CLI Repair
+
+on:
+  push:
+    branches:
+      - mldb-w009-execution
+
+jobs:
+  repair-agent-docker-cli:
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+    timeout-minutes: 5
+    steps:
+      - name: Replace stale Docker CLI inside ClearML agent
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "host=$(hostname)"
+          docker version --format 'host client={{.Client.APIVersion}} server={{.Server.APIVersion}} min={{.Server.MinAPIVersion}}'
+          agent="$(docker ps --format '{{.Names}} {{.Image}}' | awk 'tolower($0) ~ /clearml/ && tolower($0) ~ /agent/ {print $1; exit}')"
+          test -n "$agent"
+          echo "agent=$agent"
+          docker exec "$agent" sh -lc 'docker version --format "before client={{.Client.APIVersion}} server={{.Server.APIVersion}} min={{.Server.MinAPIVersion}}" || true'
+          docker cp "$(command -v docker)" "$agent:/usr/local/bin/docker"
+          docker exec "$agent" sh -lc 'chmod +x /usr/local/bin/docker && /usr/local/bin/docker version --format "after client={{.Client.APIVersion}} server={{.Server.APIVersion}} min={{.Server.MinAPIVersion}}"'
+          docker exec "$agent" sh -lc 'command -v docker && docker version --format "path client={{.Client.APIVersion}}"'
