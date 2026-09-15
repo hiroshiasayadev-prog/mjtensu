@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Mapping, Protocol, cast
 from mldb_v2.src.catalog._executable_definition_loading import _load_executable_callable
 from mldb_v2.src.common.ids import EntityKind, EvaluationProtocolId
 from mldb_v2.src.common.parameters import ResolvedPublicParameters
+from mldb_v2.src.common.telemetry import TelemetryReporter
 from mldb_v2.src.evaluation.evaluation_protocol import _load_evaluation_protocol_definition
 
 if TYPE_CHECKING:
@@ -40,6 +41,7 @@ class EvaluationContext:
     corpus: MaterializedCorpus
     model: LoadedModel
     parameters: ResolvedPublicParameters
+    telemetry: TelemetryReporter
     work_dir: Path
 
 

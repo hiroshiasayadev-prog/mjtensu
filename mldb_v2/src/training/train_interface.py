@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Protocol, cast
 from mldb_v2.src.catalog._executable_definition_loading import _load_executable_callable
 from mldb_v2.src.common.ids import EntityKind, TrainProtocolId
 from mldb_v2.src.common.parameters import ResolvedPublicParameters
+from mldb_v2.src.common.telemetry import TelemetryReporter
 from mldb_v2.src.training.train_protocol import _load_train_protocol_definition
 
 if TYPE_CHECKING:
@@ -32,6 +33,7 @@ class TrainContext:
     model: torch.nn.Module
     seed: int
     parameters: ResolvedPublicParameters
+    telemetry: TelemetryReporter
     work_dir: Path
 
 

@@ -1,0 +1,55 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "rotated-fcos/w010-telemetry-smoke-v1",
+  "status": "sealed",
+  "name": "W010 detector telemetry smoke",
+  "description": "Bounded 3-epoch actual ClearML GPU execution for W010 telemetry/chart closure verification; experiment semantics otherwise mirror the accepted W009 conformance Study.",
+  "model": {
+    "train": {
+      "corpus": "rotated-fcos/mahjong-rotated-detector-320-v1",
+      "protocol": "rotated-fcos/rotated-fcos-train-gpu-v3",
+      "architectures": [
+        "rotated-fcos/rotated-fcos-s05-rgb-baseline-v1"
+      ],
+      "parameters": {
+        "epochs": {
+          "values": [
+            3
+          ]
+        },
+        "batch_size": {
+          "values": [
+            8
+          ]
+        }
+      },
+      "seeds": [
+        42
+      ]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "standard-operating-point",
+      "corpus": "rotated-fcos/mahjong-rotated-detector-320-v1",
+      "protocol": "rotated-fcos/rotated-fcos-standard-v1",
+      "parameters": {
+        "score_threshold": {
+          "values": [
+            0.2
+          ]
+        },
+        "nms_iou_threshold": {
+          "values": [
+            0.45
+          ]
+        },
+        "match_iou_threshold": {
+          "values": [
+            0.5
+          ]
+        }
+      }
+    }
+  ]
+}

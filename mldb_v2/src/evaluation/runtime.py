@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import cast
 
@@ -22,6 +22,7 @@ from mldb_v2.src.common.ids import (
     _validate_trial_id,
     _validate_typed_reference,
 )
+from mldb_v2.src.common.telemetry import _AcceptedScalarEvent, _RecordingTelemetryReporter
 from mldb_v2.src.common.parameters import (
     _resolve_public_parameters,
     _validate_public_parameter_value,
@@ -311,6 +312,7 @@ def _execute_evaluation_stage(
     corpus_destination_root: str | Path,
     work_dir: str | Path,
     artifact_uris: Mapping[str, str],
+    telemetry_sink: Callable[[_AcceptedScalarEvent], None] | None = None,
 ) -> EvaluationCandidateResult:
     """Execute one validated evaluation stage and return its provisional result payload."""
     validated = _validate_evaluation_stage_input(stage_input)
@@ -375,6 +377,7 @@ def _execute_evaluation_stage(
         architecture=architecture,
         module=module,
     )
+    telemetry = _RecordingTelemetryReporter(sink=telemetry_sink)
     context = EvaluationContext(
         task=task,
         corpus=MaterializedCorpus(
@@ -383,6 +386,7 @@ def _execute_evaluation_stage(
         ),
         model=loaded_model,
         parameters=parameters,
+        telemetry=telemetry,
         work_dir=Path(work_dir),
     )
     evaluate = _load_evaluation_callable(
@@ -396,6 +400,13 @@ def _execute_evaluation_stage(
         raise ValueError("EvaluationProtocol must return EvaluationCandidate")
 
     metrics = _validate_candidate_metrics(candidate.metrics, protocol["metrics"])
+    for key, value in metrics.items():
+        telemetry.report_scalar(
+            group=stage["name"], series=key, value=value, step=0
+        )
+    if telemetry.accepted_count == 0:
+        raise ValueError("Evaluation must establish at least one valid scalar telemetry event")
+
     artifacts = _publish_candidate_artifacts(
         candidate.artifacts,
         protocol["artifacts"],

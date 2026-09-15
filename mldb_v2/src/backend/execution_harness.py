@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Protocol, cast
@@ -29,6 +29,7 @@ from mldb_v2.src.common.ids import (
     _validate_typed_reference,
 )
 from mldb_v2.src.common.diagnostic import Diagnostic, _validate_diagnostic
+from mldb_v2.src.common.telemetry import _AcceptedScalarEvent
 from mldb_v2.src.evaluation import runtime as evaluation_runtime
 from mldb_v2.src.evaluation.evaluation_protocol import _load_evaluation_protocol_definition
 from mldb_v2.src.repository.resolution import CanonicalRepositoryResolver
@@ -419,6 +420,7 @@ class CommonExecutionHarness:
         backend: str,
         execution_id: str,
         started_at: str | None = None,
+        telemetry_sink: Callable[[_AcceptedScalarEvent], None] | None = None,
     ) -> None:
         self._repository_root = _repo_root(repository_root)
         self._pinned_mldb_data_root = Path(pinned_mldb_data_root)
@@ -433,6 +435,7 @@ class CommonExecutionHarness:
         self._backend = _nonempty_string(backend, label="backend")
         self._execution_id = _nonempty_string(execution_id, label="execution_id")
         self._started_at = _validate_started_at(started_at)
+        self._telemetry_sink = telemetry_sink
 
     def __call__(self, stage_input: StageInput) -> TerminalCandidate:
         stage_key = _establish_stage_key(stage_input)
@@ -457,6 +460,7 @@ class CommonExecutionHarness:
                     corpus_destination_root=self._corpus_destination_root,
                     work_dir=self._work_dir,
                     weights_uri=self._training_weights_uri,
+                    telemetry_sink=self._telemetry_sink,
                 )
                 attempt = _attempt(
                     backend=self._backend,
@@ -481,6 +485,7 @@ class CommonExecutionHarness:
                 corpus_destination_root=self._corpus_destination_root,
                 work_dir=self._work_dir,
                 artifact_uris=self._evaluation_artifact_uris,
+                telemetry_sink=self._telemetry_sink,
             )
             attempt = _attempt(
                 backend=self._backend,

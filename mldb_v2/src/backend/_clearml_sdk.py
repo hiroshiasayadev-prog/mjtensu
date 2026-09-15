@@ -27,6 +27,7 @@ from mldb_v2.src.backend._clearml_observation import (
 )
 from mldb_v2.src.backend._config import BackendConfig
 from mldb_v2.src.common.ids import EntityKind
+from mldb_v2.src.common.telemetry import _AcceptedScalarEvent
 from mldb_v2.src.repository.resolution import CanonicalRepositoryResolver
 from mldb_v2.src.study._plan_build import _validate_study_plan
 from mldb_v2.src.training.model import _validate_model
@@ -50,6 +51,34 @@ _REMOTE_PACKAGES = (
 
 class ClearMLSDKError(RuntimeError):
     """Bounded production ClearML SDK activation/projection failure."""
+
+
+class _ClearMLScalarSink:
+    """Lazy per-Task scalar projection; caller owns best-effort isolation."""
+
+    def __init__(self, task: object) -> None:
+        self._task = task
+        self._logger: object | None = None
+
+    def __call__(self, event: _AcceptedScalarEvent) -> None:
+        logger = self._logger
+        if logger is None:
+            get_logger = getattr(self._task, "get_logger", None)
+            if not callable(get_logger):
+                raise ClearMLSDKError("ClearML Task does not expose get_logger()")
+            logger = get_logger()
+            if logger is None:
+                raise ClearMLSDKError("ClearML Task logger is unavailable")
+            self._logger = logger
+        report_scalar = getattr(logger, "report_scalar", None)
+        if not callable(report_scalar):
+            raise ClearMLSDKError("ClearML logger does not expose report_scalar()")
+        report_scalar(
+            title=event.group,
+            series=event.series,
+            value=event.value,
+            iteration=event.step,
+        )
 
 
 @dataclass(frozen=True)
@@ -790,6 +819,7 @@ def _run_remote_harness() -> None:
         backend="clearml",
         execution_id=task_id,
         started_at=None,
+        telemetry_sink=_ClearMLScalarSink(task),
     )
     candidate = harness(stage_input)
     task.set_configuration_object(

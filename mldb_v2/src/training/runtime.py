@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
@@ -11,6 +12,7 @@ from mldb_v2.src.catalog.architecture import _load_architecture_definition
 from mldb_v2.src.catalog.corpus import _load_corpus
 from mldb_v2.src.catalog.task import _load_task
 from mldb_v2.src.common.ids import _validate_trial_id, _validate_typed_reference
+from mldb_v2.src.common.telemetry import _AcceptedScalarEvent, _RecordingTelemetryReporter
 from mldb_v2.src.common.parameters import (
     _resolve_public_parameters,
     _validate_public_parameter_value,
@@ -132,6 +134,7 @@ def _execute_training_stage(
     corpus_destination_root: str | Path,
     work_dir: str | Path,
     weights_uri: str,
+    telemetry_sink: Callable[[_AcceptedScalarEvent], None] | None = None,
 ) -> TrainingCandidateResult:
     """Execute one validated training stage and return only its provisional result payload."""
     validated = _validate_training_stage_input(stage_input)
@@ -168,6 +171,7 @@ def _execute_training_stage(
         raise ValueError("materialized Corpus does not match resolved Corpus")
 
     model = _build_fresh_architecture_module(root, stage["architecture"])
+    telemetry = _RecordingTelemetryReporter(sink=telemetry_sink)
     context = TrainContext(
         task=task,
         corpus=MaterializedCorpus(
@@ -178,6 +182,7 @@ def _execute_training_stage(
         model=model,
         seed=seed,
         parameters=parameters,
+        telemetry=telemetry,
         work_dir=Path(work_dir),
     )
     train = _load_train_callable(root, stage["train_protocol"])
@@ -185,6 +190,8 @@ def _execute_training_stage(
         trained_module = train(context)
     except Exception as error:
         raise ValueError("TrainProtocol raised during training execution") from error
+    if telemetry.accepted_count == 0:
+        raise ValueError("TrainProtocol must emit at least one valid scalar telemetry event")
 
     state = _canonicalize_trained_module_state(root, stage["architecture"], trained_module)
     data = _serialize_canonical_state_dict(state)

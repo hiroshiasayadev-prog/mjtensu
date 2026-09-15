@@ -1,0 +1,98 @@
+{
+  "schema": "mjtensu.mldb-v2/train-protocol/v1",
+  "id": "rotated-fcos/rotated-fcos-train-gpu-v3",
+  "status": "sealed",
+  "task": "rotated-fcos/mahjong-tile-rotated-detection-v1",
+  "name": "Rotated FCOS GPU training with validation telemetry",
+  "description": "V3 preserves V2 training and best-model selection semantics while reporting per-completed-epoch validation F1, recall, mean IoU, and positive mean validation loss through the backend-neutral TrainContext telemetry reporter.",
+  "implementation": {
+    "entrypoint": "train",
+    "sha256": "c52f73c177a889a9a7e074243a7a80176716d0cc3ddfbf03a6a97b4e1721bbaf"
+  },
+  "parameters": {
+    "epochs": {
+      "default": 80,
+      "type": "integer",
+      "minimum": 1
+    },
+    "batch_size": {
+      "default": 32,
+      "type": "integer",
+      "minimum": 1
+    },
+    "workers": {
+      "default": 8,
+      "type": "integer",
+      "minimum": 0
+    },
+    "learning_rate": {
+      "default": 0.0003,
+      "type": "number",
+      "minimum": 1e-07
+    },
+    "weight_decay": {
+      "default": 0.0001,
+      "type": "number",
+      "minimum": 0.0
+    },
+    "warmup_epochs": {
+      "default": 3.0,
+      "type": "number",
+      "minimum": 0.0
+    },
+    "freeze_backbone_epochs": {
+      "default": 3,
+      "type": "integer",
+      "minimum": 0
+    },
+    "center_radius": {
+      "default": 1.5,
+      "type": "number",
+      "minimum": 0.0
+    },
+    "pretrained_backbone": {
+      "default": true,
+      "type": "boolean"
+    },
+    "train_split": {
+      "default": "train",
+      "type": "string"
+    },
+    "validation_split": {
+      "default": "val",
+      "type": "string"
+    },
+    "score_threshold": {
+      "default": 0.2,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "nms_iou_threshold": {
+      "default": 0.45,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "match_iou_threshold": {
+      "default": 0.5,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "max_detections": {
+      "default": 64,
+      "type": "integer",
+      "minimum": 1
+    },
+    "early_stop_patience": {
+      "default": 20,
+      "type": "integer",
+      "minimum": 0
+    },
+    "amp": {
+      "default": true,
+      "type": "boolean"
+    }
+  }
+}
