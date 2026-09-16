@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+from importlib.machinery import ModuleSpec
 import inspect
 import re
 import sys
@@ -79,34 +80,40 @@ def _validate_sha256(value: object, *, label: str = "sha256") -> str:
     return value
 
 
-def _validate_source_path(value: object) -> str:
+def _validate_source_path(
+    value: object,
+    *,
+    namespace: str | None = None,
+    mldb_prefix: str = "mldb_data",
+) -> str:
     path = _require_string(value, label="source path", nonempty=True)
     if "\\" in path or any(char in path for char in "*?["):
         raise ValueError("source path must be a repository-relative file path")
     pure = PurePosixPath(path)
-    if (
-        pure.is_absolute()
-        or path != pure.as_posix()
-        or any(part in {"", ".", ".."} for part in pure.parts)
-    ):
+    if pure.is_absolute() or path != pure.as_posix() or any(part in {"", ".", ".."} for part in pure.parts):
         raise ValueError("source path must be a canonical repository-relative file path")
-    if ":" in pure.parts[0] or pure.parts[0] == "tools":
-        raise ValueError("source path must be a repository-relative non-tools file path")
+    if ":" in pure.parts[0]:
+        raise ValueError("source path must be a repository-relative file path")
+    if namespace is not None:
+        prefix = PurePosixPath(mldb_prefix) / namespace / "lib"
+        if pure == prefix or not pure.is_relative_to(prefix) or pure.suffix != ".py":
+            raise ValueError("source path must be a Python helper under the executable namespace lib directory")
     return path
 
 
-def _validate_sources(value: object) -> list[ExecutableSource]:
+def _validate_sources(
+    value: object,
+    *,
+    namespace: str | None = None,
+    mldb_prefix: str = "mldb_data",
+) -> list[ExecutableSource]:
     if type(value) is not list:
         raise ValueError("implementation.sources must be a list")
     validated: list[ExecutableSource] = []
     paths: list[str] = []
     for entry in value:
-        mapping = _require_exact_keys(
-            entry,
-            required={"path", "sha256"},
-            label="implementation.sources entry",
-        )
-        path = _validate_source_path(mapping["path"])
+        mapping = _require_exact_keys(entry, required={"path", "sha256"}, label="implementation.sources entry")
+        path = _validate_source_path(mapping["path"], namespace=namespace, mldb_prefix=mldb_prefix)
         sha256 = _validate_sha256(mapping["sha256"], label="source sha256")
         paths.append(path)
         validated.append({"path": path, "sha256": sha256})
@@ -123,6 +130,7 @@ def _validate_implementation(
     entrypoint: str,
     framework: str | None = None,
     sealed: bool,
+    namespace: str | None = None,
 ) -> dict[str, object]:
     required = {"entrypoint"}
     optional = {"sha256", "sources"}
@@ -143,7 +151,7 @@ def _validate_implementation(
     if "sha256" in mapping:
         _validate_sha256(mapping["sha256"], label="implementation.sha256")
     if "sources" in mapping:
-        _validate_sources(mapping["sources"])
+        _validate_sources(mapping["sources"], namespace=namespace)
     return mapping
 
 
@@ -190,6 +198,16 @@ def _resolve_document(
     return dict(document), yaml_path
 
 
+def _package_module(name: str, path: Path) -> ModuleType:
+    module = ModuleType(name)
+    module.__package__ = name
+    module.__path__ = [str(path)]  # type: ignore[attr-defined]
+    spec = ModuleSpec(name, loader=None, is_package=True)
+    spec.submodule_search_locations = [str(path)]
+    module.__spec__ = spec
+    return module
+
+
 def _load_companion_module(
     mldb_data_root: str | Path,
     *,
@@ -200,27 +218,34 @@ def _load_companion_module(
         raise ValueError("unsupported executable definition kind")
     typed_id = _validate_definition_id(entity_id)
     namespace, local_id = typed_id.split("/", 1)
-    companion = Path(mldb_data_root) / namespace / _DOMAIN_BY_KIND[kind] / f"{local_id}.py"
+    namespace_root = (Path(mldb_data_root) / namespace).resolve()
+    companion = namespace_root / _DOMAIN_BY_KIND[kind] / f"{local_id}.py"
     if not companion.is_file():
         raise FileNotFoundError(f"same-basename executable companion not found: {companion}")
     absolute = companion.resolve()
     digest = hashlib.sha256(str(absolute).encode("utf-8")).hexdigest()[:24]
-    module_name = f"_mldb_v2_exec_{kind.value}_{digest}"
+    package_name = f"_mldb_v2_execpkg_{digest}"
+    domain_package = f"{package_name}.{_DOMAIN_BY_KIND[kind]}"
+    module_name = f"{domain_package}.entry"
+    previous = {name: module for name, module in tuple(sys.modules.items()) if name == package_name or name.startswith(package_name + ".")}
+    for name in previous:
+        sys.modules.pop(name, None)
+    sys.modules[package_name] = _package_module(package_name, namespace_root)
+    sys.modules[domain_package] = _package_module(domain_package, absolute.parent)
     spec = importlib.util.spec_from_file_location(module_name, absolute)
     if spec is None or spec.loader is None:
         raise ValueError(f"cannot create module spec for companion: {companion}")
     module = importlib.util.module_from_spec(spec)
-    previous = sys.modules.get(module_name)
-    previous_dont_write_bytecode = sys.dont_write_bytecode
     sys.modules[module_name] = module
+    previous_dont_write_bytecode = sys.dont_write_bytecode
     sys.dont_write_bytecode = True
     try:
         spec.loader.exec_module(module)
     except Exception as error:
-        if previous is None:
-            sys.modules.pop(module_name, None)
-        else:
-            sys.modules[module_name] = previous
+        for name in tuple(sys.modules):
+            if name == package_name or name.startswith(package_name + "."):
+                sys.modules.pop(name, None)
+        sys.modules.update(previous)
         raise ValueError(f"failed to load executable companion: {companion}") from error
     finally:
         sys.dont_write_bytecode = previous_dont_write_bytecode

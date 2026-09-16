@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, TypeAlias
 
+from mldb_v2.src.catalog._executable_definition_loading import _validate_source_path
 from mldb_v2.src.common.ids import EntityKind, _canonical_json_bytes
 from mldb_v2.src.repository.resolution import CanonicalRepositoryResolver
 from mldb_v2.src.source.git_snapshot import (
@@ -414,7 +415,9 @@ class _StudySourcePinCollector:
             if type(path) is not str or type(recorded_sha256) is not str:
                 raise _SourcePinningError("pin_graph_invalid")
             try:
-                relative = _validate_safe_relative_path(path, label="repository source path")
+                relative = _validate_source_path(
+                    path, namespace=entity_id.split("/", 1)[0], mldb_prefix=self._mldb_prefix
+                )
             except ValueError as error:
                 raise _SourcePinningError("required_source_invalid") from error
             committed = _required_committed_bytes(

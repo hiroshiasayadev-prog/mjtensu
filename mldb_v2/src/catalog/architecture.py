@@ -90,6 +90,7 @@ def _parse_architecture_document(document: object, *, expected_id: str) -> Archi
         entrypoint="build",
         framework="pytorch",
         sealed=status == "sealed",
+        namespace=definition_id.split("/", 1)[0],
     )
 
     interface = _require_exact_keys(

@@ -49,7 +49,7 @@ Reusable definitions and canonical history live under one namespace root:
 
 Do not use the old flat v1 `mldb_data_old/` layout as a template for new v2 work.
 
-Executable definitions normally pair a YAML definition with a sibling Python implementation. Corpus definitions may additionally reference manifests/builders according to their formal contract.
+Executable definitions pair a YAML definition with a same-basename Python entrypoint. Reusable experiment helpers may live under `mldb_data/<same-namespace>/lib/`; every helper imported directly or transitively must be listed in `implementation.sources` with its exact SHA-256. Repository-owned imports outside that namespace-private `lib/` boundary are invalid. Corpus definitions may additionally reference manifests/builders according to their formal contract.
 
 ## 4. Authoring flow
 
@@ -64,7 +64,7 @@ For a new experiment or semantic definition change:
 7. Run verification, including executable integrity and relevant asset tests.
 8. Seal the reusable definition only after verification passes.
 9. Create a Study that expresses the comparison matrix and seeds.
-10. Commit/push the exact required source closure for source pinning.
+10. Commit/push the exact required canonical inputs, executable companions, and declared namespace-private helpers for source pinning.
 11. Plan and run the Study through the public CLI.
 12. Compare canonical Evaluation Result metrics and artifacts.
 
@@ -144,7 +144,7 @@ A Study is not execution-ready merely because its YAML validates. Formal plannin
 
 When authoring changes executable or canonical inputs:
 
-- inspect the exact referenced source closure;
+- inspect the exact canonical inputs and same-basename executable companions;
 - stage only those required files;
 - review the cached diff;
 - commit and push to a backend-reachable ref;

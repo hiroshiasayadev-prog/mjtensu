@@ -15,6 +15,6 @@ entering formal experiments/history.
 | ref | responsibility |
 |---|---|
 | `spec:mldb.v2.verification.definition_lifecycle` | validate, verify, and seal definitions. |
-| `spec:mldb.v2.verification.executable_integrity` | Sibling and project-source integrity for executable definitions. |
+| `spec:mldb.v2.verification.executable_integrity` | Executable sibling plus same-namespace helper integrity and repository-import boundary. |
 | `spec:mldb.v2.verification.executable_asset_tests` | Required per-asset pytest gate and deterministic test placement. |
 | `spec:mldb.v2.verification.result_acceptance` | convert collected backend outcome into canonical result. |

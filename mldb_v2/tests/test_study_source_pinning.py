@@ -7,7 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from mldb_v2.src.study._planning_preflight import _StudyPlanningPreflight
+from mldb_v2.src.study._planning_preflight import (
+    _PlanningPreflightError,
+    _StudyPlanningPreflight,
+)
 from mldb_v2.src.study._source_pinning import (
     _SourcePinningError,
     _StudySourcePinCollector,
@@ -219,7 +222,11 @@ def _training_repo(tmp_path: Path) -> tuple[Path, str, str, dict[str, bytes]]:
     source_a = b"VALUE_A = 1\n"
     source_b = b"VALUE_B = 2\n"
     source_common = b"COMMON = 3\n"
-    sources = {"product/a.py": source_a, "product/b.py": source_b, "product/common.py": source_common}
+    sources = {
+        "mldb_data/arch-ns/lib/a.py": source_a,
+        "mldb_data/arch-ns/lib/b.py": source_b,
+        "mldb_data/proto-ns/lib/common.py": source_common,
+    }
     for relative, data in sources.items():
         _write_bytes(repo / relative, data)
 
@@ -239,11 +246,11 @@ def _training_repo(tmp_path: Path) -> tuple[Path, str, str, dict[str, bytes]]:
     _write_bytes(root / "data-ns" / "corpora" / f"{train_local}.manifest.jsonl", train_manifest)
     _write_bytes(root / "data-ns" / "corpora" / f"{eval_local}.manifest.jsonl", eval_manifest)
 
-    _install_definition(root, "architecture", ids["arch_z"], _architecture(ids["arch_z"], task=ids["task"], companion=arch_z_py, sources=[("product/b.py", source_b)]), arch_z_py)
-    _install_definition(root, "architecture", ids["arch_a"], _architecture(ids["arch_a"], task=ids["task"], companion=arch_a_py, sources=[("product/a.py", source_a)]), arch_a_py)
+    _install_definition(root, "architecture", ids["arch_z"], _architecture(ids["arch_z"], task=ids["task"], companion=arch_z_py, sources=[("mldb_data/arch-ns/lib/b.py", source_b)]), arch_z_py)
+    _install_definition(root, "architecture", ids["arch_a"], _architecture(ids["arch_a"], task=ids["task"], companion=arch_a_py, sources=[("mldb_data/arch-ns/lib/a.py", source_a)]), arch_a_py)
 
-    _install_definition(root, "train_protocol", ids["train_protocol"], _train_protocol(ids["train_protocol"], task=ids["task"], companion=train_py, sources=[("product/common.py", source_common)]), train_py)
-    _install_definition(root, "evaluation_protocol", ids["eval_protocol"], _evaluation_protocol(ids["eval_protocol"], task=ids["task"], companion=eval_py, sources=[("product/common.py", source_common)]), eval_py)
+    _install_definition(root, "train_protocol", ids["train_protocol"], _train_protocol(ids["train_protocol"], task=ids["task"], companion=train_py, sources=[("mldb_data/proto-ns/lib/common.py", source_common)]), train_py)
+    _install_definition(root, "evaluation_protocol", ids["eval_protocol"], _evaluation_protocol(ids["eval_protocol"], task=ids["task"], companion=eval_py, sources=[("mldb_data/proto-ns/lib/common.py", source_common)]), eval_py)
     _install_definition(
         root,
         "study",
@@ -353,7 +360,7 @@ def test_training_preflight_to_source_pins_exact_hashes_order_and_dedup(tmp_path
 
     arch_a = next(pin for pin in result.pins if pin.id == "arch-ns/arch-a-v1")
     assert [(source.path, source.sha256) for source in arch_a.sources] == [
-        ("product/a.py", _sha(blobs["product/a.py"]))
+        ("mldb_data/arch-ns/lib/a.py", _sha(blobs["mldb_data/arch-ns/lib/a.py"]))
     ]
     assert arch_a.manifest_sha256 is None
     study_pin = next(pin for pin in result.pins if pin.id == study_id)
@@ -383,7 +390,7 @@ def test_collection_is_deterministic_and_pure(tmp_path: Path) -> None:
         "mldb_data/study-ns/namespace.yaml",
         "mldb_data/study-ns/studies/study-v1.yaml",
         "mldb_data/arch-ns/architectures/arch-a-v1.py",
-        "product/a.py",
+        "mldb_data/arch-ns/lib/a.py",
         "mldb_data/data-ns/corpora/train-v1.manifest.jsonl",
         "mldb_data/data-ns/corpora/train-v1.py",
     ],
@@ -494,7 +501,7 @@ def test_required_file_absent_at_selected_commit_rejected(tmp_path: Path) -> Non
         root,
         "architecture",
         new_id,
-        _architecture(new_id, task="task-ns/task-v1", companion=companion, sources=[("product/a.py", blobs["product/a.py"])]),
+        _architecture(new_id, task="task-ns/task-v1", companion=companion, sources=[]),
         companion,
     )
     study_path = root / "study-ns" / "studies" / "study-v1.yaml"

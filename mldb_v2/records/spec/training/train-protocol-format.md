@@ -30,14 +30,14 @@ Required fields are:
 
 Each `parameters.<key>` follows `spec:mldb.v2.common.public_parameters`. The training seed is a
 separate integer execution input and is not duplicated as a universal public parameter.
-For `sealed`, `implementation.sha256` is required. `implementation.sources`, when needed, follows
+For `sealed`, `implementation.sha256` is required. `implementation.sources`, when present, declares exact same-namespace `lib/` helpers as defined by
 `spec:mldb.v2.verification.executable_integrity`.
 
 ## Executable companion
 
 Same-basename `<local-id>.py` is required and exposes `train` according to
-`spec:mldb.v2.training.train_interface`. It may import declared normal project source but must not
-use a `tools/` script as the reusable protocol implementation.
+`spec:mldb.v2.training.train_interface`. It may import declared helpers only from the same namespace's `lib/` tree; other repository-owned
+Python imports are invalid.
 
 The returned learned module and standardized canonical weights are defined by the Train interface and
 `spec:mldb.v2.training.canonical_weights`; Train Protocol YAML does not declare an alternate learned

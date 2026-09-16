@@ -18,7 +18,7 @@ Meaning: one or more formal v2 inputs consumed by the Study do not match the sel
 Recovery:
 
 1. Confirm current `HEAD` and branch.
-2. Determine the exact referenced source closure for the Study.
+2. Determine the exact referenced canonical inputs and same-basename executable companions for the Study.
 3. Compare required working-tree bytes against `HEAD`; ignore unrelated dirty files.
 4. Stage only required source paths. Never use `git add .` merely to clear the error.
 5. Review the staged file list and diff.

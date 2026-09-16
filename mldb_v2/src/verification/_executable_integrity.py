@@ -15,7 +15,7 @@ from mldb_v2.src.common.diagnostic import Diagnostic
 from mldb_v2.src.common.ids import CorpusId
 from mldb_v2.src.evaluation.evaluation_protocol import _load_evaluation_protocol_definition
 from mldb_v2.src.repository.resolution import CanonicalRepositoryResolver
-from mldb_v2.src.storage._paths import _validate_safe_relative_path
+from mldb_v2.src.catalog._executable_definition_loading import _validate_source_path
 from mldb_v2.src.training.train_protocol import _load_train_protocol_definition
 from mldb_v2.src.verification.executable_integrity import (
     CorpusBuilderIntegrityRequest,
@@ -172,8 +172,8 @@ class _RepositoryExecutableIntegrityVerifier:
             assert type(source_path) is str and type(declared_sha256) is str
             source_evidence.append((source_path, declared_sha256))
             try:
-                relative = _validate_safe_relative_path(
-                    source_path, label="repository source path"
+                relative = _validate_source_path(
+                    source_path, namespace=entity_id.split("/", 1)[0]
                 )
             except ValueError:
                 diagnostics.append(
@@ -205,6 +205,7 @@ class _RepositoryExecutableIntegrityVerifier:
                 import_scan = _scan_project_source_imports(
                     self._repository_root,
                     companion_path,
+                    allowed_source_root=self._mldb_data_root / entity_id.split("/", 1)[0] / "lib",
                 )
             except (OSError, ValueError):
                 diagnostics.append(

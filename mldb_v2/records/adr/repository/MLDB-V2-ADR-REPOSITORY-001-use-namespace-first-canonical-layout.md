@@ -46,10 +46,10 @@ The entity kind is supplied by the typed reference and is not repeated inside th
 
 Cross-namespace references are allowed.
 
-Python files under `mldb_data/` are permitted only when a domain specification defines an
-executable companion for a YAML definition. Such a file MUST have the exact same basename as its
-YAML sibling. Standalone helpers, shared Python modules, and unrelated scripts under `mldb_data/`
-are invalid.
+Python files under entity domains are permitted only as same-basename executable companions.
+Each namespace additionally owns an optional `lib/` tree for reusable experiment helpers. Those
+helpers are private to that namespace, are not standalone MLDB entities, and may contain Python
+modules/package subdirectories only.
 
 ## Rationale
 
@@ -70,11 +70,11 @@ Typed lookup keeps IDs short while preserving unambiguous resolution.
 Unlimited hierarchy turns organization into another taxonomy problem. MLDB v2 has exactly one
 namespace segment before the fixed domain.
 
-### Put reusable ML implementation in `tools/`
+### Put reusable ML implementation outside the namespace
 
-`tools/` is not a reusable domain package. MLDB executable entrypoints are definition-owned sibling
-modules. Shared reusable implementation belongs in a normal project source package and may be
-imported by the sibling module.
+Depending on `tools/`, `product/`, another namespace, or another repository package makes an
+experiment depend on separately movable code. Reusable experiment code therefore stays inside the
+owning namespace's `lib/` tree and is explicitly hashed/pinned by each executable that imports it.
 
 ## Consequences
 

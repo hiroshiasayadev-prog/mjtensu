@@ -34,14 +34,14 @@ Required fields are:
 Optional fields are `structure.traits` (unique non-empty strings) and `parameters` (descriptive
 JSON-compatible mapping not supplied as `build()` arguments).
 
-For `sealed`, `implementation.sha256` is required. `implementation.sources`, when needed, follows
+For `sealed`, `implementation.sha256` is required. `implementation.sources`, when present, declares exact same-namespace `lib/` helpers as defined by
 `spec:mldb.v2.verification.executable_integrity`.
 
 ## Executable companion
 
 Same-basename `<local-id>.py` is required and exposes `build` according to
-`spec:mldb.v2.catalog.architecture_build`. The sibling may import declared normal project source but
-must not designate a `tools/` script as implementation.
+`spec:mldb.v2.catalog.architecture_build`. The sibling may import declared helpers only from the same namespace's `lib/` tree; other
+repository-owned Python imports are invalid.
 
 ## Identity and validation
 

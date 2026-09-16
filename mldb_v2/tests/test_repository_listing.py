@@ -190,6 +190,20 @@ def test_unknown_direct_domain_is_issue(tmp_path: Path) -> None:
     assert "repository_unknown_domain" in _codes(listing)
 
 
+def test_namespace_lib_accepts_python_helpers_and_rejects_other_files(tmp_path: Path) -> None:
+    root = tmp_path / "mldb_data"
+    _namespace(root, "alpha")
+    lib = root / "alpha" / "lib" / "pkg"
+    lib.mkdir(parents=True)
+    (lib / "helper.py").write_text("VALUE = 1\n", encoding="utf-8")
+    listing = CanonicalRepositoryListing(root).list_entities(kind=EntityKind.TASK)
+    assert "repository_unknown_domain" not in _codes(listing)
+    assert "repository_unexpected_source_file" not in _codes(listing)
+    (lib / "notes.txt").write_text("not source\n", encoding="utf-8")
+    listing = CanonicalRepositoryListing(root).list_entities(kind=EntityKind.TASK)
+    assert "repository_unexpected_source_file" in _codes(listing)
+
+
 def test_invalid_basename_schema_and_id_candidates_are_excluded(tmp_path: Path) -> None:
     root = tmp_path / "mldb_data"
     _namespace(root, "alpha")

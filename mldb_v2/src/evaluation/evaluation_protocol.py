@@ -136,7 +136,8 @@ def _parse_evaluation_protocol_document(
         mapping["description"], label="Evaluation Protocol description"
     )
     implementation = _validate_implementation(
-        mapping["implementation"], entrypoint="evaluate", sealed=status == "sealed"
+        mapping["implementation"], entrypoint="evaluate", sealed=status == "sealed",
+        namespace=definition_id.split("/", 1)[0],
     )
     parameters = _validate_parameter_declarations(mapping["parameters"])
     metrics = _validate_metric_declarations(mapping["metrics"])

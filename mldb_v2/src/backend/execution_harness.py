@@ -236,7 +236,9 @@ def _verify_executable_pin(
     if hashlib.sha256(companion).hexdigest() != pin["companion_sha256"]:
         raise ValueError("pinned executable companion sha256 mismatch")
     for source in pin["sources"]:
-        path = _validate_source_path(source["path"])
+        path = _validate_source_path(
+            source["path"], namespace=entity_id.split("/", 1)[0], mldb_prefix=prefix
+        )
         data = _verified_committed_bytes(
             repository_root,
             commit=commit,

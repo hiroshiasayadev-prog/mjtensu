@@ -25,9 +25,11 @@ mldb_data/
     models/
     evaluation_results/
     study_results/
+    lib/
 ```
 
-The recognized domain names are fixed. Empty domain directories MAY be absent.
+The recognized entity domain names are fixed. Empty domain directories MAY be absent. `lib/` is a
+namespace-private Python source area, not an entity domain.
 
 A direct child of `mldb_data/` is a v2 namespace only when it contains `namespace.yaml`.
 Existing v1 flat directories such as `mldb_data/tasks/` therefore remain outside v2 lookup.
@@ -76,9 +78,9 @@ When permitted:
 <local-id>.py
 ```
 
-MUST be same-basename siblings. A `.py` without its owning YAML is invalid. `helpers.py`,
-`common.py`, package subdirectories, and other shared implementation modules under `mldb_data/`
-are invalid.
+MUST be same-basename siblings. A `.py` without its owning YAML is invalid inside entity
+domains. Shared experiment implementation is allowed only under the same namespace's `lib/` tree;
+`lib/` may contain Python modules and package subdirectories, but no non-Python files.
 
 Corpus may additionally own a same-basename manifest:
 
@@ -99,6 +101,7 @@ Cross-namespace references are valid.
 
 ## Implementation-code boundary
 
-Definition companion `.py` may import stable reusable code from normal project source packages.
-An MLDB definition MUST NOT designate a script under `tools/` as its reusable implementation
-entrypoint.
+Definition companion `.py` owns its executable entrypoint and MAY import reusable Python only
+from `mldb_data/<same-namespace>/lib/`. Repository-owned imports from `tools/`, `product/`, another
+namespace, entity domains, or any other repository package are invalid. Standard-library, third-party,
+and MLDB v2 infrastructure imports remain allowed.

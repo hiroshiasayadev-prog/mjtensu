@@ -172,7 +172,11 @@ def test_cross_namespace_pins_dependencies_and_unrelated_dirty_allowed(tmp_path:
         for pin in plan["pins"]
         for source in pin["sources"]
     }
-    assert declared_sources == {"product/a.py", "product/b.py", "product/common.py"}
+    assert declared_sources == {
+        "mldb_data/arch-ns/lib/a.py",
+        "mldb_data/arch-ns/lib/b.py",
+        "mldb_data/proto-ns/lib/common.py",
+    }
 
 
 def test_existing_model_order_lineage_pins_and_no_runtime_loading(tmp_path: Path) -> None:

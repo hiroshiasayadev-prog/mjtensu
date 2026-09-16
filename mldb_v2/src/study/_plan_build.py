@@ -160,7 +160,9 @@ def _validate_pin(pin: object) -> tuple[str, str]:
     for raw_source in sources:
         source = _require_exact_dict(raw_source, _SOURCE_FIELDS, code="invalid_pin_source")
         try:
-            path = _validate_source_path(source["path"])
+            path = _validate_source_path(
+                source["path"], namespace=entity_id.split("/", 1)[0]
+            )
         except ValueError as error:
             raise _StudyPlanError("invalid_pin_source_path") from error
         _validate_sha256(source["sha256"])

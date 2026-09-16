@@ -52,7 +52,8 @@ def _parse_train_protocol_document(document: object, *, expected_id: str) -> Tra
     name = _require_string(mapping["name"], label="Train Protocol name", nonempty=True)
     description = _require_string(mapping["description"], label="Train Protocol description")
     implementation = _validate_implementation(
-        mapping["implementation"], entrypoint="train", sealed=status == "sealed"
+        mapping["implementation"], entrypoint="train", sealed=status == "sealed",
+        namespace=definition_id.split("/", 1)[0],
     )
     parameters = _validate_parameter_declarations(mapping["parameters"])
     return {

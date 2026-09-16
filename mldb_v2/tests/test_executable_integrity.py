@@ -224,113 +224,35 @@ def test_executable_definition_missing_malformed_and_wrong_dispatch_fail_cleanly
     assert [item["code"] for item in bad_kind["diagnostics"]] == ["definition_invalid"]
 
 
-def test_declared_sources_verify_exact_working_tree_bytes(tmp_path: Path) -> None:
+def test_declared_same_namespace_lib_source_verifies_exact_bytes(tmp_path: Path) -> None:
     repo, root = _make_repo(tmp_path)
-    source_a = repo / "product" / "a.py"
-    source_b = repo / "product" / "b.py"
-    source_a.parent.mkdir(parents=True)
-    source_a.write_bytes(b"a\n")
-    source_b.write_bytes(b"b\n")
-    sources = [
-        {"path": "product/a.py", "sha256": _sha(b"a\n")},
-        {"path": "product/b.py", "sha256": _sha(b"b\n")},
-    ]
+    source_bytes = b"VALUE = 7\n"
+    source = root / "demo" / "lib" / "behavior.py"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(source_bytes)
+    sources = [{"path": "mldb_data/demo/lib/behavior.py", "sha256": _sha(source_bytes)}]
     _install_executable(
-        root,
-        "train_protocol",
-        _executable_document("train_protocol", sources=sources),
+        root, "architecture", _executable_document("architecture", sources=sources),
+        companion=b"from ..lib.behavior import VALUE\nRESULT = VALUE\n",
     )
     verifier = _verifier(repo, root)
-    assert verifier.verify_executable_definition(request=_request("train_protocol")) == {
-        "valid": True,
-        "diagnostics": [],
-    }
-
-    source_b.write_bytes(b"changed\n")
-    result = verifier.verify_executable_definition(request=_request("train_protocol"))
+    assert verifier.verify_executable_definition(request=_request("architecture")) == {"valid": True, "diagnostics": []}
+    evidence = verifier._executable_sealing_evidence(request=_request("architecture"))
+    assert evidence.sources == (("mldb_data/demo/lib/behavior.py", _sha(source_bytes)),)
+    source.write_bytes(b"VALUE = 8\n")
+    result = verifier.verify_executable_definition(request=_request("architecture"))
     assert [item["code"] for item in result["diagnostics"]] == ["source_hash_mismatch"]
-@pytest.mark.parametrize(
-    ("mode", "code"),
-    [
-        ("missing", "source_missing"),
-        ("directory", "source_invalid"),
-        ("wrong_hash", "source_hash_mismatch"),
-    ],
-)
-def test_declared_source_failure_classes(tmp_path: Path, mode: str, code: str) -> None:
-    repo, root = _make_repo(tmp_path)
-    source = repo / "product" / "source.py"
-    source.parent.mkdir(parents=True)
-    if mode == "directory":
-        source.mkdir()
-    elif mode != "missing":
-        source.write_bytes(b"source\n")
-    declared = _sha(b"different\n") if mode == "wrong_hash" else _sha(b"source\n")
-    _install_executable(
-        root,
-        "architecture",
-        _executable_document(
-            "architecture",
-            sources=[{"path": "product/source.py", "sha256": declared}],
-        ),
-    )
-    result = _verifier(repo, root).verify_executable_definition(request=_request("architecture"))
-    assert [item["code"] for item in result["diagnostics"]] == [code]
 
 
-@pytest.mark.parametrize("path", ["../x.py", "/abs/x.py", "product/*.py", "tools/x.py"])
-def test_structurally_invalid_declared_source_remains_rejected(tmp_path: Path, path: str) -> None:
-    repo, root = _make_repo(tmp_path)
-    _install_executable(
-        root,
-        "train_protocol",
-        _executable_document(
-            "train_protocol", sources=[{"path": path, "sha256": "0" * 64}]
-        ),
-    )
-    result = _verifier(repo, root).verify_executable_definition(request=_request("train_protocol"))
-    assert result["valid"] is False
-    assert [item["code"] for item in result["diagnostics"]] == ["definition_invalid"]
-def test_source_diagnostics_are_in_declared_order_and_unrelated_files_do_not_matter(tmp_path: Path) -> None:
-    repo, root = _make_repo(tmp_path)
-    (repo / "product").mkdir(parents=True)
-    (repo / "product" / "b.py").write_bytes(b"actual\n")
-    (repo / "scratch.tmp").write_text("dirty but unrelated", encoding="utf-8")
-    sources = [
-        {"path": "product/a.py", "sha256": "0" * 64},
-        {"path": "product/b.py", "sha256": "1" * 64},
-    ]
-    _install_executable(
-        root,
-        "evaluation_protocol",
-        _executable_document("evaluation_protocol", sources=sources),
-    )
-    result = _verifier(repo, root).verify_executable_definition(request=_request("evaluation_protocol"))
-    assert [item["code"] for item in result["diagnostics"]] == [
-        "source_missing",
-        "source_hash_mismatch",
-    ]
-
-
-def test_executable_private_evidence_uses_verified_bytes_and_does_not_mutate_yaml(tmp_path: Path) -> None:
+def test_empty_sources_remain_valid_and_sealing_evidence_is_empty(tmp_path: Path) -> None:
     repo, root = _make_repo(tmp_path)
     companion = b"VALUE = 'companion evidence'\n"
-    source = repo / "product" / "source.py"
-    source.parent.mkdir(parents=True)
-    source.write_bytes(b"source evidence\n")
-    sources = [{"path": "product/source.py", "sha256": _sha(b"source evidence\n")}]
-    _install_executable(
-        root,
-        "architecture",
-        _executable_document("architecture", sources=sources),
-        companion=companion,
-    )
-    yaml_path = root / "demo" / "architectures" / "model-v1.yaml"
-    before = yaml_path.read_bytes()
-    evidence = _verifier(repo, root)._executable_sealing_evidence(request=_request("architecture"))
-    assert evidence.companion_sha256 == _sha(companion)
-    assert evidence.sources == (("product/source.py", _sha(b"source evidence\n")),)
-    assert yaml_path.read_bytes() == before
+    _install_executable(root, "architecture", _executable_document("architecture", sources=[]), companion=companion)
+    verifier = _verifier(repo, root)
+    assert verifier.verify_executable_definition(request=_request("architecture")) == {"valid": True, "diagnostics": []}
+    assert verifier._executable_sealing_evidence(request=_request("architecture")).sources == ()
+
+
 def test_corpus_without_builder_requires_no_same_basename_python(tmp_path: Path) -> None:
     repo, root = _make_repo(tmp_path)
     path = _install_corpus(root, _corpus())
@@ -411,12 +333,12 @@ def test_corpus_definition_missing_and_invalid_fail_cleanly(tmp_path: Path) -> N
     "sources",
     [
         [
-            {"path": "product/b.py", "sha256": "0" * 64},
-            {"path": "product/a.py", "sha256": "1" * 64},
+            {"path": "mldb_data/demo/lib/b.py", "sha256": "0" * 64},
+            {"path": "mldb_data/demo/lib/a.py", "sha256": "1" * 64},
         ],
         [
-            {"path": "product/a.py", "sha256": "0" * 64},
-            {"path": "product/a.py", "sha256": "1" * 64},
+            {"path": "mldb_data/demo/lib/a.py", "sha256": "0" * 64},
+            {"path": "mldb_data/demo/lib/a.py", "sha256": "1" * 64},
         ],
     ],
 )
@@ -433,16 +355,13 @@ def test_unsorted_or_duplicate_sources_fail_through_typed_parser(
     assert [item["code"] for item in result["diagnostics"]] == ["definition_invalid"]
 
 
-def test_unreadable_companion_source_and_builder_are_diagnostics(
+def test_unreadable_companion_and_builder_are_diagnostics(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     repo, root = _make_repo(tmp_path)
-    source = repo / "product" / "source.py"
-    source.parent.mkdir(parents=True)
-    source.write_bytes(b"source\n")
-    sources = [{"path": "product/source.py", "sha256": _sha(b"source\n")}]
-    _install_executable(root, "architecture", _executable_document("architecture", sources=sources))
+    _install_executable(root, "architecture", _executable_document("architecture"))
     real_hash = integrity_impl._sha256_file
+
     def fail_companion(path: Path) -> str:
         if path.name == "model-v1.py":
             raise PermissionError("denied")
@@ -451,15 +370,6 @@ def test_unreadable_companion_source_and_builder_are_diagnostics(
     monkeypatch.setattr(integrity_impl, "_sha256_file", fail_companion)
     result = _verifier(repo, root).verify_executable_definition(request=_request("architecture"))
     assert [item["code"] for item in result["diagnostics"]] == ["companion_unreadable"]
-
-    def fail_source(path: Path) -> str:
-        if path.name == "source.py":
-            raise PermissionError("denied")
-        return real_hash(path)
-
-    monkeypatch.setattr(integrity_impl, "_sha256_file", fail_source)
-    result = _verifier(repo, root).verify_executable_definition(request=_request("architecture"))
-    assert [item["code"] for item in result["diagnostics"]] == ["source_unreadable"]
 
     builder_bytes = b"builder\n"
     _install_corpus(root, _corpus(builder={"entrypoint": "build"}), builder_bytes=builder_bytes)
@@ -565,66 +475,100 @@ def test_undeclared_direct_project_owned_import_is_rejected(tmp_path: Path) -> N
     )
     assert result["valid"] is False
     assert [item["code"] for item in result["diagnostics"]] == [
-        "source_declaration_missing"
+        "source_import_forbidden"
     ]
     assert "product/behavior.py" in result["diagnostics"][0]["message"]
 
 
-def test_declared_direct_project_owned_import_with_exact_hash_passes(tmp_path: Path) -> None:
+def test_declaring_project_owned_source_cannot_bypass_self_contained_contract(tmp_path: Path) -> None:
     repo, root = _make_repo(tmp_path)
     source_bytes = b"VALUE = 7\n"
     source = repo / "product" / "behavior.py"
     source.parent.mkdir(parents=True)
     source.write_bytes(source_bytes)
-    sources = [{"path": "product/behavior.py", "sha256": _sha(source_bytes)}]
     _install_executable(
         root,
         "train_protocol",
-        _executable_document("train_protocol", sources=sources),
+        _executable_document(
+            "train_protocol",
+            sources=[{"path": "product/behavior.py", "sha256": _sha(source_bytes)}],
+        ),
         companion=b"from product.behavior import VALUE\nRESULT = VALUE\n",
     )
-    verifier = _verifier(repo, root)
-    result = verifier.verify_executable_definition(request=_request("train_protocol"))
-    assert result == {"valid": True, "diagnostics": []}
-    evidence = verifier._executable_sealing_evidence(request=_request("train_protocol"))
-    assert evidence.sources == (("product/behavior.py", _sha(source_bytes)),)
+    result = _verifier(repo, root).verify_executable_definition(request=_request("train_protocol"))
+    assert result["valid"] is False
+    assert [item["code"] for item in result["diagnostics"]] == ["definition_invalid"]
 
 
-def test_transitive_project_owned_import_must_also_be_declared(tmp_path: Path) -> None:
+def test_same_namespace_lib_import_must_be_declared(tmp_path: Path) -> None:
     repo, root = _make_repo(tmp_path)
-    behavior_bytes = b"from product.helper import OFFSET\nVALUE = OFFSET + 1\n"
-    helper_bytes = b"OFFSET = 6\n"
-    product = repo / "product"
-    product.mkdir(parents=True)
-    (product / "behavior.py").write_bytes(behavior_bytes)
-    (product / "helper.py").write_bytes(helper_bytes)
-    companion = b"from product.behavior import VALUE\nRESULT = VALUE\n"
-    only_direct = [{"path": "product/behavior.py", "sha256": _sha(behavior_bytes)}]
+    helper = root / "demo" / "lib" / "helper.py"
+    helper.parent.mkdir(parents=True, exist_ok=True)
+    helper.write_bytes(b"VALUE = 7\n")
     _install_executable(
-        root,
-        "evaluation_protocol",
-        _executable_document("evaluation_protocol", sources=only_direct),
-        companion=companion,
+        root, "evaluation_protocol", _executable_document("evaluation_protocol"),
+        companion=b"from ..lib.helper import VALUE\nRESULT = VALUE\n",
+    )
+    result = _verifier(repo, root).verify_executable_definition(request=_request("evaluation_protocol"))
+    assert [item["code"] for item in result["diagnostics"]] == ["source_declaration_missing"]
+    assert "mldb_data/demo/lib/helper.py" in result["diagnostics"][0]["message"]
+
+
+def test_transitive_same_namespace_lib_import_must_also_be_declared(tmp_path: Path) -> None:
+    repo, root = _make_repo(tmp_path)
+    behavior = b"from .helper import OFFSET\nVALUE = OFFSET + 1\n"
+    helper = b"OFFSET = 6\n"
+    lib = root / "demo" / "lib"
+    lib.mkdir(parents=True)
+    (lib / "behavior.py").write_bytes(behavior)
+    (lib / "helper.py").write_bytes(helper)
+    declared = [{"path": "mldb_data/demo/lib/behavior.py", "sha256": _sha(behavior)}]
+    _install_executable(
+        root, "train_protocol", _executable_document("train_protocol", sources=declared),
+        companion=b"from ..lib.behavior import VALUE\nRESULT = VALUE\n",
     )
     verifier = _verifier(repo, root)
-    missing = verifier.verify_executable_definition(request=_request("evaluation_protocol"))
-    assert [item["code"] for item in missing["diagnostics"]] == [
-        "source_declaration_missing"
-    ]
-    assert "product/helper.py" in missing["diagnostics"][0]["message"]
+    missing = verifier.verify_executable_definition(request=_request("train_protocol"))
+    assert [item["code"] for item in missing["diagnostics"]] == ["source_declaration_missing"]
+    assert "mldb_data/demo/lib/helper.py" in missing["diagnostics"][0]["message"]
     all_sources = [
-        {"path": "product/behavior.py", "sha256": _sha(behavior_bytes)},
-        {"path": "product/helper.py", "sha256": _sha(helper_bytes)},
+        {"path": "mldb_data/demo/lib/behavior.py", "sha256": _sha(behavior)},
+        {"path": "mldb_data/demo/lib/helper.py", "sha256": _sha(helper)},
     ]
     _install_executable(
-        root,
-        "evaluation_protocol",
-        _executable_document("evaluation_protocol", sources=all_sources),
-        companion=companion,
+        root, "train_protocol", _executable_document("train_protocol", sources=all_sources),
+        companion=b"from ..lib.behavior import VALUE\nRESULT = VALUE\n",
     )
-    assert verifier.verify_executable_definition(
-        request=_request("evaluation_protocol")
-    ) == {"valid": True, "diagnostics": []}
+    assert verifier.verify_executable_definition(request=_request("train_protocol")) == {"valid": True, "diagnostics": []}
+
+
+def test_package_init_under_namespace_lib_is_part_of_required_source_graph(tmp_path: Path) -> None:
+    repo, root = _make_repo(tmp_path)
+    package_init = b"OFFSET = 2\n"
+    helper = b"from . import OFFSET\nVALUE = OFFSET + 5\n"
+    package = root / "demo" / "lib" / "pkg"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_bytes(package_init)
+    (package / "helper.py").write_bytes(helper)
+    declared = [{"path": "mldb_data/demo/lib/pkg/helper.py", "sha256": _sha(helper)}]
+    _install_executable(
+        root, "architecture", _executable_document("architecture", sources=declared),
+        companion=b"from ..lib.pkg.helper import VALUE\nRESULT = VALUE\n",
+    )
+    verifier = _verifier(repo, root)
+    missing = verifier.verify_executable_definition(request=_request("architecture"))
+    assert [item["code"] for item in missing["diagnostics"]] == ["source_declaration_missing"]
+    assert "mldb_data/demo/lib/pkg/__init__.py" in missing["diagnostics"][0]["message"]
+
+    all_sources = [
+        {"path": "mldb_data/demo/lib/pkg/__init__.py", "sha256": _sha(package_init)},
+        {"path": "mldb_data/demo/lib/pkg/helper.py", "sha256": _sha(helper)},
+    ]
+    _install_executable(
+        root, "architecture", _executable_document("architecture", sources=all_sources),
+        companion=b"from ..lib.pkg.helper import VALUE\nRESULT = VALUE\n",
+    )
+    assert verifier.verify_executable_definition(request=_request("architecture")) == {"valid": True, "diagnostics": []}
 
 
 def test_stdlib_third_party_and_mldb_infrastructure_imports_do_not_require_sources(
@@ -708,31 +652,22 @@ def test_from_namespace_package_import_discovers_project_submodule(tmp_path: Pat
         request=_request("architecture")
     )
     assert [item["code"] for item in result["diagnostics"]] == [
-        "source_declaration_missing"
+        "source_import_forbidden"
     ]
     assert "product/behavior.py" in result["diagnostics"][0]["message"]
 
 
-def test_relative_transitive_import_is_discovered(tmp_path: Path) -> None:
+def test_package_import_outside_companion_is_forbidden(tmp_path: Path) -> None:
     repo, root = _make_repo(tmp_path)
     package = repo / "product" / "pkg"
     package.mkdir(parents=True)
-    init_bytes = b"from .behavior import VALUE\n"
-    behavior_bytes = b"VALUE = 11\n"
-    (package / "__init__.py").write_bytes(init_bytes)
-    (package / "behavior.py").write_bytes(behavior_bytes)
-    companion = b"from product.pkg import VALUE\nRESULT = VALUE\n"
-    declared = [{"path": "product/pkg/__init__.py", "sha256": _sha(init_bytes)}]
+    (package / "__init__.py").write_bytes(b"VALUE = 11\n")
     _install_executable(
         root,
         "train_protocol",
-        _executable_document("train_protocol", sources=declared),
-        companion=companion,
+        _executable_document("train_protocol"),
+        companion=b"from product.pkg import VALUE\nRESULT = VALUE\n",
     )
-    result = _verifier(repo, root).verify_executable_definition(
-        request=_request("train_protocol")
-    )
-    assert [item["code"] for item in result["diagnostics"]] == [
-        "source_declaration_missing"
-    ]
-    assert "product/pkg/behavior.py" in result["diagnostics"][0]["message"]
+    result = _verifier(repo, root).verify_executable_definition(request=_request("train_protocol"))
+    assert [item["code"] for item in result["diagnostics"]] == ["source_import_forbidden"]
+    assert "product/pkg/__init__.py" in result["diagnostics"][0]["message"]

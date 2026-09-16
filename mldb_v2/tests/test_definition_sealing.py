@@ -68,10 +68,10 @@ def _corpus(
         value["builder"] = b
     return value
 
-def _architecture(*, status: str = "draft", task: str = "demo/task-v1", source_sha: str | None = None) -> dict[str, object]:
-    implementation: dict[str, object] = {"framework": "pytorch", "entrypoint": "build"}
-    if source_sha is not None:
-        implementation["sources"] = [{"path": "product/demo_source.py", "sha256": source_sha}]
+def _architecture(*, status: str = "draft", task: str = "demo/task-v1") -> dict[str, object]:
+    implementation: dict[str, object] = {
+        "framework": "pytorch", "entrypoint": "build", "sources": []
+    }
     return {
         "schema": "mjtensu.mldb-v2/architecture/v1", "id": "demo/arch-v1",
         "status": status, "task": task, "name": "Arch", "family": "demo",
@@ -146,15 +146,13 @@ def _install_exec(root: Path, domain: str, local_id: str, document: dict[str, ob
 def _repo(tmp_path: Path, *, builder: bool = False, runner: _Runner | None = None):
     repo = tmp_path / "repo"; root = repo / "mldb_data"; tests = repo / "mldb_tests"
     tests.mkdir(parents=True); _namespace(root)
-    source_bytes = b"VALUE = 1\n"; source_path = repo / "product/demo_source.py"
-    source_path.parent.mkdir(parents=True); source_path.write_bytes(source_bytes)
     _write(root / "demo/tasks/task-v1.yaml", _task())
     manifest = _manifest(); _write(root / "demo/corpora/corpus-v1.yaml", _corpus(builder=builder))
     (root / "demo/corpora/corpus-v1.manifest.jsonl").write_bytes(manifest)
     if builder:
         (root / "demo/corpora/corpus-v1.py").write_bytes(b"def build():\n    return None\n")
     companions = {
-        "architectures": ("arch-v1", _architecture(source_sha=_sha(source_bytes)), b"def build():\n    return None\n"),
+        "architectures": ("arch-v1", _architecture(), b"def build():\n    return None\n"),
         "train_protocols": ("train-v1", _train(), b"def train(context):\n    return context\n"),
         "evaluation_protocols": ("eval-v1", _evaluation(), b"def evaluate(context):\n    return context\n"),
     }

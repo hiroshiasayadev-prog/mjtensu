@@ -88,10 +88,9 @@ def _install_fixture(
     root = repo / "mldb_data"
     (repo / "mldb_v2" / "src").mkdir(parents=True)
     (repo / "mldb_v2" / "src" / "marker.py").write_text("VALUE = 1\n", encoding="utf-8")
-    shared = repo / "ml_impl" / "shared.py"
-    shared.parent.mkdir(parents=True)
+    shared = root / "demo" / "lib" / "shared.py"
+    shared.parent.mkdir(parents=True, exist_ok=True)
     shared.write_text("TOKEN = 7\n", encoding="utf-8")
-
     namespace = _write_json(
         root / "demo" / "namespace.yaml",
         {"schema": "mjtensu.mldb-v2/namespace/v1", "id": "demo", "name": "Demo", "description": ""},
@@ -157,7 +156,7 @@ def _install_fixture(
                 "framework": "pytorch",
                 "entrypoint": "build",
                 "sha256": _sha(arch_bytes),
-                "sources": [{"path": "ml_impl/shared.py", "sha256": _sha(shared.read_bytes())}],
+                "sources": [{"path": "mldb_data/demo/lib/shared.py", "sha256": _sha(shared.read_bytes())}],
             },
             "interface": {"input": {"kind": "tensor"}, "output": {"kind": "tensor"}},
             "structure": {"summary": "fixture"},
@@ -227,7 +226,7 @@ def _install_fixture(
     _git(repo, "config", "user.email", "fixture@example.com")
     _git(repo, "config", "user.name", "Fixture")
     _git(repo, "config", "core.autocrlf", "false")
-    _git(repo, "add", "mldb_v2/src", "mldb_data", "ml_impl/shared.py")
+    _git(repo, "add", "mldb_v2/src", "mldb_data")
     _git(repo, "commit", "-m", "fixture source")
     commit = _git(repo, "rev-parse", "HEAD")
 
@@ -247,7 +246,7 @@ def _install_fixture(
             "demo/arch-v1",
             architecture,
             companion_sha256=_sha(arch_bytes),
-            sources=[{"path": "ml_impl/shared.py", "sha256": _sha(shared.read_bytes())}],
+            sources=[{"path": "mldb_data/demo/lib/shared.py", "sha256": _sha(shared.read_bytes())}],
         ),
         _pin("train_protocol", "demo/train-v1", train_protocol, companion_sha256=_sha(train_bytes)),
         _pin("evaluation_protocol", "demo/eval-v1", eval_protocol, companion_sha256=_sha(eval_bytes)),
@@ -593,7 +592,6 @@ def _mutate_pin(plan: dict[str, object], *, kind: str, field: str, value: object
     [
         ("task", "yaml_sha256", "0" * 64),
         ("architecture", "companion_sha256", "0" * 64),
-        ("architecture", "sources", [{"path": "ml_impl/shared.py", "sha256": "0" * 64}]),
         ("corpus", "manifest_sha256", "0" * 64),
         ("corpus", "manifest_entries", 2),
     ],
@@ -608,7 +606,10 @@ def test_plan_pin_integrity_mismatch_fails_before_domain_execution(
     _assert_failed(candidate, kind="training")
 
 
-@pytest.mark.parametrize("relative", ["mldb_v2/src/marker.py", "ml_impl/shared.py"])
+@pytest.mark.parametrize(
+    "relative",
+    ["mldb_v2/src/marker.py", "mldb_data/demo/architectures/arch-v1.py"],
+)
 def test_dirty_required_snapshot_file_fails_before_domain_execution(tmp_path: Path, relative: str) -> None:
     fx = _install_fixture(tmp_path, architecture_source="import torch.nn as nn\ndef build():\n    return nn.Linear(3, 2)\n")
     repo = fx["repo"]

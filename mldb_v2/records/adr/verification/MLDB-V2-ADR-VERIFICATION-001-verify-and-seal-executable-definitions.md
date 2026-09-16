@@ -27,13 +27,13 @@ draft -> validate -> verify executable contract -> seal
 A sealed executable definition records the SHA-256 of its exact same-basename sibling `.py`.
 A sealed definition is eligible for Study planning. A draft definition is not.
 
-Executable definition modules live only as YAML-owned sibling `.py` files in the applicable
-`mldb_data/<namespace>/<domain>/` directory. There are no free-standing helper modules under
-`mldb_data/`.
+Executable entrypoints live as YAML-owned sibling `.py` files in the applicable
+`mldb_data/<namespace>/<domain>/` directory. Reusable experiment helpers live only under that same
+namespace's `lib/` tree and are declared with exact hashes in `implementation.sources`.
 
-A sibling module may import reusable implementation from a normal project source package. `tools/`
-is not a reusable ML implementation package and MUST NOT be the designated implementation
-entrypoint for an MLDB definition.
+The sibling may import those declared same-namespace helpers. Standard-library, third-party, and
+MLDB v2 infrastructure imports remain allowed; other repository-owned Python imports are invalid.
+This keeps the complete experiment implementation movable as one namespace package.
 
 Changing executable behavior after sealing requires a new definition revision.
 

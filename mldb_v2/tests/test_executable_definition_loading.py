@@ -15,6 +15,8 @@ from mldb_v2.src.catalog.architecture import (
     _parse_architecture_document,
 )
 from mldb_v2.src.catalog.architecture_build import ArchitectureBuild, _load_architecture_build
+from mldb_v2.src.catalog._executable_definition_loading import _load_companion_module
+from mldb_v2.src.common.ids import EntityKind
 from mldb_v2.src.evaluation.evaluate_interface import (
     EvaluationCandidate,
     EvaluationCallable,
@@ -223,6 +225,8 @@ def test_architecture_structure_contract(structure: object) -> None:
     [{"path": "b.py", "sha256": "0" * 64}, {"path": "a.py", "sha256": "1" * 64}],
     [{"path": "a.py", "sha256": "0" * 64}, {"path": "a.py", "sha256": "1" * 64}],
     [{"path": "a.py", "sha256": "A" * 64}],
+    [{"path": "product/x.py", "sha256": "0" * 64}],
+    [{"path": "mldb_data/other/lib/x.py", "sha256": "0" * 64}],
 ])
 def test_executable_sources_reject_unsafe_unsorted_duplicate_or_bad_hash(sources: object) -> None:
     value = _train()
@@ -231,13 +235,27 @@ def test_executable_sources_reject_unsafe_unsorted_duplicate_or_bad_hash(sources
         _parse_train_protocol_document(value, expected_id="demo/train-v1")
 
 
-def test_executable_sources_accept_sorted_unique_repo_relative_entries() -> None:
+def test_executable_sources_accept_same_namespace_lib_entries() -> None:
     value = _train()
     value["implementation"] = {"entrypoint": "train", "sources": [
-        {"path": "product/a.py", "sha256": "0" * 64},
-        {"path": "product/b.py", "sha256": "1" * 64},
+        {"path": "mldb_data/demo/lib/a.py", "sha256": "0" * 64},
+        {"path": "mldb_data/demo/lib/pkg/b.py", "sha256": "1" * 64},
     ]}
-    assert _parse_train_protocol_document(value, expected_id="demo/train-v1")["implementation"]["sources"] == value["implementation"]["sources"]
+    parsed = _parse_train_protocol_document(value, expected_id="demo/train-v1")
+    assert parsed["implementation"]["sources"] == value["implementation"]["sources"]
+
+
+def test_companion_relative_imports_namespace_private_lib_with_hyphen_namespace(tmp_path: Path) -> None:
+    root = tmp_path / "mldb_data"
+    namespace = root / "rotated-fcos"
+    (namespace / "architectures").mkdir(parents=True)
+    (namespace / "lib").mkdir()
+    (namespace / "lib" / "helper.py").write_text("VALUE = 7\n", encoding="utf-8")
+    (namespace / "architectures" / "model-v1.py").write_text(
+        "from ..lib.helper import VALUE\ndef build():\n    return VALUE\n", encoding="utf-8"
+    )
+    module = _load_companion_module(root, kind=EntityKind.ARCHITECTURE, entity_id="rotated-fcos/model-v1")
+    assert module.build() == 7
 
 
 @pytest.mark.parametrize("mutation", [

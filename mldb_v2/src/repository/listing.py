@@ -46,7 +46,8 @@ _EXECUTABLE_KINDS = frozenset(
     {EntityKind.ARCHITECTURE, EntityKind.TRAIN_PROTOCOL, EntityKind.EVALUATION_PROTOCOL}
 )
 _PYTHON_PERMITTED_KINDS = _EXECUTABLE_KINDS | {EntityKind.CORPUS}
-_RECOGNIZED_DOMAINS = frozenset(_DOMAIN_BY_KIND.values())
+_SOURCE_DOMAIN = "lib"
+_RECOGNIZED_DOMAINS = frozenset(_DOMAIN_BY_KIND.values()) | {_SOURCE_DOMAIN}
 
 
 def _issue(code: str, message: str) -> Diagnostic:
@@ -66,6 +67,19 @@ def _valid_local_id(value: str) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _namespace_source_layout_issues(namespace_path: Path, root: Path) -> list[Diagnostic]:
+    source_root = namespace_path / _SOURCE_DOMAIN
+    if not source_root.is_dir():
+        return []
+    issues: list[Diagnostic] = []
+    for entry in sorted(source_root.rglob("*"), key=lambda path: path.as_posix()):
+        if entry.is_dir():
+            continue
+        if entry.suffix != ".py":
+            issues.append(_issue("repository_unexpected_source_file", f"{_display(entry, root)}: namespace lib may contain Python source only"))
+    return issues
 
 
 def _parse_created_at(value: object) -> datetime:
@@ -222,6 +236,7 @@ class CanonicalRepositoryListing:
                 issues.append(_issue("repository_unknown_domain", f"{_display(entry, self._root)}: unknown direct Namespace domain"))
                 continue
             issues.append(_issue("repository_unexpected_namespace_entry", f"{_display(entry, self._root)}: unexpected file in canonical Namespace root"))
+        issues.extend(_namespace_source_layout_issues(namespace_path, self._root))
         return issues
 
     def _list_kind(

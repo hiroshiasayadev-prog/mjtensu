@@ -40,7 +40,7 @@ values except boolean; `integer` accepts integer except boolean.
 Each `artifacts.<key>` is exactly a mapping with required non-empty `format`, required non-empty
 versioned `schema`, required boolean `required`, and optional `description`.
 
-For `sealed`, `implementation.sha256` is required. `implementation.sources`, when needed, follows
+For `sealed`, `implementation.sha256` is required. `implementation.sources`, when present, declares exact same-namespace `lib/` helpers as defined by
 `spec:mldb.v2.verification.executable_integrity`.
 
 ## Executable and lifecycle

@@ -12,10 +12,9 @@ Formal Study planning does not require the entire repository working tree to be 
 all canonical v2 inputs consumed by the plan to match the selected Git commit exactly.
 
 The required clean set includes `mldb_v2/src/`, the referenced Namespace/Study/Task/Corpus/
-Architecture/Protocol YAML, executable sibling `.py` files, every project source explicitly declared
-by `spec:mldb.v2.verification.executable_integrity`, Corpus manifests/builders, and referenced
-canonical Model or result records. Unrelated application files, Brewprint records/tests, and
-unrelated namespaces may be dirty.
+Architecture/Protocol YAML, same-basename executable sibling `.py` files, declared same-namespace
+`lib/` helper sources, Corpus manifests/builders, and referenced canonical Model or result records.
+Unrelated application files, Brewprint records/tests, and unrelated namespaces may be dirty.
 ## Execution rule
 
 The Study Plan records one source Git commit. Backend execution checks out that commit, or consumes

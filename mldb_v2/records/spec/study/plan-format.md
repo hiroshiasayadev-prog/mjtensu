@@ -36,7 +36,7 @@ Every source object needed to interpret or execute the Plan appears exactly once
   yaml_sha256: <64 lowercase hex>
   companion_sha256: <64 lowercase hex or null>
   sources:
-    - path: product/recognition/models/rotated_fcos.py
+    - path: mldb_data/rotated-fcos/lib/backbone.py
       sha256: <64 lowercase hex>
   manifest_sha256: null
   manifest_entries: null
@@ -49,8 +49,9 @@ Namespace ID; all other pins use typed canonical IDs.
 `yaml_sha256` is always non-null and is SHA-256 of the exact canonical YAML bytes stored by Git at
 `source_commit`; Namespace pins hash `namespace.yaml` while their `id` remains one segment.
 `companion_sha256` is non-null only when the pinned entity owns a sibling executable/builder.
-`sources` is the exact lexically sorted project-source set from executable-integrity and is otherwise
-empty. Corpus pins additionally carry their manifest digest/count; non-Corpus pins use null.
+`sources` contains the sorted exact helper path/hash set declared by executable definitions; it is
+empty when no namespace-private helpers are used. Corpus pins additionally carry their manifest
+digest/count; non-Corpus pins use null.
 ## Trial shape
 
 Training-source trial:

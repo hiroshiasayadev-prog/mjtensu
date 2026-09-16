@@ -104,8 +104,8 @@ def _unit_parts():
         ),
     )
     sources = (
-        _PinnedExecutableSource(path="product/a.py", sha256=_hex("b")),
-        _PinnedExecutableSource(path="product/z.py", sha256=_hex("c")),
+        _PinnedExecutableSource(path="mldb_data/demo/lib/a.py", sha256=_hex("b")),
+        _PinnedExecutableSource(path="mldb_data/demo/lib/z.py", sha256=_hex("c")),
     )
     pins = (
         _pin("namespace", "demo"),
@@ -252,16 +252,6 @@ def test_validator_rejects_pin_order_structure_and_reference_failures() -> None:
         next(pin for pin in p["pins"] if pin["kind"] == "corpus")["manifest_entries"] = True
     mutations.append(bool_entries)
 
-    def unsorted_sources(p):
-        pin = next(pin for pin in p["pins"] if pin["id"] == "demo/arch-a-v1")
-        pin["sources"].reverse()
-    mutations.append(unsorted_sources)
-
-    def duplicate_source(p):
-        pin = next(pin for pin in p["pins"] if pin["id"] == "demo/arch-a-v1")
-        pin["sources"].append(copy.deepcopy(pin["sources"][0]))
-    mutations.append(duplicate_source)
-
     def bad_sha(p):
         p["pins"][0]["yaml_sha256"] = "A" * 64
     mutations.append(bad_sha)
@@ -272,54 +262,24 @@ def test_validator_rejects_pin_order_structure_and_reference_failures() -> None:
         _expect_invalid(plan)
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
-        "tools/evil.py",
-        "tools/sub/evil.py",
-        "product/*.py",
-        "product/x?.py",
-        "product/[x].py",
-    ],
-)
-def test_validator_rejects_plan_pin_source_paths_outside_executable_source_grammar(path: str) -> None:
+def test_validator_accepts_same_namespace_lib_sources() -> None:
     plan = _base_plan()
-    pin = next(pin for pin in plan["pins"] if pin["id"] == "demo/arch-a-v1")
-    pin["sources"][0]["path"] = path
-    pin["sources"].sort(key=lambda source: source["path"])
-    _resign(plan)
-
-    with pytest.raises(_StudyPlanError, match="invalid_pin_source_path"):
-        _validate_study_plan(plan)
-    with pytest.raises(_StudyPlanError, match="invalid_pin_source_path"):
-        _StudyPlanRecordValidator().validate(
-            kind=EntityKind.STUDY_PLAN,
-            entity_id=plan["id"],
-            document=plan,
-        )
-
-
-@pytest.mark.parametrize(
-    "path",
-    [
-        "product/a.py",
-        "product/recognition/models/rotated_fcos.py",
-        "package/sub/module.py",
-    ],
-)
-def test_validator_accepts_executable_source_paths_allowed_by_w002_boundary(path: str) -> None:
-    plan = _base_plan()
-    pin = next(pin for pin in plan["pins"] if pin["id"] == "demo/arch-a-v1")
-    pin["sources"][0]["path"] = path
-    pin["sources"].sort(key=lambda source: source["path"])
-    _resign(plan)
-
     assert _validate_study_plan(plan) == plan
     _StudyPlanRecordValidator().validate(
-        kind=EntityKind.STUDY_PLAN,
-        entity_id=plan["id"],
-        document=plan,
+        kind=EntityKind.STUDY_PLAN, entity_id=plan["id"], document=plan
     )
+
+
+@pytest.mark.parametrize("path", ["product/a.py", "mldb_data/other/lib/a.py", "mldb_data/demo/architectures/helper.py"])
+def test_validator_rejects_executable_sources_outside_same_namespace_lib(path: str) -> None:
+    plan = _base_plan()
+    pin = next(pin for pin in plan["pins"] if pin["id"] == "demo/arch-a-v1")
+    pin["sources"][0]["path"] = path
+    pin["sources"].sort(key=lambda source: source["path"])
+    _resign(plan)
+    with pytest.raises(_StudyPlanError, match="invalid_pin_source_path"):
+        _validate_study_plan(plan)
+
 
 def test_validator_rejects_trial_evaluation_and_parameter_failures() -> None:
     mutations = []

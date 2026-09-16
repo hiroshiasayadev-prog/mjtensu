@@ -198,8 +198,9 @@ def test_plan_unsealed_study_maps_not_sealed(tmp_path: Path) -> None:
 
 
 def test_plan_dirty_selected_source_maps_source_not_pinned(tmp_path: Path) -> None:
-    repo, study_id, _commit, sources = _training_repo(tmp_path)
-    (repo / "product" / "a.py").write_bytes(sources["product/a.py"] + b"# dirty\n")
+    repo, study_id, _commit, _sources = _training_repo(tmp_path)
+    companion = repo / "mldb_data" / "arch-ns" / "architectures" / "arch-a-v1.py"
+    companion.write_bytes(companion.read_bytes() + b"# dirty\n")
     with pytest.raises(_ApplicationBoundaryError) as exc:
         _planning_service(repo).plan_study(study=study_id)
     assert exc.value.error == {

@@ -100,7 +100,7 @@ Then validate the exact definition scope you intend to use, for example:
 
 Formal planning selects the current Git `HEAD` as the Study source commit. Every required v2 source input must match that commit exactly.
 
-The clean set is scoped, not repository-wide. It includes `mldb_v2/src/` plus the referenced Namespace/Study/Task/Corpus/Architecture/Protocol definitions, executable siblings and declared project sources, manifests/builders, and any referenced canonical Model/result inputs.
+The clean set is scoped, not repository-wide. It includes `mldb_v2/src/` plus the referenced Namespace/Study/Task/Corpus/Architecture/Protocol definitions, same-basename executable siblings, declared same-namespace `lib/` helpers, manifests/builders, and any referenced canonical Model/result inputs.
 
 Unrelated files may remain dirty.
 
