@@ -44,3 +44,15 @@ product/frontend/test-results/
 /mldb_data/study_runs/
 /mldb_data/models/
 /mldb_data/**/__pycache__/
+
+# MLDB v2 namespace-first generated runtime state
+/mldb_data/*/corpora/*.sqlite
+/mldb_data/*/corpora/*.sqlite-*
+/mldb_data/*/study_plans/
+/mldb_data/*/study_results/
+/mldb_data/*/training_results/
+/mldb_data/*/evaluation_results/
+/mldb_data/*/models/
+
+# Local migration backup
+/mldb_data_old/
