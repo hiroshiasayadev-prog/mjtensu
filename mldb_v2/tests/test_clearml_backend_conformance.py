@@ -25,6 +25,7 @@ from mldb_v2.src.backend._clearml_observation import (
 from mldb_v2.src.backend._clearml_sdk import (
     ClearMLSDKAdapter,
     ClearMLSDKSettings,
+    _ClearMLScalarSink,
     _configuration,
 )
 from mldb_v2.src.backend._config import BackendConfig
@@ -39,6 +40,7 @@ from mldb_v2.src.backend.stage_input import (
     StageInput,
     TrainingStageInput,
 )
+from mldb_v2.src.common.telemetry import _AcceptedScalarEvent
 from mldb_v2.src.common.ids import (
     ArchitectureId,
     CorpusId,
@@ -365,6 +367,64 @@ def test_sdk_configuration_recursively_normalizes_mapping_subclasses() -> None:
     pins = plan["pins"]
     assert type(pins) is list
     assert type(pins[0]) is dict
+
+
+class FakeScalarLogger:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def report_scalar(self, **kwargs) -> None:
+        self.calls.append(dict(kwargs))
+
+
+class FakeScalarTask:
+    def __init__(self, logger: FakeScalarLogger) -> None:
+        self.logger = logger
+        self.get_logger_calls = 0
+
+    def get_logger(self) -> FakeScalarLogger:
+        self.get_logger_calls += 1
+        return self.logger
+
+
+def test_clearml_scalar_sink_maps_generic_events_exactly_and_lazily() -> None:
+    logger = FakeScalarLogger()
+    task = FakeScalarTask(logger)
+    sink = _ClearMLScalarSink(task)
+
+    assert task.get_logger_calls == 0
+    sink(
+        _AcceptedScalarEvent(
+            group="optimization",
+            series="cross_entropy_loss",
+            value=1.25,
+            step=3,
+        )
+    )
+    sink(
+        _AcceptedScalarEvent(
+            group="validation",
+            series="mean_iou",
+            value=0.7,
+            step=5,
+        )
+    )
+
+    assert task.get_logger_calls == 1
+    assert logger.calls == [
+        {
+            "title": "optimization",
+            "series": "cross_entropy_loss",
+            "value": 1.25,
+            "iteration": 3,
+        },
+        {
+            "title": "validation",
+            "series": "mean_iou",
+            "value": 0.7,
+            "iteration": 5,
+        },
+    ]
 
 
 class FakeSDKTask:
