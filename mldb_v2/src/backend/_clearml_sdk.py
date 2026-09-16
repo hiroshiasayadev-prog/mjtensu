@@ -81,6 +81,105 @@ class _ClearMLScalarSink:
         )
 
 
+_ARTIFACT_EXTENSIONS = {
+    "png": ".png",
+    "csv": ".csv",
+    "plotly-json": ".plotly.json",
+    "json": ".json",
+    "jsonl": ".jsonl",
+    "html": ".html",
+}
+
+
+def _artifact_projection_filename(name: str, artifact_format: str) -> str:
+    safe = "".join(character if character.isalnum() or character in "-_" else "_" for character in name)
+    if not safe:
+        safe = "artifact"
+    return safe + _ARTIFACT_EXTENSIONS.get(artifact_format, ".bin")
+
+
+def _clearml_logger(task: object) -> object:
+    get_logger = getattr(task, "get_logger", None)
+    if not callable(get_logger):
+        raise ClearMLSDKError("ClearML Task does not expose get_logger()")
+    logger = get_logger()
+    if logger is None:
+        raise ClearMLSDKError("ClearML Task logger is unavailable")
+    return logger
+
+
+def _project_evaluation_artifacts(
+    *,
+    task: object,
+    candidate: Mapping[str, object],
+    object_bytes: object,
+    projection_root: Path,
+) -> None:
+    """Best-effort ClearML UI projection of canonical evaluation artifacts."""
+    if candidate.get("status") != "completed":
+        return
+    result = candidate.get("result")
+    if type(result) is not dict:
+        return
+    artifacts = result.get("artifacts")
+    if type(artifacts) is not dict or not artifacts:
+        return
+
+    projection_root.mkdir(parents=True, exist_ok=True)
+    logger: object | None = None
+    for name, raw_ref in artifacts.items():
+        if type(name) is not str or type(raw_ref) is not dict:
+            continue
+        try:
+            read_verified = getattr(object_bytes, "read_verified", None)
+            if not callable(read_verified):
+                raise ClearMLSDKError("object-byte access does not expose read_verified()")
+            data = read_verified(raw_ref)
+            artifact_format = str(raw_ref.get("format") or "opaque")
+            path = projection_root / _artifact_projection_filename(name, artifact_format)
+            path.write_bytes(data)
+            upload_artifact = getattr(task, "upload_artifact", None)
+            if not callable(upload_artifact):
+                raise ClearMLSDKError("ClearML Task does not expose upload_artifact()")
+            upload_artifact(
+                name=f"evaluation/{name}",
+                artifact_object=str(path),
+                metadata={
+                    "canonical_uri": str(raw_ref.get("uri") or ""),
+                    "sha256": str(raw_ref.get("sha256") or ""),
+                    "format": artifact_format,
+                    "schema": str(raw_ref.get("schema") or ""),
+                },
+                wait_on_upload=False,
+            )
+            if artifact_format not in {"png", "csv", "plotly-json"}:
+                continue
+            if logger is None:
+                logger = _clearml_logger(task)
+            if artifact_format == "png":
+                report_image = getattr(logger, "report_image", None)
+                if not callable(report_image):
+                    raise ClearMLSDKError("ClearML logger does not expose report_image()")
+                report_image(title="evaluation artifacts", series=name, iteration=0, local_path=str(path))
+            elif artifact_format == "csv":
+                report_table = getattr(logger, "report_table", None)
+                if not callable(report_table):
+                    raise ClearMLSDKError("ClearML logger does not expose report_table()")
+                report_table(title="evaluation tables", series=name, iteration=0, csv=str(path))
+            else:
+                report_plotly = getattr(logger, "report_plotly", None)
+                if not callable(report_plotly):
+                    raise ClearMLSDKError("ClearML logger does not expose report_plotly()")
+                report_plotly(
+                    title="evaluation plots",
+                    series=name,
+                    iteration=0,
+                    figure=json.loads(data.decode("utf-8")),
+                )
+        except Exception as exc:
+            print(f"MLDB ClearML artifact projection skipped {name!r}: {exc}")
+
+
 @dataclass(frozen=True)
 class ClearMLSDKSettings:
     api_host: str | None = None
@@ -807,11 +906,12 @@ def _run_remote_harness() -> None:
             prefix=prefix,
         )
 
+    object_bytes = _remote_object_bytes(runtime)
     harness = CommonExecutionHarness(
         repository_root=repository_root,
         pinned_mldb_data_root=pinned_data_root,
         runtime_mldb_data_root=runtime_data_root,
-        object_bytes=_remote_object_bytes(runtime),
+        object_bytes=object_bytes,
         corpus_destination_root=attempt_root / "corpus",
         work_dir=attempt_root / "work",
         training_weights_uri=weights_uri,
@@ -822,6 +922,13 @@ def _run_remote_harness() -> None:
         telemetry_sink=_ClearMLScalarSink(task),
     )
     candidate = harness(stage_input)
+    if stage_input["kind"] == "evaluation":
+        _project_evaluation_artifacts(
+            task=task,
+            candidate=candidate,
+            object_bytes=object_bytes,
+            projection_root=attempt_root / "clearml-projection",
+        )
     task.set_configuration_object(
         name=_PROJECTION_CONFIG,
         config_dict={

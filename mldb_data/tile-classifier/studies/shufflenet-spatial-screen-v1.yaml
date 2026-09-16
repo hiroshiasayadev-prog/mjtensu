@@ -1,0 +1,115 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/shufflenet-spatial-screen-v1",
+  "status": "sealed",
+  "name": "ShuffleNet spatial-retention classifier screen",
+  "description": "Compare ShuffleNetV2 0.5x stem stride and maxpool choices under fixed INV-013 mix-heavy random360 training. Global angle robustness and 5m/6m/7m diagnostics decide which downsampling policy best preserves tile-discriminative structure before transfer to detector experiments.",
+  "model": {
+    "train": {
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-train-gpu-v5",
+      "architectures": [
+        "tile-classifier/tile-shufflenet-s05-s2-pool-v1",
+        "tile-classifier/tile-shufflenet-s05-s2-nopool-v1",
+        "tile-classifier/tile-shufflenet-s05-s1-pool-v1",
+        "tile-classifier/tile-shufflenet-s05-s1-nopool-v1"
+      ],
+      "parameters": {
+        "epochs": {
+          "values": [
+            150
+          ]
+        },
+        "batch_size": {
+          "values": [
+            512
+          ]
+        },
+        "rotation_augment_deg": {
+          "values": [
+            180.0
+          ]
+        },
+        "augmentation_recipe": {
+          "values": [
+            "inv013-mix-heavy-v1"
+          ]
+        },
+        "checkpoint_eval_every": {
+          "values": [
+            5
+          ]
+        },
+        "cache_device": {
+          "values": [
+            "cuda"
+          ]
+        },
+        "cache_vram_fraction": {
+          "values": [
+            0.5
+          ]
+        }
+      },
+      "seeds": [
+        42
+      ]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "angle-robustness",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-angle-robustness-v1",
+      "parameters": {
+        "eval_angles": {
+          "values": [
+            [
+              0.0,
+              15.0,
+              30.0,
+              45.0
+            ]
+          ]
+        },
+        "batch_size": {
+          "values": [
+            1024
+          ]
+        },
+        "cache_device": {
+          "values": [
+            "cuda"
+          ]
+        },
+        "cache_vram_fraction": {
+          "values": [
+            0.5
+          ]
+        }
+      }
+    },
+    {
+      "stage": "manzu-diagnostic",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-manzu-diagnostic-v1",
+      "parameters": {
+        "split": {
+          "values": [
+            "manual_val"
+          ]
+        },
+        "batch_size": {
+          "values": [
+            64
+          ]
+        },
+        "occlusion_patch": {
+          "values": [
+            8
+          ]
+        }
+      }
+    }
+  ]
+}

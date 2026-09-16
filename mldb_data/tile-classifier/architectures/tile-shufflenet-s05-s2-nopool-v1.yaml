@@ -1,0 +1,37 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/tile-shufflenet-s05-s2-nopool-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Tile ShuffleNetV2 0.5x stem-s2 no-pool",
+  "family": "shufflenet-v2-x0.5",
+  "description": "Grayscale ShuffleNetV2 0.5x without the stem maxpool; late feature map is 4x4 for 64x64 input.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sha256": "6a06d26798649d9153c56eaf67a29ddd8db287b83ad0b75d3867bdef736c59de"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        1,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "ShuffleNetV2 x0.5; stem stride2; no maxpool; stage2/3/4; GAP head; final spatial 4x4",
+    "traits": [
+      "grayscale",
+      "shufflenet-v2-x0.5",
+      "stem-s2",
+      "no-maxpool",
+      "final-4x4"
+    ]
+  }
+}

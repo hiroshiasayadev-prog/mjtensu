@@ -1,0 +1,79 @@
+{
+  "schema": "mjtensu.mldb-v2/train-protocol/v1",
+  "id": "tile-classifier/tile-shape-train-gpu-v5",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Tile shape GPU training with INV-013 geometry mixtures",
+  "description": "Classifier training with deterministic random360 and reviewed INV-013 Original/A0/A1/A2/A3 stochastic mixtures, plus best-checkpoint selection over manual 0/15/30/45 degree accuracy.",
+  "implementation": {
+    "entrypoint": "train",
+    "sha256": "c01b1684b2e3ff4141981c66d24b9e7a3db051b9a1e11dad4086e477281e3022"
+  },
+  "parameters": {
+    "epochs": {
+      "default": 150,
+      "type": "integer",
+      "minimum": 1
+    },
+    "batch_size": {
+      "default": 512,
+      "type": "integer",
+      "minimum": 2
+    },
+    "learning_rate": {
+      "default": 0.001,
+      "type": "number",
+      "minimum": 1e-07
+    },
+    "weight_decay": {
+      "default": 0.0001,
+      "type": "number",
+      "minimum": 0.0
+    },
+    "rotation_augment_deg": {
+      "default": 180.0,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 180.0
+    },
+    "augmentation_recipe": {
+      "default": "inv013-mix-heavy-v1",
+      "type": "string",
+      "enum": [
+        "original-only-v1",
+        "random360-only-v1",
+        "inv013-mix-light-v1",
+        "inv013-mix-mid-v1",
+        "inv013-mix-heavy-v1"
+      ]
+    },
+    "checkpoint_eval_every": {
+      "default": 5,
+      "type": "integer",
+      "minimum": 1
+    },
+    "amp": {
+      "default": true,
+      "type": "boolean"
+    },
+    "tf32": {
+      "default": true,
+      "type": "boolean"
+    },
+    "cache_device": {
+      "default": "auto",
+      "type": "string",
+      "enum": [
+        "auto",
+        "cpu",
+        "cuda"
+      ]
+    },
+    "cache_vram_fraction": {
+      "default": 0.5,
+      "type": "number",
+      "minimum": 0.01,
+      "maximum": 0.79
+    }
+  }
+}
