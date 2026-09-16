@@ -1,0 +1,159 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "rotated-fcos/detector-crop-quality-v1",
+  "status": "draft",
+  "task": "rotated-fcos/mahjong-tile-rotated-detection-v1",
+  "name": "Detector crop-quality evaluation example",
+  "description": "Custom product-facing localization evaluation derived from INV-010: measure the classifier crop, not only detector TP/FP/FN.",
+  "implementation": {
+    "entrypoint": "evaluate"
+  },
+  "parameters": {
+    "split": {
+      "default": "val",
+      "type": "string"
+    },
+    "score_threshold": {
+      "default": 0.2,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "nms_iou_threshold": {
+      "default": 0.45,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "match_iou_threshold": {
+      "default": 0.5,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "max_detections": {
+      "default": 64,
+      "type": "integer",
+      "minimum": 1
+    },
+    "worst_case_count": {
+      "default": 32,
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "metrics": {
+    "precision": {
+      "type": "number",
+      "required": true
+    },
+    "recall": {
+      "type": "number",
+      "required": true
+    },
+    "f1": {
+      "type": "number",
+      "required": true
+    },
+    "iou_p10": {
+      "type": "number",
+      "required": true
+    },
+    "iou_median": {
+      "type": "number",
+      "required": true
+    },
+    "gt_coverage_p10": {
+      "type": "number",
+      "required": true,
+      "description": "intersection(pred,gt)/area(gt), p10"
+    },
+    "gt_coverage_median": {
+      "type": "number",
+      "required": true
+    },
+    "crop_purity_p10": {
+      "type": "number",
+      "required": true,
+      "description": "intersection(pred,gt)/area(pred), p10"
+    },
+    "crop_purity_median": {
+      "type": "number",
+      "required": true
+    },
+    "center_error_x_p90": {
+      "type": "number",
+      "required": true
+    },
+    "center_error_y_p90": {
+      "type": "number",
+      "required": true
+    },
+    "width_ratio_median": {
+      "type": "number",
+      "required": true
+    },
+    "height_ratio_median": {
+      "type": "number",
+      "required": true
+    },
+    "completed_hand_recall": {
+      "type": "number",
+      "required": false
+    },
+    "completed_hand_gt_coverage_p10": {
+      "type": "number",
+      "required": false
+    },
+    "completed_hand_crop_purity_p10": {
+      "type": "number",
+      "required": false
+    },
+    "dora_indicators_recall": {
+      "type": "number",
+      "required": false
+    },
+    "dora_indicators_gt_coverage_p10": {
+      "type": "number",
+      "required": false
+    },
+    "dora_indicators_crop_purity_p10": {
+      "type": "number",
+      "required": false
+    },
+    "melds_recall": {
+      "type": "number",
+      "required": false
+    },
+    "melds_gt_coverage_p10": {
+      "type": "number",
+      "required": false
+    },
+    "melds_crop_purity_p10": {
+      "type": "number",
+      "required": false
+    },
+    "duplicate_count": {
+      "type": "integer",
+      "required": false
+    },
+    "merged_detection_count": {
+      "type": "integer",
+      "required": false
+    }
+  },
+  "artifacts": {
+    "match_details": {
+      "format": "jsonl",
+      "schema": "mjtensu.mldb-v2/eval-artifact/detector-crop-quality-matches/v1",
+      "required": true,
+      "description": "Per-match geometry, semantic region, and crop-quality measurements."
+    },
+    "worst_case_contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.mldb-v2/eval-artifact/detector-crop-quality-contact-sheet/v1",
+      "required": false,
+      "description": "GT, prediction, and actual classifier crop side by side for worst cases."
+    }
+  }
+}

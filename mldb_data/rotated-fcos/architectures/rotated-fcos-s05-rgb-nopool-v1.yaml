@@ -1,0 +1,47 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "rotated-fcos/rotated-fcos-s05-rgb-nopool-v1",
+  "status": "draft",
+  "task": "rotated-fcos/mahjong-tile-rotated-detection-v1",
+  "name": "Rotated FCOS ShuffleNet 0.5x no-pool",
+  "family": "rotated-fcos-shufflenet-v2-x0.5",
+  "description": "Remove the stem maxpool so stage2/3/4 produce FCOS strides 4/8/16.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        3,
+        320,
+        320
+      ]
+    },
+    "output": {
+      "kind": "rotated-fcos-dense-pyramid"
+    }
+  },
+  "structure": {
+    "summary": "ShuffleNetV2 0.5x + TinyFPN64 + shared 2-layer FCOS head; strides [4, 8, 16]",
+    "traits": [
+      "rgb",
+      "shufflenet-v2-x0.5",
+      "depthwise-fpn",
+      "rotated-fcos"
+    ]
+  },
+  "parameters": {
+    "stem_stride": 2,
+    "use_maxpool": false,
+    "include_p2": false,
+    "strides": [
+      4,
+      8,
+      16
+    ],
+    "fpn_channels": 64,
+    "head_convs": 2
+  }
+}

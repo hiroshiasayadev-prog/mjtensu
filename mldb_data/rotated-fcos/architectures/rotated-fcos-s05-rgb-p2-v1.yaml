@@ -1,0 +1,48 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "rotated-fcos/rotated-fcos-s05-rgb-p2-v1",
+  "status": "draft",
+  "task": "rotated-fcos/mahjong-tile-rotated-detection-v1",
+  "name": "Rotated FCOS ShuffleNet 0.5x P2",
+  "family": "rotated-fcos-shufflenet-v2-x0.5",
+  "description": "Keep the baseline backbone but expose the stride-4 pooled feature to a four-level FPN.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        3,
+        320,
+        320
+      ]
+    },
+    "output": {
+      "kind": "rotated-fcos-dense-pyramid"
+    }
+  },
+  "structure": {
+    "summary": "ShuffleNetV2 0.5x + TinyFPN64 + shared 2-layer FCOS head; strides [4, 8, 16, 32]",
+    "traits": [
+      "rgb",
+      "shufflenet-v2-x0.5",
+      "depthwise-fpn",
+      "rotated-fcos"
+    ]
+  },
+  "parameters": {
+    "stem_stride": 2,
+    "use_maxpool": true,
+    "include_p2": true,
+    "strides": [
+      4,
+      8,
+      16,
+      32
+    ],
+    "fpn_channels": 64,
+    "head_convs": 2
+  }
+}
