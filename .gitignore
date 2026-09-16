@@ -56,3 +56,6 @@ product/frontend/test-results/
 
 # Local migration backup
 /mldb_data_old/
+
+# Local environment secrets
+.env
