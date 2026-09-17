@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -770,6 +771,47 @@ class ClearMLSDKAdapter:
                 config_dict=native,
             )
 
+    def _project_pipeline_summary_scalars(
+        self,
+        *,
+        task: object,
+        summary: Mapping[str, object],
+    ) -> None:
+        get_logger = getattr(task, "get_logger", None)
+        if not callable(get_logger):
+            return
+        try:
+            logger = get_logger()
+        except Exception:
+            return
+        report_single_value = getattr(logger, "report_single_value", None)
+        if not callable(report_single_value):
+            return
+        rows = summary.get("rows")
+        if type(rows) is not list:
+            return
+        for row in rows:
+            if type(row) is not dict:
+                continue
+            trial = row.get("trial")
+            stage = row.get("stage")
+            metrics = row.get("metrics")
+            if type(trial) is not str or type(stage) is not str or not isinstance(metrics, Mapping):
+                continue
+            for metric, value in metrics.items():
+                if type(metric) is not str or type(value) not in {int, float}:
+                    continue
+                numeric = float(value)
+                if not math.isfinite(numeric):
+                    continue
+                try:
+                    report_single_value(
+                        name=f"{trial}/{stage}/{metric}",
+                        value=numeric,
+                    )
+                except Exception:
+                    continue
+
     def project_pipeline_summary(
         self,
         *,
@@ -784,18 +826,7 @@ class ClearMLSDKAdapter:
                 name=_PIPELINE_SUMMARY_CONFIG,
                 config_dict=payload,
             )
-            uploader = getattr(task, "upload_artifact", None)
-            if callable(uploader):
-                try:
-                    uploader(
-                        name="mldb-study-summary",
-                        artifact_object=payload,
-                        wait_on_upload=True,
-                    )
-                except Exception:
-                    # Pipeline summary artifacts are observational only. A Fileserver
-                    # outage/misconfiguration must not block canonical Study progress.
-                    pass
+        self._project_pipeline_summary_scalars(task=task, summary=payload)
         self._sync_pipeline_node_statuses(pipeline=task, summary=payload)
 
         study_status = payload.get("status")

@@ -205,6 +205,7 @@ class FakeSDKTask:
         self.parameters: dict[str, object] = {}
         self.parent: str | None = None
         self.uploads: list[dict[str, object]] = []
+        self.single_values: dict[str, float] = {}
 
     @classmethod
     def reset(cls) -> None:
@@ -277,6 +278,12 @@ class FakeSDKTask:
         self.uploads.append(deepcopy(kwargs))
         return True
 
+    def get_logger(self):
+        return self
+
+    def report_single_value(self, name: str, value: float) -> None:
+        self.single_values[name] = value
+
     def get_project_name(self):
         return self.project
 
@@ -334,7 +341,7 @@ def test_sdk_adapter_creates_native_controller_task_without_enqueuing_children()
     assert found[0].configuration == _pipeline_request(plan, result).configuration
 
 
-def test_sdk_adapter_projects_one_bounded_study_summary_artifact() -> None:
+def test_sdk_adapter_projects_bounded_study_summary_config_and_scalars() -> None:
     FakeSDKTask.reset()
     plan = _plan()
     result = _result(plan)
@@ -353,13 +360,12 @@ def test_sdk_adapter_projects_one_bounded_study_summary_artifact() -> None:
     controller = FakeSDKTask.get_task(task_id=pipeline_id)
     assert controller is not None
     assert controller.configs["mldb.study_summary"] == summary
-    assert len(controller.uploads) == 1
-    assert controller.uploads[0]["name"] == "mldb-study-summary"
-    assert controller.uploads[0]["artifact_object"] == summary
+    assert controller.uploads == []
+    assert controller.single_values == {"trial-0001/quality/accuracy": 0.9}
     assert controller.status == "in_progress"
 
 
-def test_pipeline_summary_artifact_upload_failure_is_observational() -> None:
+def test_pipeline_summary_scalar_failure_is_observational() -> None:
     FakeSDKTask.reset()
     plan = _plan()
     result = _result(plan)
@@ -368,16 +374,16 @@ def test_pipeline_summary_artifact_upload_failure_is_observational() -> None:
     controller = FakeSDKTask.get_task(task_id=pipeline_id)
     assert controller is not None
 
-    def fail_upload(**_kwargs):
-        raise RuntimeError("fileserver unavailable")
+    def fail_report(name: str, value: float) -> None:
+        raise RuntimeError("metrics backend unavailable")
 
-    controller.upload_artifact = fail_upload  # type: ignore[method-assign]
+    controller.report_single_value = fail_report  # type: ignore[method-assign]
     summary = {
         "schema": "mjtensu.mldb-v2/study-summary-projection/v1",
         "study_result": result["id"],
         "study": result["study"],
         "status": "submitted",
-        "rows": [],
+        "rows": [{"trial": "trial-0001", "stage": "quality", "metrics": {"accuracy": 0.9}}],
     }
 
     adapter.project_pipeline_summary(execution_id=pipeline_id, summary=summary)
