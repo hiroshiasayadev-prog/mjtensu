@@ -207,6 +207,8 @@ class FakeSDKTask:
         self.parent: str | None = None
         self.uploads: list[dict[str, object]] = []
         self.single_values: dict[str, float] = {}
+        self.plotly_reports: list[dict[str, object]] = []
+        self.table_reports: list[dict[str, object]] = []
 
     @classmethod
     def reset(cls) -> None:
@@ -292,6 +294,12 @@ class FakeSDKTask:
 
     def report_single_value(self, name: str, value: float) -> None:
         self.single_values[name] = value
+
+    def report_plotly(self, **kwargs) -> None:
+        self.plotly_reports.append(deepcopy(kwargs))
+
+    def report_table(self, **kwargs) -> None:
+        self.table_reports.append(deepcopy(kwargs))
 
     def get_project_name(self):
         return self.project
@@ -383,6 +391,10 @@ def test_sdk_adapter_projects_bounded_study_summary_config_and_scalars() -> None
     assert controller.configs["mldb.study_summary"] == summary
     assert controller.uploads == []
     assert controller.single_values == {"trial-0001/quality/accuracy": 0.9}
+    assert controller.plotly_reports[-1]["title"] == "Pipeline"
+    assert controller.plotly_reports[-1]["series"] == "Execution Flow"
+    assert controller.table_reports[-1]["title"] == "Pipeline Details"
+    assert controller.table_reports[-1]["series"] == "Execution Details"
     assert controller.status == "in_progress"
 
 

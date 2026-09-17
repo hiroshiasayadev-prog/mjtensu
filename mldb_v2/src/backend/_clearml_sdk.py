@@ -895,6 +895,107 @@ class ClearMLSDKAdapter:
                 config_dict=native,
             )
 
+    def _project_pipeline_execution_views(self, *, task: object) -> None:
+        """Best-effort native ClearML Pipeline flow/table projection."""
+        native = _configuration(task, _NATIVE_PIPELINE_CONFIG)
+        if native is None:
+            return
+        get_logger = getattr(task, "get_logger", None)
+        if not callable(get_logger):
+            return
+        try:
+            logger = get_logger()
+            report_plotly = getattr(logger, "report_plotly", None)
+            report_table = getattr(logger, "report_table", None)
+            if not callable(report_plotly) or not callable(report_table):
+                return
+
+            pending = dict(native)
+            ordered: list[str] = []
+            while pending:
+                progressed = False
+                for name, raw in list(pending.items()):
+                    if type(raw) is not dict:
+                        pending.pop(name)
+                        progressed = True
+                        continue
+                    parents = raw.get("parents") or []
+                    if not all(parent in ordered for parent in parents):
+                        continue
+                    ordered.append(name)
+                    pending.pop(name)
+                    progressed = True
+                if not progressed:
+                    return
+
+            index = {name: i for i, name in enumerate(ordered)}
+            labels: list[str] = []
+            sources: list[int] = []
+            targets: list[int] = []
+            values: list[int] = []
+            table = [["Pipeline Step", "Task ID", "Status", "Stage", "Parents"]]
+            for name in ordered:
+                raw = cast(dict[str, object], native[name])
+                status = str(raw.get("status") or "pending")
+                stage = str(raw.get("stage") or "")
+                task_id = str(raw.get("job_id") or raw.get("executed") or "")
+                parents = [str(parent) for parent in (raw.get("parents") or [])]
+                labels.append(f"{name}<br />{status}")
+                for parent in parents:
+                    sources.append(index[parent])
+                    targets.append(index[name])
+                    values.append(1)
+                table.append([name, task_id, status, stage, ", ".join(parents)])
+
+            linked = set(sources) | set(targets)
+            flow = {
+                "type": "sankey",
+                "orientation": "h",
+                "node": {"label": labels, "hovertemplate": "%{label}<extra></extra>"},
+                "link": {
+                    "source": sources,
+                    "target": targets,
+                    "value": values,
+                    "hovertemplate": "<extra></extra>",
+                },
+            }
+            data: list[dict[str, object]] = [flow]
+            singles = [i for i in range(len(ordered)) if i not in linked]
+            if singles:
+                data.append(
+                    {
+                        "type": "scatter",
+                        "mode": "markers",
+                        "x": list(range(len(singles))),
+                        "y": [1] * len(singles),
+                        "text": [labels[i] for i in singles],
+                        "hovertemplate": "%{text}<extra></extra>",
+                        "marker": {"size": [40] * len(singles)},
+                        "showlegend": False,
+                    }
+                )
+            report_plotly(
+                title="Pipeline",
+                series="Execution Flow",
+                iteration=0,
+                figure={
+                    "data": data,
+                    "layout": {
+                        "hovermode": "closest",
+                        "xaxis": {"visible": False},
+                        "yaxis": {"visible": False},
+                    },
+                },
+            )
+            report_table(
+                title="Pipeline Details",
+                series="Execution Details",
+                iteration=0,
+                table_plot=table,
+            )
+        except Exception:
+            return
+
     def _project_pipeline_summary_scalars(
         self,
         *,
@@ -952,6 +1053,7 @@ class ClearMLSDKAdapter:
             )
         self._project_pipeline_summary_scalars(task=task, summary=payload)
         self._sync_pipeline_node_statuses(pipeline=task, summary=payload)
+        self._project_pipeline_execution_views(task=task)
 
         study_status = payload.get("status")
         task_status = _status(task)
