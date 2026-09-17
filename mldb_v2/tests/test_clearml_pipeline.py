@@ -203,6 +203,7 @@ class FakeSDKTask:
         self.configs: dict[str, dict[str, object]] = {}
         self.packages: list[str] = []
         self.parameters: dict[str, object] = {}
+        self.runtime_properties: dict[str, object] = {}
         self.parent: str | None = None
         self.uploads: list[dict[str, object]] = []
         self.single_values: dict[str, float] = {}
@@ -262,6 +263,9 @@ class FakeSDKTask:
 
     def set_parameters_as_dict(self, value) -> None:
         self.parameters = deepcopy(value)
+
+    def _set_runtime_properties(self, value) -> None:
+        self.runtime_properties.update(deepcopy(value))
 
     def get_system_tags(self):
         return list(self.system_tags)
@@ -339,6 +343,11 @@ def test_sdk_adapter_creates_native_controller_task_without_enqueuing_children()
     assert native["trial-0001-train"]["stage"] == "training"
     assert native["trial-0001-eval-0001"]["parents"] == ["trial-0001-train"]
     assert native["trial-0001-eval-0002"]["cache_executed_step"] is False
+    assert native["trial-0001-train"]["job_id"] is None
+    assert task.parameters["properties/version"] == "1.0.0"
+    assert task.parameters["pipeline/add_pipeline_tags"] == "True"
+    assert task.runtime_properties["version"] == "1.0.0"
+    assert task.runtime_properties["_pipeline_hash"].endswith(":1.0.0")
     assert task.status == "created"
 
     ownership = _pipeline_ownership_key(plan, result)
@@ -459,8 +468,8 @@ def test_ready_child_is_bound_to_pipeline_before_queue_and_replay_is_idempotent(
     assert child.properties["mldb.pipeline_execution"] == pipeline_id
     assert child.properties["mldb.pipeline_step"] == "trial-0001-train"
     node = controller.configs["Pipeline"]["trial-0001-train"]
-    assert "job_id" not in node
     assert node["executed"] == child.id
+    assert node["job_id"] == child.id
 
     pending_summary = {
         "schema": "mjtensu.mldb-v2/study-summary-projection/v1",

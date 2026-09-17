@@ -539,11 +539,13 @@ def _native_pipeline_dag(topology: Mapping[str, object], *, queue: str | None) -
             cache_executed_step=False,
             stage=stage,
         )
-        dag[name] = {
+        serialized = {
             key: value
             for key, value in node.__dict__.items()
             if key not in {"job", "name", "task_factory_func"}
         }
+        serialized["job_id"] = node.executed or (node.job.task_id() if node.job else None)
+        dag[name] = serialized
     return dag
 
 
@@ -775,13 +777,49 @@ class ClearMLSDKAdapter:
             name=_PIPELINE_CONFIG,
             config_dict=dict(request.configuration),
         )
+        native_dag = _native_pipeline_dag(
+            topology,
+            queue=self._settings.step_queue,
+        )
         task.set_configuration_object(
             name=_NATIVE_PIPELINE_CONFIG,
-            config_dict=_native_pipeline_dag(
-                topology,
-                queue=self._settings.step_queue,
-            ),
+            config_dict=native_dag,
         )
+        version = "1.0.0"
+        set_parameters = getattr(task, "set_parameters_as_dict", None)
+        if callable(set_parameters):
+            set_parameters(
+                {
+                    "pipeline/default_queue": self._settings.step_queue or "",
+                    "pipeline/add_pipeline_tags": "True",
+                    "pipeline/target_project": "True",
+                    "properties/version": version,
+                }
+            )
+        set_runtime = getattr(task, "_set_runtime_properties", None)
+        if callable(set_runtime):
+            pipeline_hash = hashlib.sha256(
+                json.dumps(
+                    {
+                        "source_commit": request.source_commit,
+                        "configuration": dict(request.configuration),
+                        "pipeline": native_dag,
+                    },
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=False,
+                ).encode("utf-8")
+            ).hexdigest()
+            set_runtime(
+                {
+                    "_pipeline_hash": f"{pipeline_hash}:{version}",
+                    "version": version,
+                }
+            )
+        try:
+            task.set_user_properties({"name": "version", "value": version})
+        except Exception:
+            pass
         task.set_packages(["clearml==2.1.12"])
         return task_id
 
@@ -814,6 +852,10 @@ class ClearMLSDKAdapter:
             node = native.get(step)
             if type(node) is not dict:
                 continue
+            executed = node.get("executed")
+            if type(executed) is str and executed and node.get("job_id") != executed:
+                node["job_id"] = executed
+                changed = True
 
             status: str | None = None
             if disposition == "completed":
@@ -980,8 +1022,9 @@ class ClearMLSDKAdapter:
         if parent is None:
             parent = getattr(child, "parent", None)
         if parent == pipeline_execution_id:
-            if existing != task_id:
+            if existing != task_id or node.get("job_id") != task_id:
                 node["executed"] = task_id
+                node["job_id"] = task_id
                 pipeline.set_configuration_object(
                     name=_NATIVE_PIPELINE_CONFIG,
                     config_dict=native,
@@ -1005,6 +1048,7 @@ class ClearMLSDKAdapter:
                 tags.append(pipeline_tag)
                 set_tags(tags)
         node["executed"] = task_id
+        node["job_id"] = task_id
         pipeline.set_configuration_object(
             name=_NATIVE_PIPELINE_CONFIG,
             config_dict=native,
