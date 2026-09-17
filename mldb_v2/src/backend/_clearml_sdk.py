@@ -786,11 +786,16 @@ class ClearMLSDKAdapter:
             )
             uploader = getattr(task, "upload_artifact", None)
             if callable(uploader):
-                uploader(
-                    name="mldb-study-summary",
-                    artifact_object=payload,
-                    wait_on_upload=False,
-                )
+                try:
+                    uploader(
+                        name="mldb-study-summary",
+                        artifact_object=payload,
+                        wait_on_upload=True,
+                    )
+                except Exception:
+                    # Pipeline summary artifacts are observational only. A Fileserver
+                    # outage/misconfiguration must not block canonical Study progress.
+                    pass
         self._sync_pipeline_node_statuses(pipeline=task, summary=payload)
 
         study_status = payload.get("status")

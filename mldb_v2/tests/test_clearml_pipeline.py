@@ -357,6 +357,33 @@ def test_sdk_adapter_projects_one_bounded_study_summary_artifact() -> None:
     assert controller.status == "in_progress"
 
 
+def test_pipeline_summary_artifact_upload_failure_is_observational() -> None:
+    FakeSDKTask.reset()
+    plan = _plan()
+    result = _result(plan)
+    adapter = ClearMLSDKAdapter(ClearMLSDKSettings(), task_class=FakeSDKTask)
+    pipeline_id = cast(str, adapter.create_pipeline_run(_pipeline_request(plan, result)))
+    controller = FakeSDKTask.get_task(task_id=pipeline_id)
+    assert controller is not None
+
+    def fail_upload(**_kwargs):
+        raise RuntimeError("fileserver unavailable")
+
+    controller.upload_artifact = fail_upload  # type: ignore[method-assign]
+    summary = {
+        "schema": "mjtensu.mldb-v2/study-summary-projection/v1",
+        "study_result": result["id"],
+        "study": result["study"],
+        "status": "submitted",
+        "rows": [],
+    }
+
+    adapter.project_pipeline_summary(execution_id=pipeline_id, summary=summary)
+
+    assert controller.configs["mldb.study_summary"] == summary
+    assert controller.status == "in_progress"
+
+
 def test_concrete_backend_exposes_pipeline_capability_without_replacing_stage_port() -> None:
     plan = _plan()
     result = _result(plan)
