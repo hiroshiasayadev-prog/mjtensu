@@ -1,0 +1,101 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/w011-pipeline-smoke-v1",
+  "status": "sealed",
+  "name": "W011 ClearML Pipeline smoke",
+  "description": "Bounded two-trial one-epoch classifier Study for actual ClearML Pipeline UI and execution closure verification.",
+  "model": {
+    "train": {
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-train-gpu-v4",
+      "architectures": [
+        "tile-classifier/tile-plain-gray35-v2"
+      ],
+      "parameters": {
+        "epochs": {
+          "values": [
+            1
+          ]
+        },
+        "batch_size": {
+          "values": [
+            256
+          ]
+        },
+        "rotation_augment_deg": {
+          "values": [
+            5.0
+          ]
+        },
+        "perspective_augment": {
+          "values": [
+            0.05
+          ]
+        },
+        "shear_augment": {
+          "values": [
+            0.05
+          ]
+        },
+        "stretch_augment": {
+          "values": [
+            0.05
+          ]
+        },
+        "projective_augment_probability": {
+          "values": [
+            1.0
+          ]
+        },
+        "cache_device": {
+          "values": [
+            "cuda"
+          ]
+        },
+        "cache_vram_fraction": {
+          "values": [
+            0.5
+          ]
+        }
+      },
+      "seeds": [
+        42,
+        43
+      ]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "angle-robustness",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-angle-robustness-v2",
+      "parameters": {
+        "eval_angles": {
+          "values": [
+            [
+              0.0,
+              15.0,
+              30.0,
+              45.0
+            ]
+          ]
+        },
+        "batch_size": {
+          "values": [
+            1024
+          ]
+        },
+        "cache_device": {
+          "values": [
+            "cuda"
+          ]
+        },
+        "cache_vram_fraction": {
+          "values": [
+            0.5
+          ]
+        }
+      }
+    }
+  ]
+}
