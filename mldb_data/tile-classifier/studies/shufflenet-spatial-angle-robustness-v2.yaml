@@ -1,0 +1,49 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/shufflenet-spatial-angle-robustness-v2",
+  "status": "sealed",
+  "name": "ShuffleNet spatial screen angle diagnostics v2",
+  "description": "Re-evaluate the four completed ShuffleNet spatial-retention models without retraining, using angle robustness v2 so per-angle telemetry and ClearML Plotly charts are preserved.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-70f6ddae5a5446478dbd0e15a9523d52-trial-0001-model",
+      "tile-classifier/run-70f6ddae5a5446478dbd0e15a9523d52-trial-0002-model",
+      "tile-classifier/run-70f6ddae5a5446478dbd0e15a9523d52-trial-0003-model",
+      "tile-classifier/run-70f6ddae5a5446478dbd0e15a9523d52-trial-0004-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "angle-robustness-v2",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-angle-robustness-v2",
+      "parameters": {
+        "eval_angles": {
+          "values": [
+            [
+              0.0,
+              15.0,
+              30.0,
+              45.0
+            ]
+          ]
+        },
+        "batch_size": {
+          "values": [
+            1024
+          ]
+        },
+        "cache_device": {
+          "values": [
+            "cuda"
+          ]
+        },
+        "cache_vram_fraction": {
+          "values": [
+            0.5
+          ]
+        }
+      }
+    }
+  ]
+}

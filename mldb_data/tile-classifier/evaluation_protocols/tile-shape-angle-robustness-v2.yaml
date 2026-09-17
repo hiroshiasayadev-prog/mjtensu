@@ -1,0 +1,81 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-angle-robustness-v2",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Tile shape angle robustness with per-angle diagnostics",
+  "description": "Evaluate manual_val and jp_val over authored rotation angles. Preserve the four terminal summary metrics while emitting per-angle telemetry; telemetry step is the zero-based authored eval_angles index. Produce a CSV table and Plotly line chart so ClearML shows the actual angle response curve.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "0b0f911497707ad78ad48e8ff8d95550a1ffbe607d89b700abf22dc16999530c"
+  },
+  "parameters": {
+    "batch_size": {
+      "default": 1024,
+      "type": "integer",
+      "minimum": 2
+    },
+    "eval_angles": {
+      "default": [
+        0.0,
+        15.0,
+        30.0,
+        45.0
+      ],
+      "type": "array"
+    },
+    "amp": {
+      "default": true,
+      "type": "boolean"
+    },
+    "tf32": {
+      "default": true,
+      "type": "boolean"
+    },
+    "cache_device": {
+      "default": "auto",
+      "type": "string",
+      "enum": [
+        "auto",
+        "cpu",
+        "cuda"
+      ]
+    },
+    "cache_vram_fraction": {
+      "default": 0.5,
+      "type": "number",
+      "minimum": 0.01,
+      "maximum": 0.79
+    }
+  },
+  "metrics": {
+    "manual_accuracy_0deg": {
+      "type": "number",
+      "required": true
+    },
+    "jp_accuracy_0deg": {
+      "type": "number",
+      "required": true
+    },
+    "manual_angle_mean": {
+      "type": "number",
+      "required": true
+    },
+    "jp_angle_mean": {
+      "type": "number",
+      "required": true
+    }
+  },
+  "artifacts": {
+    "angle_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/tile-angle-robustness-table/v1",
+      "required": true
+    },
+    "angle_plot": {
+      "format": "plotly-json",
+      "schema": "mjtensu.recognition/tile-angle-robustness-plot/v1",
+      "required": true
+    }
+  }
+}
