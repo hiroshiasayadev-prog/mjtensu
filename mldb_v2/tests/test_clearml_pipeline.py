@@ -226,7 +226,12 @@ class FakeSDKTask:
 
     @classmethod
     def get_tasks(cls, *, project_name, tags, allow_archived):
-        return [t for t in cls.tasks if t.project == project_name and all(tag in t.tags for tag in tags)]
+        return [
+            t
+            for t in cls.tasks
+            if (project_name is None or t.project == project_name)
+            and all(tag in t.tags for tag in tags)
+        ]
 
     @classmethod
     def get_task(cls, *, task_id):
@@ -326,6 +331,7 @@ def test_sdk_adapter_creates_native_controller_task_without_enqueuing_children()
     assert task_id == "sdk-pipeline-1"
     task = FakeSDKTask.tasks[0]
     assert FakeSDKTask.create_calls[0]["task_type"] == "controller"
+    assert FakeSDKTask.create_calls[0]["project_name"] == "mldb/demo/.pipelines/study-v1"
     assert FakeSDKTask.create_calls[0]["script"].endswith("_clearml_pipeline_controller.py")
     assert "pipeline" in task.system_tags
     assert "Pipeline" in task.configs
@@ -339,6 +345,12 @@ def test_sdk_adapter_creates_native_controller_task_without_enqueuing_children()
     found = adapter.search_pipeline_runs(project="mldb/demo", ownership_key=ownership)
     assert [record.task_id for record in found] == ["sdk-pipeline-1"]
     assert found[0].configuration == _pipeline_request(plan, result).configuration
+
+    # Recovery remains compatible with W011 controllers created before native
+    # ClearML Pipeline sub-project placement was implemented.
+    task.project = "mldb/demo"
+    legacy_found = adapter.search_pipeline_runs(project="mldb/demo", ownership_key=ownership)
+    assert [record.task_id for record in legacy_found] == ["sdk-pipeline-1"]
 
 
 def test_sdk_adapter_projects_bounded_study_summary_config_and_scalars() -> None:

@@ -484,6 +484,22 @@ def _project_name(task: object) -> str | None:
     return value if type(value) is str else None
 
 
+def _native_pipeline_projects(*, logical_project: str, study: str) -> tuple[str, str]:
+    if type(logical_project) is not str or not logical_project:
+        raise ValueError("logical_project must be a non-empty string")
+    if type(study) is not str or "/" not in study:
+        raise ValueError("study must be one typed reference")
+    study_name = study.split("/", 1)[1]
+    parent = f"{logical_project}/.pipelines"
+    return parent, f"{parent}/{study_name}"
+
+
+def _is_pipeline_project(*, project: str | None, logical_project: str) -> bool:
+    return project == logical_project or (
+        type(project) is str and project.startswith(f"{logical_project}/.pipelines/")
+    )
+
+
 def _status(task: object) -> str:
     getter = getattr(task, "get_status", None)
     value = getter() if callable(getter) else None
@@ -618,6 +634,54 @@ class ClearMLSDKAdapter:
             raise ClearMLSDKError("ClearML Task no longer exists")
         return task
 
+    def _ensure_pipeline_project_layout(
+        self,
+        *,
+        task: object,
+        logical_project: str,
+        study: str,
+    ) -> None:
+        parent_project, pipeline_project = _native_pipeline_projects(
+            logical_project=logical_project,
+            study=study,
+        )
+        Task = self._Task()
+        get_session = getattr(Task, "_get_default_session", None)
+        if callable(get_session):
+            try:
+                from clearml.backend_interface.util import get_or_create_project
+
+                session = get_session()
+                get_or_create_project(
+                    session,
+                    project_name=parent_project,
+                    system_tags=["hidden"],
+                )
+                project_id = getattr(task, "project", None)
+                if _project_name(task) == pipeline_project and type(project_id) is str:
+                    get_or_create_project(
+                        session,
+                        project_name=pipeline_project,
+                        project_id=project_id,
+                        system_tags=["pipeline", "hidden"],
+                    )
+                    return
+            except Exception as error:
+                raise ClearMLSDKError("ClearML Pipeline Project creation failed") from error
+
+        if _project_name(task) == pipeline_project:
+            return
+        mover = getattr(task, "move_to_project", None)
+        if not callable(mover):
+            return
+        try:
+            mover(
+                new_project_name=pipeline_project,
+                system_tags=["pipeline", "hidden"],
+            )
+        except Exception as error:
+            raise ClearMLSDKError("ClearML Pipeline Project placement failed") from error
+
     def _search(self, *, project: str, key: str, value: str) -> tuple[object, ...]:
         tasks = self._Task().get_tasks(
             project_name=project,
@@ -633,10 +697,16 @@ class ClearMLSDKAdapter:
     def search_pipeline_runs(
         self, *, project: str, ownership_key: str
     ) -> Sequence[ClearMLPipelineRecord]:
-        tasks = self._search(
-            project=project,
-            key="mldb.pipeline_ownership_key",
-            value=ownership_key,
+        tasks = self._Task().get_tasks(
+            project_name=None,
+            tags=[_search_tag("mldb.pipeline_ownership_key", ownership_key)],
+            allow_archived=True,
+        )
+        tasks = tuple(
+            task
+            for task in tasks
+            if _is_pipeline_project(project=_project_name(task), logical_project=project)
+            and _metadata(task).get("mldb.pipeline_ownership_key") == ownership_key
         )
         records: list[ClearMLPipelineRecord] = []
         for task in tasks:
@@ -655,9 +725,16 @@ class ClearMLSDKAdapter:
         topology = request.configuration.get("mldb.topology")
         if not isinstance(topology, Mapping):
             raise ClearMLSDKError("ClearML Pipeline request topology is missing")
+        study = request.metadata.get("mldb.study")
+        if type(study) is not str or not study:
+            raise ClearMLSDKError("ClearML Pipeline request study identity is missing")
+        _parent_project, pipeline_project = _native_pipeline_projects(
+            logical_project=request.project,
+            study=study,
+        )
         Task = self._Task()
         kwargs: dict[str, object] = {
-            "project_name": request.project,
+            "project_name": pipeline_project,
             "task_name": request.task_name,
             "task_type": "controller",
             "commit": request.source_commit,
@@ -670,6 +747,11 @@ class ClearMLSDKAdapter:
         task = Task.create(**kwargs)
         if task is None:
             return None
+        self._ensure_pipeline_project_layout(
+            task=task,
+            logical_project=request.project,
+            study=study,
+        )
         task_id = _task_id(task)
         properties = [
             {"name": key, "value": value}

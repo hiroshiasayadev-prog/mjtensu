@@ -10,8 +10,9 @@
 
 | MLDB | ClearML |
 |---|---|
-| Namespace | Project `mldb/<namespace>` |
-| one Study Result execution | one Pipeline Run / controller Task |
+| Namespace | logical Project root `mldb/<namespace>` |
+| Study definition UI container | native hidden Pipeline subproject `mldb/<namespace>/.pipelines/<study-local-id>` when required by the ClearML server/UI |
+| one Study Result execution | one Pipeline Run / controller Task inside that Pipeline subproject |
 | immutable Study Plan | Pipeline DAG/configuration source |
 | trial | logical Pipeline branch plus searchable metadata |
 | one training/evaluation attempt | child Pipeline step Task |
@@ -21,7 +22,7 @@
 | formal artifact bytes | ClearML artifact/model projection + canonical S3 reference |
 | backend attempt identity | child ClearML Task ID |
 
-A Study is not a ClearML Project. Multiple Study executions in one Namespace share the same Project, while each Study Result has its own Pipeline Run identity.
+The MLDB Namespace remains the logical ClearML Project root. A ClearML server/UI that represents Pipelines as hidden subprojects may require one native `.pipelines/<study-local-id>` UI container under that root; this is an adapter/UI detail, not a new MLDB semantic Project. Multiple Study Result executions of the same Study share that Pipeline subproject while each Study Result keeps its own Pipeline Run/controller identity.
 
 ## Pipeline identity
 

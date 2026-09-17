@@ -17,9 +17,9 @@ MLDB telemetry           ->   child Task metrics/plots
 selected Study summary   ->   Pipeline/controller metrics/artifacts
 ```
 
-One Namespace still maps to one ClearML Project. A Study does not get its own Project.
+One Namespace remains the logical ClearML Project root. On ClearML servers that expose Pipelines through native hidden subprojects, the adapter additionally places controller Tasks under `mldb/<namespace>/.pipelines/<study-local-id>` and marks that subproject `pipeline` + `hidden`; this is a ClearML UI implementation detail, not a new MLDB semantic Project.
 
-One fresh MLDB Study Result gets one fresh, recoverable Pipeline Run.
+One fresh MLDB Study Result gets one fresh, recoverable Pipeline Run inside the Study's native Pipeline subproject.
 
 ## 2. What ClearML owns
 
@@ -100,8 +100,8 @@ If ClearML and canonical MLDB disagree, investigate and reconcile through the fo
 
 ## 9. Implementation status
 
-As of 2026-09-17, T011-02 through T011-04 have a local implementation and focused conformance coverage. One Study Result creates/recover one ClearML controller Task with native Pipeline DAG configuration; semantically released child Tasks are bound to the exact Pipeline node before ClearML enqueue, and a bounded Study-summary artifact/configuration is mirrored to the controller.
+As of 2026-09-17, T011-02 through T011-04 are implemented and an actual two-trial RTX 3090 ClearML Study has completed through training acceptance, dependent evaluation release, recovery/resume, and terminal canonical Study closure. One Study Result creates/recovers one ClearML controller Task with native Pipeline DAG configuration; released child Tasks are bound to exact Pipeline nodes before enqueue, detailed telemetry remains on child Tasks, and bounded Study-summary values are projected to the controller without requiring the ClearML Fileserver.
 
-The controller Task is currently an operational/UI ownership container, not a second remote MLDB scheduler loop. MLDB reconciliation opens semantic gates; the ClearML backend performs Task creation/enqueue and ClearML queue/agent infrastructure owns worker/resource execution. This avoids requiring the remote controller to mutate canonical result files that live with MLDB.
+The controller Task is an operational/UI ownership container, not a second remote MLDB scheduler loop. MLDB reconciliation opens semantic gates; the ClearML backend performs Task creation/enqueue and ClearML queue/agent infrastructure owns worker/resource execution.
 
-Actual ClearML web UI behavior and RTX 3090 execution remain unverified until T011-05. In particular, do not claim final Pipeline UI grouping/retry behavior until the real-server closure check passes.
+Actual verification found that API-server-2.17+ ClearML UIs discover Pipelines through native hidden `.pipelines/<pipeline-name>` subprojects. Controllers created directly in the Namespace Project remained valid Tasks but were invisible in the Pipelines page. The adapter now uses the native subproject layout while retaining recovery compatibility with the earlier flat placement. Final T011-05 closure still requires human-visible Pipeline-page confirmation and the remaining actual cancellation check.
