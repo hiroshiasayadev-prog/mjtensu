@@ -2,7 +2,7 @@
 
 - **id**: `spec:mldb.v2.cli.operations`
 - **status**: draft
-- **date**: 2026-09-09
+- **date**: 2026-09-17
 - **parent**: `spec:mldb.v2.cli`
 - **contract_class**: `api`
 
@@ -68,17 +68,18 @@ mldb advance <study-result-ref>
 ```
 
 `run` compiles/plans one sealed Study, creates a fresh Study Result, prints its identity as soon as it
-is durable, and drives the Study in the foreground until terminal.
+is durable, creates/recovers the selected backend Study execution, and reconciles canonical results
+until terminal.
 
-`resume` drives one existing non-terminal Study Result until terminal. It never creates a new formal
-execution. Interrupting `run`/`resume` stops only the local controller loop and does not request
-cancellation.
+`resume` reconnects to one existing non-terminal Study Result and its same backend Study execution;
+it never creates a new formal execution. Interrupting `run`/`resume` stops local reconciliation only
+and does not request backend Pipeline cancellation.
 `rerun` creates a fresh Study Result from the exact immutable Plan referenced by the source execution;
 it does not recompile the current mutable Study definition. `--backend` may select a new backend for
 that fresh execution.
 
-`cancel` records cancellation intent and requests cancellation of currently admitted backend work.
-`advance` performs exactly one idempotent progression pass and is intended for recovery,
+`cancel` records canonical cancellation intent and requests cancellation of the backend Study execution plus active child work.
+`advance` performs exactly one idempotent canonical reconciliation pass and is intended for recovery,
 automation, and debugging rather than normal interactive control.
 
 ## Monitor and investigate

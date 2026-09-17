@@ -25,6 +25,10 @@ from mldb_v2.src.backend._clearml_observation import (
     ClearMLRuntimeProjection,
     _stage_key_from_input,
 )
+from mldb_v2.src.backend._clearml_pipeline import (
+    ClearMLPipelineCreateRequest,
+    ClearMLPipelineRecord,
+)
 from mldb_v2.src.backend._config import BackendConfig
 from mldb_v2.src.common.ids import EntityKind
 from mldb_v2.src.common.telemetry import _AcceptedScalarEvent
@@ -37,6 +41,9 @@ _MLDB_CONFIG = "mldb"
 _RUNTIME_CONFIG = "mldb.runtime"
 _RUNTIME_SNAPSHOTS_CONFIG = "mldb.runtime_snapshots"
 _PROJECTION_CONFIG = "mldb.runtime_projection"
+_PIPELINE_CONFIG = "mldb.pipeline"
+_PIPELINE_SUMMARY_CONFIG = "mldb.study_summary"
+_NATIVE_PIPELINE_CONFIG = "Pipeline"
 _ACTIVE_STATUSES = {"created", "queued", "in_progress", "publishing"}
 _TERMINAL_STATUSES = {"completed", "published", "closed", "failed", "stopped"}
 _REMOTE_PACKAGES = (
@@ -196,10 +203,12 @@ class ClearMLSDKSettings:
     s3_endpoint_url: str | None = None
     s3_region: str | None = None
     script: str = "mldb_v2/src/backend/_clearml_sdk.py"
+    pipeline_script: str = "mldb_v2/src/backend/_clearml_pipeline_controller.py"
     working_directory: str = "."
     pinned_data_root: str = "mldb_data"
     runtime_data_root: str | None = None
     artifact_uri_prefix: str | None = None
+    step_queue: str | None = None
     work_root: str = ".mldb-v2-clearml"
     log_reports: int = 20
 
@@ -207,12 +216,12 @@ class ClearMLSDKSettings:
         for name in (
             "api_host", "web_host", "files_host", "repository", "local_repository_root",
             "docker_image", "docker_env_file", "docker_gpu", "docker_shm_size", "s3_endpoint_url", "s3_region",
-            "runtime_data_root", "artifact_uri_prefix",
+            "runtime_data_root", "artifact_uri_prefix", "step_queue",
         ):
             value = getattr(self, name)
             if value is not None and (type(value) is not str or not value or value.strip() != value):
                 raise ValueError(f"{name} must be null or a non-empty trimmed string")
-        for name in ("script", "working_directory", "pinned_data_root", "work_root"):
+        for name in ("script", "pipeline_script", "working_directory", "pinned_data_root", "work_root"):
             value = getattr(self, name)
             if type(value) is not str or not value or value.strip() != value:
                 raise ValueError(f"{name} must be a non-empty trimmed string")
@@ -410,6 +419,16 @@ def _load_task_class() -> Any:
     return Task
 
 
+def _load_pipeline_controller_class() -> Any:
+    try:
+        from clearml.automation import PipelineController  # type: ignore[import-not-found]
+    except ModuleNotFoundError as error:
+        raise ClearMLSDKError(
+            "clearml package is required to activate the production ClearML backend"
+        ) from error
+    return PipelineController
+
+
 def _task_id(task: object) -> str:
     value = getattr(task, "id", None) or getattr(task, "task_id", None)
     if type(value) is not str or not value:
@@ -482,6 +501,35 @@ def _cancellation_state(status: str) -> ClearMLCancellationState:
     return ClearMLCancellationState.TERMINAL
 
 
+def _native_pipeline_dag(topology: Mapping[str, object], *, queue: str | None) -> dict[str, object]:
+    raw_steps = topology.get("steps")
+    if type(raw_steps) is not list:
+        raise ClearMLSDKError("MLDB Pipeline topology steps are malformed")
+    Node = _load_pipeline_controller_class().Node
+    dag: dict[str, object] = {}
+    for raw in raw_steps:
+        if type(raw) is not dict:
+            raise ClearMLSDKError("MLDB Pipeline topology step is malformed")
+        name = raw.get("name")
+        parents = raw.get("parents")
+        stage = raw.get("stage")
+        if type(name) is not str or not name or type(parents) is not list or type(stage) is not str:
+            raise ClearMLSDKError("MLDB Pipeline topology step fields are malformed")
+        node = Node(
+            name=name,
+            parents=list(parents),
+            queue=queue,
+            cache_executed_step=False,
+            stage=stage,
+        )
+        dag[name] = {
+            key: value
+            for key, value in node.__dict__.items()
+            if key not in {"job", "name", "task_factory_func"}
+        }
+    return dag
+
+
 class ClearMLSDKAdapter:
     """One lazy SDK adapter satisfying admission/observation/cancel/log Protocols."""
 
@@ -518,10 +566,16 @@ class ClearMLSDKAdapter:
             s3_endpoint_url=_optional_string(options, "s3_endpoint_url"),
             s3_region=_optional_string(options, "s3_region"),
             script=_string_option(options, "script", "mldb_v2/src/backend/_clearml_sdk.py"),
+            pipeline_script=_string_option(
+                options,
+                "pipeline_script",
+                "mldb_v2/src/backend/_clearml_pipeline_controller.py",
+            ),
             working_directory=_string_option(options, "working_directory", "."),
             pinned_data_root=_string_option(options, "pinned_data_root", "mldb_data"),
             runtime_data_root=_optional_string(options, "runtime_data_root"),
             artifact_uri_prefix=_optional_string(options, "artifact_uri_prefix"),
+            step_queue=_optional_string(options, "queue"),
             work_root=_string_option(options, "work_root", ".mldb-v2-clearml"),
             log_reports=reports,
         )
@@ -575,6 +629,181 @@ class ClearMLSDKAdapter:
             if _project_name(task) == project and _metadata(task).get(key) == value
         )
 
+    def search_pipeline_runs(
+        self, *, project: str, ownership_key: str
+    ) -> Sequence[ClearMLPipelineRecord]:
+        tasks = self._search(
+            project=project,
+            key="mldb.pipeline_ownership_key",
+            value=ownership_key,
+        )
+        records: list[ClearMLPipelineRecord] = []
+        for task in tasks:
+            config = _configuration(task, _PIPELINE_CONFIG) or {}
+            records.append(
+                ClearMLPipelineRecord(
+                    task_id=_task_id(task),
+                    metadata=_metadata(task),
+                    configuration=config,
+                    status=_status(task),
+                )
+            )
+        return records
+
+    def create_pipeline_run(self, request: ClearMLPipelineCreateRequest) -> str | None:
+        topology = request.configuration.get("mldb.topology")
+        if not isinstance(topology, Mapping):
+            raise ClearMLSDKError("ClearML Pipeline request topology is missing")
+        Task = self._Task()
+        kwargs: dict[str, object] = {
+            "project_name": request.project,
+            "task_name": request.task_name,
+            "task_type": "controller",
+            "commit": request.source_commit,
+            "script": self._settings.pipeline_script,
+            "working_directory": self._settings.working_directory,
+            "add_task_init_call": False,
+        }
+        if self._settings.repository is not None:
+            kwargs["repo"] = self._settings.repository
+        task = Task.create(**kwargs)
+        if task is None:
+            return None
+        task_id = _task_id(task)
+        properties = [
+            {"name": key, "value": value}
+            for key, value in request.metadata.items()
+        ]
+        task.set_user_properties(*properties)
+        tags = ["mldb-v2", "mldb-v2-pipeline"] + [
+            _search_tag(key, value)
+            for key, value in request.metadata.items()
+            if key in {"mldb.pipeline_ownership_key", "mldb.study_result"}
+        ]
+        task.set_tags(tags)
+        get_system_tags = getattr(task, "get_system_tags", None)
+        set_system_tags = getattr(task, "set_system_tags", None)
+        if callable(get_system_tags) and callable(set_system_tags):
+            system_tags = list(get_system_tags() or [])
+            if "pipeline" not in system_tags:
+                system_tags.append("pipeline")
+            set_system_tags(system_tags)
+        task.set_configuration_object(
+            name=_PIPELINE_CONFIG,
+            config_dict=dict(request.configuration),
+        )
+        task.set_configuration_object(
+            name=_NATIVE_PIPELINE_CONFIG,
+            config_dict=_native_pipeline_dag(
+                topology,
+                queue=self._settings.step_queue,
+            ),
+        )
+        task.set_packages(["clearml==2.1.12"])
+        return task_id
+
+    def _sync_pipeline_node_statuses(
+        self,
+        *,
+        pipeline: object,
+        summary: Mapping[str, object],
+    ) -> None:
+        native = _configuration(pipeline, _NATIVE_PIPELINE_CONFIG)
+        rows = summary.get("rows")
+        if native is None or type(rows) is not list:
+            return
+        changed = False
+        for row in rows:
+            if type(row) is not dict:
+                continue
+            trial = row.get("trial")
+            kind = row.get("kind")
+            coordinate = row.get("coordinate")
+            disposition = row.get("disposition")
+            if type(trial) is not str:
+                continue
+            if kind == "training":
+                step = f"{trial}-train"
+            elif kind == "evaluation" and type(coordinate) is str:
+                step = f"{trial}-{coordinate}"
+            else:
+                continue
+            node = native.get(step)
+            if type(node) is not dict:
+                continue
+
+            status: str | None = None
+            if disposition == "completed":
+                status = "completed"
+            elif disposition == "failed":
+                status = "failed"
+            elif disposition == "cancelled":
+                status = "aborted"
+            elif disposition == "skipped":
+                status = "skipped"
+            elif disposition == "pending":
+                task_id = node.get("executed")
+                if type(task_id) is str and task_id:
+                    try:
+                        child_status = _status(self._get_task(task_id))
+                    except Exception:
+                        child_status = None
+                    status = {
+                        "created": "pending",
+                        "queued": "queued",
+                        "in_progress": "running",
+                        "publishing": "running",
+                        "completed": "completed",
+                        "published": "completed",
+                        "closed": "completed",
+                        "failed": "failed",
+                        "stopped": "aborted",
+                    }.get(child_status)
+                else:
+                    status = "pending"
+            if status is not None and node.get("status") != status:
+                node["status"] = status
+                changed = True
+        if changed:
+            pipeline.set_configuration_object(
+                name=_NATIVE_PIPELINE_CONFIG,
+                config_dict=native,
+            )
+
+    def project_pipeline_summary(
+        self,
+        *,
+        execution_id: str,
+        summary: Mapping[str, object],
+    ) -> None:
+        task = self._get_task(execution_id)
+        payload = dict(summary)
+        previous = _configuration(task, _PIPELINE_SUMMARY_CONFIG)
+        if previous != payload:
+            task.set_configuration_object(
+                name=_PIPELINE_SUMMARY_CONFIG,
+                config_dict=payload,
+            )
+            uploader = getattr(task, "upload_artifact", None)
+            if callable(uploader):
+                uploader(
+                    name="mldb-study-summary",
+                    artifact_object=payload,
+                    wait_on_upload=False,
+                )
+        self._sync_pipeline_node_statuses(pipeline=task, summary=payload)
+
+        study_status = payload.get("status")
+        task_status = _status(task)
+        if study_status in {"submitted", "cancelling"} and task_status == "created":
+            task.mark_started(force=True)
+        elif study_status == "completed" and task_status not in _TERMINAL_STATUSES:
+            task.mark_completed(force=True, status_message="MLDB Study completed")
+        elif study_status in {"completed_with_failures", "failed"} and task_status not in _TERMINAL_STATUSES:
+            task.mark_failed(force=True, status_message=f"MLDB Study {study_status}")
+        elif study_status == "cancelled" and task_status not in _TERMINAL_STATUSES:
+            task.mark_stopped(force=True, status_message="MLDB Study cancelled")
+
     def search_tasks(
         self, *, project: str, ownership_key: str
     ) -> Sequence[ClearMLTaskRecord]:
@@ -596,6 +825,48 @@ class ClearMLSDKAdapter:
                 )
             )
         return records
+
+    def bind_task_to_pipeline(
+        self,
+        *,
+        task_id: str,
+        pipeline_execution_id: str,
+        pipeline_step: str,
+    ) -> None:
+        child = self._get_task(task_id)
+        pipeline = self._get_task(pipeline_execution_id)
+        child_meta = _metadata(child)
+        pipeline_meta = _metadata(pipeline)
+        if child_meta.get("mldb.study_result") != pipeline_meta.get("mldb.study_result"):
+            raise ClearMLSDKError("ClearML child Task and Pipeline StudyResult do not match")
+
+        native = _configuration(pipeline, _NATIVE_PIPELINE_CONFIG)
+        if native is None:
+            raise ClearMLSDKError("ClearML Pipeline native DAG configuration is missing")
+        node = native.get(pipeline_step)
+        if type(node) is not dict:
+            raise ClearMLSDKError("ClearML Pipeline step does not exist in native DAG")
+        existing = node.get("executed")
+        if existing is not None and existing != task_id:
+            raise ClearMLSDKError("ClearML Pipeline step is already bound to another Task")
+        node["executed"] = task_id
+        pipeline.set_configuration_object(
+            name=_NATIVE_PIPELINE_CONFIG,
+            config_dict=native,
+        )
+
+        set_parent = getattr(child, "set_parent", None)
+        if not callable(set_parent):
+            raise ClearMLSDKError("ClearML child Task does not expose set_parent()")
+        set_parent(pipeline_execution_id)
+        get_tags = getattr(child, "get_tags", None)
+        set_tags = getattr(child, "set_tags", None)
+        if callable(get_tags) and callable(set_tags):
+            tags = list(get_tags() or [])
+            pipeline_tag = f"pipe:{pipeline_execution_id}"
+            if pipeline_tag not in tags:
+                tags.append(pipeline_tag)
+                set_tags(tags)
 
     def create_task(self, request: ClearMLCreateRequest) -> str | None:
         stage_input = _restore_stage_input(request.launch.stage_input_json)
@@ -671,6 +942,14 @@ class ClearMLSDKAdapter:
         parameters = request.configuration.get("mldb.public_parameters")
         if type(parameters) is dict:
             task.set_parameters_as_dict({"mldb": parameters})
+        if request.launch.pipeline_execution_id is not None:
+            if request.launch.pipeline_step is None:
+                raise ClearMLSDKError("Pipeline-bound Task is missing pipeline step identity")
+            self.bind_task_to_pipeline(
+                task_id=task_id,
+                pipeline_execution_id=request.launch.pipeline_execution_id,
+                pipeline_step=request.launch.pipeline_step,
+            )
         Task.enqueue(task=task, queue_name=request.launch.queue)
         return task_id
 

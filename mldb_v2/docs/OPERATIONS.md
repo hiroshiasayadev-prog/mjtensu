@@ -2,6 +2,8 @@
 
 This is the day-to-day runbook for executing existing MLDB v2 Studies from the Windows development repository through ClearML to the GPU worker.
 
+> W011 transition note (2026-09-17): the approved target maps one MLDB Study Result to one ClearML Pipeline Run and delegates physical child-Task scheduling/retry/liveness to ClearML. The current runtime still uses the earlier flat stage-Task mapping until W011 implementation closes. See `CLEARML_PIPELINES.md` before changing backend execution code.
+
 ## 1. Proven deployment
 
 Repository root:
@@ -129,7 +131,7 @@ or, without a configured default backend:
 
     .\mldb.cmd run <namespace>/<study-id> --backend clearml
 
-`run` plans/compiles the Study, creates a fresh durable Study Result, and drives progression until terminal. Interrupting the local process does not mean cancellation; use `resume` to continue or `cancel` to request cancellation.
+`run` plans/compiles the Study and creates a fresh durable Study Result. Under the W011 target mapping it then creates/recover one ClearML Pipeline Run for that Study Result; ClearML owns child-Task scheduling while the foreground MLDB process reconciles canonical results until terminal. Interrupting the local process does not mean cancellation; the backend Pipeline may continue. Use `resume` to reconnect/reconcile or `cancel` to request cancellation.
 
 ## 6. Monitor and recover
 
@@ -143,7 +145,9 @@ Useful read/control commands:
     .\mldb.cmd advance <study-result-id>
     .\mldb.cmd cancel <study-result-id>
 
-`watch` is read-only. `advance` performs one explicit progression pass and is mainly for recovery/debugging. `rerun` creates a fresh Study Result from the immutable Plan of an earlier execution rather than recompiling the current mutable Study definition.
+`watch` is read-only. `advance` performs one explicit canonical reconciliation pass and is mainly for recovery/debugging. `rerun` creates a fresh Study Result from the immutable Plan of an earlier execution rather than recompiling the current mutable Study definition.
+
+After W011 implementation, the primary ClearML UI entrypoint for a running/completed Study is its Pipeline Run. Use child Pipeline Tasks for detailed logs/Charts and the controller summary for selected Study-level projections. Until W011 closes, existing executions still appear as flat Tasks.
 
 ## 7. Read the result from canonical MLDB state
 

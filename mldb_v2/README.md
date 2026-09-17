@@ -11,6 +11,7 @@ Choose the document by what you are trying to do:
 - Run an existing Study or restore the execution environment: [`docs/OPERATIONS.md`](docs/OPERATIONS.md)
 - Create or change an experiment: [`docs/EXPERIMENT_AUTHORING.md`](docs/EXPERIMENT_AUTHORING.md)
 - Decide which training/evaluation values should be observable: [`docs/TELEMETRY.md`](docs/TELEMETRY.md)
+- Understand the approved StudyResult -> ClearML Pipeline execution mapping: [`docs/CLEARML_PIPELINES.md`](docs/CLEARML_PIPELINES.md)
 - Diagnose a failed plan/run/backend execution: [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)
 - AI/agent operating rules for v2 work: [`AGENTS.md`](AGENTS.md)
 
@@ -26,9 +27,13 @@ Do not execute internal implementation files directly as the normal experiment w
 
 ## Authority model
 
-Canonical experiment truth lives in repository-owned MLDB records under namespace-first `mldb_data/<namespace>/...` paths. ClearML Tasks, logs, status, and Charts are operational projections.
+Canonical experiment truth lives in repository-owned MLDB records under namespace-first `mldb_data/<namespace>/...` paths. ClearML Pipeline Runs, child Tasks, logs, status, Charts, and summary projections are operational state/UI.
 
-A ClearML reporting failure must not rewrite a valid canonical Training/Evaluation/Study result. Conversely, a green ClearML Task is not a substitute for canonical result acceptance.
+The approved W011 mapping is one MLDB Study Result -> one ClearML Pipeline Run, with planned training/evaluation work represented as child Pipeline Tasks. ClearML owns physical scheduling/retry/liveness; MLDB retains semantic gates and canonical result acceptance.
+
+A ClearML reporting failure must not rewrite a valid canonical Training/Evaluation/Study result. Conversely, a green ClearML Pipeline/Task is not a substitute for canonical result acceptance.
+
+As of 2026-09-17 the Pipeline mapping is specification-first work under W011; runtime migration is not complete yet. See `docs/CLEARML_PIPELINES.md`.
 
 ## Source execution rule
 

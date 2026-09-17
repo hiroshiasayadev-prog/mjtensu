@@ -323,6 +323,66 @@ def test_initial_training_admission_then_repeated_pass_is_idempotent(tmp_path: P
     assert second["active"] == [_stage_key(plan)]
 
 
+def test_pipeline_capable_backend_is_recovered_before_stage_admission(tmp_path: Path) -> None:
+    _root, plan, _result = _install_repo(tmp_path)
+
+    class PipelineBackend(FakeBackend):
+        def __init__(self) -> None:
+            super().__init__()
+            self.events: list[str] = []
+            self.ensure_calls = 0
+
+        def ensure_study_execution(self, *, plan, study_result):
+            self.ensure_calls += 1
+            self.events.append("ensure")
+            return {
+                "state": "active",
+                "status": "active",
+                "key": {
+                    "study_result": study_result["id"],
+                    "plan": plan["id"],
+                    "source_commit": plan["source_commit"],
+                },
+                "backend": "fake",
+                "execution_id": "pipeline-1",
+            }
+
+        def admit(self, *, stage_input):
+            self.events.append("admit")
+            return super().admit(stage_input=stage_input)
+
+    backend = PipelineBackend()
+    first = _advance(tmp_path, backend)
+    second = _advance(tmp_path, backend)
+
+    assert first["admitted"] == [_stage_key(plan)]
+    assert backend.events[:2] == ["ensure", "admit"]
+    assert backend.ensure_calls == 2
+    assert len(backend.admit_calls) == 1
+    assert second["admitted"] == []
+
+
+def test_pipeline_summary_projection_failure_cannot_change_canonical_training_outcome(tmp_path: Path) -> None:
+    root, plan, _result = _install_repo(tmp_path)
+
+    class SummaryFailBackend(FakeBackend):
+        def project_study_summary(self, *, study_result, summary):
+            raise ConnectionError("ui projection failed")
+
+    backend = SummaryFailBackend()
+    key = _stage_key(plan)
+    candidate = _terminal_observation(key, status="completed")
+    backend.observations[backend._token(key)] = copy.deepcopy(candidate)
+    backend.candidates[backend._token(key)] = copy.deepcopy(candidate)
+
+    response = _advance(tmp_path, backend)
+    current = _read_result(root)
+
+    assert current["trials"][0]["training"]["disposition"] == "completed"
+    assert current["status"] == "submitted"
+    assert response["admitted"] and response["admitted"][0]["kind"] == "evaluation"
+
+
 @pytest.mark.parametrize(
     ("status", "expected_study", "model_count"),
     [

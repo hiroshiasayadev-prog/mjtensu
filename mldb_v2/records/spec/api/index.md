@@ -2,7 +2,7 @@
 
 - **id**: `spec:mldb.v2.api`
 - **status**: draft
-- **date**: 2026-09-09
+- **date**: 2026-09-17
 - **parent**: `spec:mldb.v2`
 
 ## What this is
@@ -11,7 +11,8 @@ Defines one transport-independent application boundary used by the normal CLI, P
 any future HTTP/UI adapter.
 
 The API owns MLDB workflow and discovery semantics. Adapters MUST NOT duplicate validation,
-planning, result acceptance, readiness progression, canonical-history, or query/filter rules.
+planning, semantic readiness/gating, result acceptance, canonical-history, or query/filter rules.
+Operational Task scheduling/retry/liveness belongs to the selected execution backend.
 
 ## Golden execution path
 
@@ -19,15 +20,16 @@ planning, result acceptance, readiness progression, canonical-history, or query/
 run Study
   -> validate/plan
   -> create Study Result
-  -> advance ready work
-  -> collect/accept terminal outcomes
-  -> advance newly-ready work
+  -> create/recover backend Study execution
+  -> backend schedules semantically-released child work
+  -> MLDB collects/accepts terminal candidates
+  -> accepted canonical predecessors release downstream semantic gates
   -> close every planned stage
   -> terminal Study Result
 ```
 
-The workflow is resumable from canonical Study Result + Plan state; no hidden in-memory workflow
-state is authoritative.
+The workflow is resumable from canonical Study Result + Plan state plus recoverable backend execution
+identity; no local in-memory workflow state is authoritative.
 ## Topics
 
 | ref | responsibility |

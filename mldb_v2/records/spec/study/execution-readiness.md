@@ -1,38 +1,35 @@
-# Contract: Planned-stage readiness
+# Contract: Planned-stage semantic readiness
 
 - **id**: `spec:mldb.v2.study.execution_readiness`
 - **status**: draft
-- **date**: 2026-09-09
+- **date**: 2026-09-17
 - **parent**: `spec:mldb.v2.study`
 - **contract_class**: `lifecycle`
 
 ## Purpose
 
-MLDB owns semantic dependencies implied by the immutable Plan; the backend owns scheduling only
-after a stage is admitted. This is dependency progression, not a second resource scheduler.
+MLDB defines when a planned stage is semantically eligible to execute. The execution backend may encode the same dependencies in a native Pipeline/DAG and owns physical scheduling, but it must not release a stage before the corresponding MLDB semantic gate is satisfied.
+
+This boundary is not a queue, retry scheduler, worker selector, or resource scheduler.
 
 ## Readiness
 
-For a training-source trial, the training stage is initially ready. Its Evaluation coordinates are
-blocked until the Training Result is canonically `completed` and the deterministic Model exists.
-For an existing-Model trial, all Evaluation coordinates are initially ready after Model integrity is
-validated.
+For a training-source trial, the training stage is initially eligible. Its Evaluation coordinates are blocked until the Training candidate has been formally accepted, the canonical Training Result is `completed`, and the deterministic Model lineage exists.
 
-Evaluation coordinates are siblings: failure of one does not block another.
+For an existing-Model trial, Evaluation coordinates are initially eligible after the referenced Model/Training Result lineage and required artifacts pass normal MLDB validation.
+
+Evaluation coordinates are siblings: failure of one does not semantically block another unless a future Study contract explicitly declares such a dependency.
+
 ## Terminal upstream handling
 
-If training becomes `failed`, every still-unattempted dependent Evaluation coordinate becomes
-`skipped: upstream_failed`. If training becomes `cancelled`, they become
-`skipped: upstream_cancelled`.
+If training becomes canonically `failed`, every still-unreleased dependent Evaluation coordinate becomes `skipped: upstream_failed`. If training becomes canonically `cancelled`, they become `skipped: upstream_cancelled`.
 
-When Study Result status is `cancelling`, no new stage is ready for admission. Distinguishing
-never-admitted pending stages from backend-admitted pending stages is not part of semantic readiness,
-because admission ownership is operational rather than canonical. The application Study driver first
-observes deterministic backend ownership for pending stage keys: never-admitted stages become
-`skipped: study_cancelled`, while admitted work receives cancellation through the backend port and is
-later collected normally.
+When Study Result status is `cancelling`, no new semantic gate may open. The backend is asked to cancel the Pipeline/active child work; never-started downstream stages remain unreleased and are closed according to the canonical cancellation reconciliation rules.
 
-The readiness boundary derives dependency readiness and upstream skip consequences only from Plan
-intent plus canonical accepted outcomes. Backend queue order, worker state, retry policy, and current
-admission ownership never redefine those dependencies. Admission ownership is consulted separately by
-the Study driver only for idempotent admission recovery and cancellation handling.
+## Backend realization
+
+A backend-native Pipeline may predeclare all Plan nodes for UI/DAG purposes. Predeclaration is not execution readiness. The adapter must prevent a gated node from being queued/executed until MLDB confirms the gate.
+
+For training-produced Models, the runtime `StageInput` for dependent Evaluation must be materialized only after the accepted canonical Training Result/Model exists. Backend controller callbacks/hooks may request that materialization from generic MLDB lifecycle services; they must not synthesize Model lineage from backend Task outputs alone.
+
+The backend may independently choose queue order, worker, retry timing, resource placement, and physical concurrency among semantically eligible sibling stages.

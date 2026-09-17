@@ -56,6 +56,8 @@ class ClearMLRemoteLaunch:
     harness_symbol: str
     stage_input_json: str
     queue: str | None
+    pipeline_execution_id: str | None = None
+    pipeline_step: str | None = None
 
 
 @dataclass(frozen=True)
@@ -220,6 +222,12 @@ def _task_name(stage_input: StageInput, *, study_id: str) -> str:
     return f"{architecture} | {stage_label} | {_local_id(study_id)} | {stage_input['trial']}"
 
 
+def _pipeline_step_name(stage_input: StageInput) -> str:
+    if stage_input["kind"] == "training":
+        return f"{stage_input['trial']}-train"
+    return f"{stage_input['trial']}-{stage_input['coordinate']}"
+
+
 def _canonical_copy(value: object) -> object:
     return json.loads(_canonical_json_bytes(value))
 
@@ -305,14 +313,52 @@ class ClearMLAdmissionService:
             ownership_key=ownership_key,
         )
 
-    def admit(self, *, stage_input: StageInput) -> ClearMLAdmissionResult:
+    def _bind_pipeline_task(
+        self,
+        *,
+        task_id: str,
+        pipeline_execution_id: str | None,
+        pipeline_step: str | None,
+    ) -> None:
+        if pipeline_execution_id is None:
+            return
+        if pipeline_step is None:
+            raise ClearMLAdmissionError("Pipeline-bound Task is missing pipeline step identity")
+        binder = getattr(self._client, "bind_task_to_pipeline", None)
+        if not callable(binder):
+            raise ClearMLAdmissionError("ClearML client cannot bind Task to Pipeline")
+        try:
+            binder(
+                task_id=task_id,
+                pipeline_execution_id=pipeline_execution_id,
+                pipeline_step=pipeline_step,
+            )
+        except Exception as error:
+            raise ClearMLAdmissionError("ClearML Pipeline Task binding failed") from error
+
+    def admit(
+        self,
+        *,
+        stage_input: StageInput,
+        pipeline_execution_id: str | None = None,
+    ) -> ClearMLAdmissionResult:
+        if pipeline_execution_id is not None and (
+            type(pipeline_execution_id) is not str or not pipeline_execution_id
+        ):
+            raise ValueError("pipeline_execution_id must be null or a non-empty string")
         namespace, study_id = _validate_stage_input_identity(stage_input)
         project = f"mldb/{namespace}"
         ownership_key = _ownership_key(stage_input)
         stage_input_json = _transport_stage_input(stage_input)
+        pipeline_step = (
+            None if pipeline_execution_id is None else _pipeline_step_name(stage_input)
+        )
         metadata = _metadata(
             stage_input, study_id=study_id, ownership_key=ownership_key
         )
+        if pipeline_execution_id is not None:
+            metadata["mldb.pipeline_execution"] = pipeline_execution_id
+            metadata["mldb.pipeline_step"] = cast(str, pipeline_step)
         existing = self._search(
             project=project,
             ownership_key=ownership_key,
@@ -320,6 +366,11 @@ class ClearMLAdmissionService:
             stage_input_json=stage_input_json,
         )
         if existing is not None:
+            self._bind_pipeline_task(
+                task_id=existing.task_id,
+                pipeline_execution_id=pipeline_execution_id,
+                pipeline_step=pipeline_step,
+            )
             return ClearMLAdmissionResult(
                 task_id=existing.task_id,
                 project=project,
@@ -335,6 +386,9 @@ class ClearMLAdmissionService:
             "mldb.harness": _HARNESS_SYMBOL,
             "mldb.source_commit": stage_input["source_commit"],
         }
+        if pipeline_execution_id is not None:
+            configuration["mldb.pipeline_execution"] = pipeline_execution_id
+            configuration["mldb.pipeline_step"] = cast(str, pipeline_step)
         request = ClearMLCreateRequest(
             project=project,
             task_name=_task_name(stage_input, study_id=study_id),
@@ -345,6 +399,8 @@ class ClearMLAdmissionService:
                 harness_symbol=_HARNESS_SYMBOL,
                 stage_input_json=stage_input_json,
                 queue=self._queue,
+                pipeline_execution_id=pipeline_execution_id,
+                pipeline_step=pipeline_step,
             ),
         )
 
@@ -380,6 +436,11 @@ class ClearMLAdmissionService:
             raise ClearMLAdmissionError(
                 "ClearML create response Task ID does not match recovered ownership"
             )
+        self._bind_pipeline_task(
+            task_id=found.task_id,
+            pipeline_execution_id=pipeline_execution_id,
+            pipeline_step=pipeline_step,
+        )
         return ClearMLAdmissionResult(
             task_id=found.task_id,
             project=project,

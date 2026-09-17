@@ -2,7 +2,7 @@
 
 - **id**: `spec:mldb.v2.api.application_interface`
 - **status**: draft
-- **date**: 2026-09-09
+- **date**: 2026-09-17
 - **parent**: `spec:mldb.v2.api`
 - **contract_class**: `interface`
 
@@ -71,34 +71,37 @@ Study Result status after the cancellation request handling performed by that ca
 
 ## Execution semantics
 
-`run_study` creates a fresh execution key, plans the current sealed Study, starts that Plan, and
-repeatedly invokes the same progression primitive until terminal.
+`run_study` creates a fresh execution key, plans the current sealed Study, starts that Plan, ensures
+one backend Study execution for the resulting Study Result, and reconciles backend child outcomes
+until the canonical Study Result is terminal.
 
-`resume_study` operates on one existing Study Result and creates no new execution identity.
-`rerun_study` starts a fresh execution from the exact immutable Plan referenced by the source Study
-Result; it does not recompile the current Study definition.
+`resume_study` operates on one existing Study Result, recovers the same backend Study execution, and
+creates no new execution identity. `rerun_study` starts a fresh execution from the exact immutable
+Plan referenced by the source Study Result; it does not recompile the current Study definition.
 
 `start_study` is an application primitive, not necessarily a normal human CLI command. It returns
-after the Study Result is durably persisted; initial backend admission occurs only through
-`advance_study`.
+after the Study Result is durably persisted. Backend Study execution creation/recovery occurs through
+the normal reconciliation boundary and is idempotent for that exact Study Result.
 ## Progression response
 
-`advance_study` response has exactly these semantic fields: `study_result`, canonical `status`,
+`advance_study` response retains the existing public shape: `study_result`, canonical `status`,
 boolean `changed`, ordered `admitted` stage keys, ordered `finalized_results` refs, ordered
 `finalized_models` refs, ordered currently `active` stage keys observed during that pass, and boolean
-`terminal`. Concrete Python container classes are frozen by Skeleton. `active` is observational
-convenience and not canonical history.
+`terminal`. Under a backend-owned Study execution, `admitted` means logical stages newly released or
+confirmed as backend-owned during that reconciliation pass; it does not require MLDB itself to create
+each physical child Task. `active` and `admitted` are observational convenience, not canonical history.
 
 ## Side-effect boundaries
 
 Validation/query/verification operations are read-only; verification may execute definition tests.
 `seal_scope` mutates only selected draft definition lifecycle/integrity metadata. `plan_study` writes
-only an immutable Plan. `advance_study` is the sole normal progression mutation primitive after
-Study Result allocation.
+only an immutable Plan. `advance_study` remains the canonical reconciliation mutation primitive after
+Study Result allocation; the backend may independently mutate its own operational Pipeline/Task state.
 
-`run_study` and `resume_study` are loops over existing primitives, not alternate state machines.
-`cancel_study` changes `submitted` to `cancelling` idempotently and delegates active-work
-cancellation through the backend port; later advancement performs collection/terminal closure.
+`run_study` and `resume_study` are loops over existing application primitives, not alternate canonical
+state machines. `cancel_study` changes `submitted` to `cancelling` idempotently and delegates
+Pipeline/active-child cancellation through the backend port; later reconciliation performs formal
+candidate acceptance and canonical terminal closure.
 
 ## Failure and authority
 

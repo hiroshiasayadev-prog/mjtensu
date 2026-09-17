@@ -87,15 +87,17 @@ Do not start by changing metric names. W010 proved the generic plumbing with cla
 
 A ClearML reporting outage after acceptance is operational loss; it must not invalidate an otherwise valid canonical result.
 
-## Backend Task completed but canonical Study is not terminal
+## Backend Pipeline/Task completed but canonical Study is not terminal
 
-Read canonical `status` plus backend observation. Use `mldb resume <study-result-id>` for normal continuation or `mldb advance <study-result-id>` for one explicit idempotent progression pass.
+Read canonical `status` plus backend Pipeline/child observations. A green backend node is not canonical acceptance. Use `mldb resume <study-result-id>` for normal continuation or `mldb advance <study-result-id>` for one explicit idempotent reconciliation pass.
 
-Do not edit StudyResult/TrainingResult/EvaluationResult YAML to terminal status manually. If candidate acceptance fails, investigate the exact result/artifact/source validation failure.
+Do not edit StudyResult/TrainingResult/EvaluationResult YAML to terminal status manually. If candidate acceptance fails, investigate the exact result/artifact/source validation failure. Under the W011 mapping, also verify that the controller did not release a dependent Evaluation before the accepted Training Result/Model semantic gate.
 
 ## Local process was interrupted
 
-Interrupting `run`/`resume` stops the local controller loop; it does not mean the Study was cancelled. Inspect `mldb status`, then `resume` the existing Study Result if appropriate. Use `cancel` only when cancellation is actually intended.
+Under the W011 target mapping, interrupting `run`/`resume` stops local canonical reconciliation but does not cancel the ClearML Pipeline; backend work may continue. Inspect `mldb status`, then `resume` the existing Study Result to reconnect/reconcile. Use `cancel` only when cancellation is actually intended.
+
+Until W011 runtime migration is complete, current flat-Task executions retain the older local progression behavior; do not infer Pipeline support from the amended documentation alone.
 
 ## Historical result looks wrong
 

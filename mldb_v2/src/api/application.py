@@ -32,6 +32,7 @@ from mldb_v2.src.repository.resolution import (
 )
 from mldb_v2.src.results.study_result import StudyResult, StudyResultStatus, _validate_study_result
 from mldb_v2.src.storage.object_bytes import _ObjectByteAccess
+from mldb_v2.src.study._plan_build import _validate_study_plan
 from mldb_v2.src.study.plan import StudyPlan
 from mldb_v2.src.study.study_driver import advance_study as _advance_study
 from mldb_v2.src.verification.definition_lifecycle import DefinitionLifecycleStatus
@@ -213,6 +214,16 @@ class _CancellationRequestAdapter:
 
         backend = self._backends.resolve(backend_name)
         try:
+            ensure = getattr(backend, "ensure_study_execution", None)
+            if callable(ensure):
+                latest_before_cancel = _validated_result(self._resolver, result_id)
+                plan = _validate_study_plan(
+                    self._resolver.resolve(
+                        kind=EntityKind.STUDY_PLAN,
+                        entity_id=latest_before_cancel["plan"],
+                    )
+                )
+                ensure(plan=plan, study_result=latest_before_cancel)
             backend.cancel_study(study_result=result_id)
         except Exception as error:
             raise _BackendUnavailable("backend cancellation is unavailable") from error

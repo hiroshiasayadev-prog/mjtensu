@@ -18,6 +18,7 @@ W006 -> W007 Application/query API
 W007 -> W008 CLI
 W001..W008 -> W009 End-to-end conformance
 W009 -> W010 Execution telemetry / observability
+W010 -> W011 ClearML Pipeline Study execution
 ```
 
 W003 and W004 may proceed in parallel after W002. Later Task records may further split work for parallel sessions, but must preserve each Work Item boundary.
@@ -36,6 +37,7 @@ W003 and W004 may proceed in parallel after W002. Later Task records may further
 | MLDB-V2-WORK-008 | CLI adapter and installed `mldb` command | W007 |
 | MLDB-V2-WORK-009 | End-to-end conformance and actual-backend verification | W001-W008 |
 | MLDB-V2-WORK-010 | Backend-neutral execution telemetry and observability projection | W009 |
+| MLDB-V2-WORK-011 | ClearML Pipeline Study execution and UI projection repair | W010 |
 
 ## Rule
 

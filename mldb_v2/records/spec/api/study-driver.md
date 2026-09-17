@@ -1,55 +1,56 @@
-# Contract: Resumable Study driver
+# Contract: Resumable Study lifecycle / reconciliation
 
 - **id**: `spec:mldb.v2.api.study_driver`
 - **status**: draft
-- **date**: 2026-09-09
+- **date**: 2026-09-17
 - **parent**: `spec:mldb.v2.api`
 - **contract_class**: `lifecycle`
 
-## One progression pass
+## Purpose
 
-`advance_study(study_result)` is idempotent and derives all action from the immutable Plan,
-canonical accepted child results, current Study Result dispositions, and backend observations.
+The Study lifecycle service protects MLDB semantic gates and canonical history around a backend-owned Study execution. It is not a second queue or physical scheduler.
+
+For backends with native Study execution containers, such as ClearML Pipeline, the backend owns physical Task creation/enqueue, queue/worker placement, retry/liveness, and UI grouping after MLDB releases a logical stage. MLDB owns candidate acceptance, canonical lineage, terminal dispositions, and release of semantic gates that require accepted canonical predecessors.
+
+## One reconciliation pass
+
+`advance_study(study_result)` is idempotent and derives action from the immutable Plan, canonical accepted child results, current Study Result dispositions, and backend Study/child observations.
 
 One pass performs, in order:
 
 1. validate Study Result/Plan/source integrity required for progression;
-2. observe/recover deterministic backend ownership for pending logical stage keys and identify any
-   admitted work that is active or terminal;
-3. collect terminal candidates and run formal result acceptance;
-4. persist terminal Training/Evaluation Results and Models where accepted;
-5. update the corresponding Study Result dispositions;
-6. apply Plan-defined upstream skip rules and, when cancelling, use observed deterministic backend
-   ownership to close only never-admitted pending stages as `skipped: study_cancelled`;
-7. derive newly-ready pending coordinates;
-8. idempotently admit those coordinates through the backend port;
-9. close the Study Result if every planned coordinate is terminal.
+2. idempotently create or recover the backend Study execution for that exact Study Result;
+3. observe child-stage state and collect newly terminal candidates;
+4. run formal Training/Evaluation result acceptance;
+5. persist accepted Training/Evaluation Results and Models, then update Study Result dispositions;
+6. derive semantic downstream gates from the reconciled canonical state and notify/release the backend execution accordingly;
+7. apply canonical upstream-failure/cancellation skip rules for work that must never execute;
+8. close the Study Result when every planned coordinate is canonically terminal.
 
-The pass may make no change when backend work is still active.
+The pass may make no canonical change while backend work is active. Releasing a semantically ready logical stage through the backend port is allowed; MLDB itself must not create ClearML Tasks, choose queues/workers, or run a duplicate physical scheduler.
+
 ## Run and resume
 
-`run_study(study_ref, backend)` is the normal synchronous new-execution path:
+`run_study(study_ref, backend)` remains the normal synchronous new-execution path:
 
 ```text
-plan_study -> start_study -> advance/wait loop -> terminal Study Result
+plan_study -> start_study -> ensure backend Study execution -> reconcile/wait -> terminal Study Result
 ```
 
-`resume_study(study_result_ref)` runs the same advance/wait loop for one already-persisted
-non-terminal Study Result and creates no new execution identity.
+`resume_study(study_result_ref)` recovers the same backend Study execution and resumes reconciliation; it creates no new execution identity.
 
-A process interruption does not invalidate the execution. Backend work already admitted may continue;
-semantic progression resumes only when another driver caller invokes `resume_study` or
-`advance_study`.
+A local process interruption does not cancel or invalidate a backend-owned Pipeline. Backend work may continue independently. Resuming MLDB reconnects to the same Study Result/Pipeline and reconciles any completed child work into canonical state.
 
-`watch` is not a Study-driver operation. Read-only monitoring uses
-`spec:mldb.v2.api.query_interface` and MUST NOT be implemented as an alias for progression.
+`watch` is read-only and MUST NOT perform reconciliation or backend mutation.
 
 ## Concurrency and ownership
 
-Progression MUST tolerate repeated or concurrent caller attempts without duplicate logical stage
-admission or duplicate canonical child results. Canonical read/modify/write is coordinated by
-`spec:mldb.v2.repository.mutation_coordination`; backend admission uses deterministic ownership
-metadata derived from Study Result + trial + stage coordinate.
+Progression MUST tolerate repeated/concurrent reconciliation attempts without duplicate backend Study execution, duplicate logical child work, or duplicate canonical child results.
 
-The driver does not choose GPU, queue priority, retry timing, or worker placement. Those remain
-backend concerns.
+Canonical read/modify/write remains coordinated by `spec:mldb.v2.repository.mutation_coordination`. Backend Study execution identity and child ownership are deterministic/recoverable operational mappings derived from the exact Study Result and Plan.
+
+## Backend responsibility boundary
+
+The lifecycle service does not choose GPU, queue priority, retry timing, worker placement, or child Task launch timing among already-eligible work. Those remain backend concerns.
+
+The lifecycle service does decide whether a backend child result is formally acceptable and whether a downstream stage's semantic prerequisites are satisfied. A backend controller callback/hook may invoke this generic lifecycle boundary to bridge one completed child into canonical acceptance before releasing a dependent stage.

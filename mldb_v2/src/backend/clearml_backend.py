@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import cast
 
 from mldb_v2.src.backend._clearml_admission import ClearMLAdmissionService
@@ -14,6 +15,7 @@ from mldb_v2.src.backend._clearml_observation import (
     ClearMLObservationService,
     _stage_key_from_input,
 )
+from mldb_v2.src.backend._clearml_pipeline import ClearMLPipelineService
 from mldb_v2.src.backend._clearml_sdk import ClearMLSDKAdapter
 from mldb_v2.src.backend._config import BackendConfig
 from mldb_v2.src.backend._registry import BackendRegistry
@@ -23,7 +25,10 @@ from mldb_v2.src.backend.candidate_outcome import (
     TerminalCandidate,
 )
 from mldb_v2.src.backend.stage_input import StageInput
+from mldb_v2.src.backend.study_execution import BackendStudyExecutionObservation
 from mldb_v2.src.common.ids import StudyResultId
+from mldb_v2.src.results.study_result import StudyResult
+from mldb_v2.src.study.plan import StudyPlan
 
 
 class ClearMLBackendError(RuntimeError):
@@ -39,16 +44,24 @@ class ClearMLBackend:
         admission: ClearMLAdmissionService,
         observation: ClearMLObservationService,
         cancellation: ClearMLCancellationService,
+        pipeline: ClearMLPipelineService | None = None,
         logs: ClearMLLogService | None = None,
     ) -> None:
         self._admission = admission
         self._observation = observation
         self._cancellation = cancellation
+        self._pipeline = pipeline
         self._logs = logs
+        self._pipeline_execution_ids: dict[str, str] = {}
 
     def admit(self, *, stage_input: StageInput) -> BackendObservation:
         """Idempotently admit exact work, then return its exact backend observation."""
-        self._admission.admit(stage_input=stage_input)
+        self._admission.admit(
+            stage_input=stage_input,
+            pipeline_execution_id=self._pipeline_execution_ids.get(
+                str(stage_input["study_result"])
+            ),
+        )
         stage_key = _stage_key_from_input(stage_input)
         observed = self._observation.observe(stage_key=stage_key)
         if observed is None:
@@ -65,6 +78,41 @@ class ClearMLBackend:
 
     def cancel_study(self, *, study_result: StudyResultId) -> None:
         self._cancellation.cancel_study(study_result=study_result)
+        pipeline_id = self._pipeline_execution_ids.get(str(study_result))
+        if pipeline_id is not None and self._pipeline is not None:
+            self._pipeline.cancel_execution(execution_id=pipeline_id)
+
+    def ensure_study_execution(
+        self, *, plan: StudyPlan, study_result: StudyResult
+    ) -> BackendStudyExecutionObservation:
+        if self._pipeline is None:
+            raise ClearMLBackendError("ClearML Pipeline capability is not configured")
+        observed = self._pipeline.ensure(plan=plan, study_result=study_result)
+        self._pipeline_execution_ids[str(study_result["id"])] = observed["execution_id"]
+        return observed
+
+    def observe_study_execution(
+        self, *, plan: StudyPlan, study_result: StudyResult
+    ) -> BackendStudyExecutionObservation | None:
+        if self._pipeline is None:
+            return None
+        return self._pipeline.observe(plan=plan, study_result=study_result)
+
+    def project_study_summary(
+        self,
+        *,
+        study_result: StudyResult,
+        summary: Mapping[str, object],
+    ) -> None:
+        if self._pipeline is None:
+            return
+        execution_id = self._pipeline_execution_ids.get(str(study_result["id"]))
+        if execution_id is None:
+            return
+        self._pipeline.project_summary(
+            execution_id=execution_id,
+            summary=summary,
+        )
 
     def read_task_logs(
         self, *, study_result: StudyResultId, task_id: str
@@ -112,11 +160,16 @@ def clearml_backend_factory(config: BackendConfig) -> ClearMLBackend:
     )
     observation = ClearMLObservationService(client=cast(object, client))
     cancellation = ClearMLCancellationService(client=cast(object, client))
+    pipeline = ClearMLPipelineService(
+        client=cast(object, client),
+        recovery_search_attempts=recovery_raw,
+    )
     logs = ClearMLLogService(client=cast(object, client))
     return ClearMLBackend(
         admission=admission,
         observation=observation,
         cancellation=cancellation,
+        pipeline=pipeline,
         logs=logs,
     )
 

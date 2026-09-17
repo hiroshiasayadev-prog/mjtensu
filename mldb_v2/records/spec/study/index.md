@@ -2,15 +2,17 @@
 
 - **id**: `spec:mldb.v2.study`
 - **status**: draft
-- **date**: 2026-09-09
+- **date**: 2026-09-17
 - **parent**: `spec:mldb.v2`
 
 ## What this is
 
 Study is human-authored experiment intent. Study Plan is the immutable fully materialized contract
-used by the application driver and execution backend.
+used by the MLDB lifecycle boundary and execution backend.
 
-Study is not the backend grouping hierarchy; Namespace owns that responsibility.
+Namespace remains the backend Project grouping boundary. One concrete Study Result execution may map
+to a backend-native execution container such as a ClearML Pipeline Run without making that backend
+container canonical.
 
 ## Topics
 

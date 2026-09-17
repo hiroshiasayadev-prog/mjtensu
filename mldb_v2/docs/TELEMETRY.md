@@ -112,10 +112,18 @@ Accepted and delivered are different states. Once a valid event is accepted, a C
 
 ClearML currently maps `group -> title`, `series -> series`, `value -> value`, and `step -> iteration`. Protocols must not depend on that backend mapping.
 
-## 8. Versioning rule
+## 8. Study/Pipeline summary projection
+
+Under the approved W011 ClearML Pipeline mapping, detailed Protocol telemetry remains attached to the child Task that executed the training/evaluation stage. The ClearML Pipeline/controller MAY mirror a deliberately small subset of child metrics/artifacts/models for Study-level comparison and navigation.
+
+That mirror is presentation only. It must not rename or aggregate values in a way that changes their scientific meaning without an explicit documented projection rule, and it never replaces canonical Evaluation Result metrics.
+
+Prefer the Pipeline summary for cross-trial overview and the child Task for detailed curves/diagnostics. Do not copy every scalar to the controller merely because the backend supports it.
+
+## 9. Versioning rule
 
 Changing the scientific meaning, aggregation, cadence, or step semantics of telemetry changes the reviewed behavior of a Train/Evaluation Protocol. If the Protocol is sealed, create a new version ID rather than silently rewriting the historical definition.
 
-## 9. Pre-seal telemetry checklist
+## 10. Pre-seal telemetry checklist
 
 Before sealing a Protocol, confirm: at least one useful successful-run scalar exists; group/series names are stable; value aggregation is defined; cadence and step meaning are explicit; telemetry cost is acceptable; no backend SDK is imported; reporter failures are not swallowed; and terminal canonical metrics are not confused with observational charts.

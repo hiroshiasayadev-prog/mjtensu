@@ -169,6 +169,109 @@ def _load_context(
     return result, plan
 
 
+def _ensure_backend_study_execution(
+    *,
+    backend: BackendPort,
+    plan: StudyPlan,
+    result: StudyResult,
+) -> None:
+    ensure = getattr(backend, "ensure_study_execution", None)
+    if not callable(ensure):
+        return
+    observation = ensure(plan=plan, study_result=result)
+    if type(observation) is not dict:
+        raise _UnrecoverableProgressionError(
+            "backend Study execution observation must be a mapping"
+        )
+    expected_key = {
+        "study_result": result["id"],
+        "plan": plan["id"],
+        "source_commit": plan["source_commit"],
+    }
+    if observation.get("key") != expected_key:
+        raise _UnrecoverableProgressionError(
+            "backend Study execution identity does not match canonical StudyResult"
+        )
+    if observation.get("state") not in {"active", "terminal"}:
+        raise _UnrecoverableProgressionError(
+            "backend Study execution observation has invalid state"
+        )
+
+
+def _study_summary_projection(
+    *,
+    resolver: CanonicalRepositoryResolver,
+    result: StudyResult,
+) -> dict[str, object]:
+    rows: list[dict[str, object]] = []
+    for trial in result["trials"]:
+        training = trial["training"]
+        if training is not None:
+            rows.append(
+                {
+                    "trial": trial["trial"],
+                    "kind": "training",
+                    "stage": "training",
+                    "coordinate": None,
+                    "disposition": training["disposition"],
+                    "result": training["result"],
+                    "metrics": {},
+                }
+            )
+        for evaluation in trial["evaluations"]:
+            metrics: dict[str, object] = {}
+            result_id = evaluation["result"]
+            if evaluation["disposition"] == "completed" and result_id is not None:
+                try:
+                    document = resolver.resolve(
+                        kind=EntityKind.EVALUATION_RESULT,
+                        entity_id=result_id,
+                    )
+                except (FileNotFoundError, ValueError):
+                    document = None
+                if isinstance(document, Mapping):
+                    payload = document.get("result")
+                    if isinstance(payload, Mapping) and isinstance(payload.get("metrics"), Mapping):
+                        metrics = copy.deepcopy(dict(payload["metrics"]))
+            rows.append(
+                {
+                    "trial": trial["trial"],
+                    "kind": "evaluation",
+                    "stage": evaluation["stage"],
+                    "coordinate": evaluation["coordinate"],
+                    "disposition": evaluation["disposition"],
+                    "result": result_id,
+                    "metrics": metrics,
+                }
+            )
+    return {
+        "schema": "mjtensu.mldb-v2/study-summary-projection/v1",
+        "study_result": result["id"],
+        "study": result["study"],
+        "status": result["status"],
+        "rows": rows,
+    }
+
+
+def _project_backend_summary_best_effort(
+    *,
+    backend: BackendPort,
+    resolver: CanonicalRepositoryResolver,
+    result: StudyResult,
+) -> None:
+    project = getattr(backend, "project_study_summary", None)
+    if not callable(project):
+        return
+    try:
+        project(
+            study_result=result,
+            summary=_study_summary_projection(resolver=resolver, result=result),
+        )
+    except Exception:
+        # Pipeline/UI projection is observational and must never rewrite canonical success.
+        return
+
+
 def _validate_backend_value(
     value: BackendObservation | TerminalCandidate,
     *,
@@ -736,7 +839,15 @@ def advance_study(
     active: list[StageKey] = []
 
     try:
-        # 2. Observe/recover deterministic ownership for every pending StageKey.
+        # 2. Create/recover the backend-native Study execution container first.
+        # Generic backends without this W011 capability remain stage-driven.
+        _ensure_backend_study_execution(
+            backend=backend,
+            plan=plan,
+            result=initial,
+        )
+
+        # 3. Observe/recover deterministic ownership for every pending StageKey.
         observations, active = _observe_pending(backend=backend, plan=plan, result=initial)
 
         # 3. Collect terminal work.
@@ -768,6 +879,11 @@ def advance_study(
         )
 
         current, current_plan = _load_context(resolver, study_result_id=validated_id)
+        _project_backend_summary_best_effort(
+            backend=backend,
+            resolver=resolver,
+            result=current,
+        )
         if _terminal(current):
             return _final_response(
                 initial=initial,
@@ -803,6 +919,11 @@ def advance_study(
         )
 
         current, current_plan = _load_context(resolver, study_result_id=validated_id)
+        _project_backend_summary_best_effort(
+            backend=backend,
+            resolver=resolver,
+            result=current,
+        )
         if _terminal(current):
             return _final_response(
                 initial=initial,
@@ -855,6 +976,11 @@ def advance_study(
         )
         final, _final_plan = _load_context(resolver, study_result_id=validated_id)
 
+    _project_backend_summary_best_effort(
+        backend=backend,
+        resolver=resolver,
+        result=final,
+    )
     return _final_response(
         initial=initial,
         final=final,

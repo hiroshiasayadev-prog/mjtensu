@@ -2,15 +2,16 @@
 
 - **id**: `spec:mldb.v2.backend.stage_input`
 - **status**: draft
-- **date**: 2026-09-09
+- **date**: 2026-09-17
 - **parent**: `spec:mldb.v2.backend`
 - **contract_class**: `value`
 
 ## Purpose and common shape
 
-A backend admission carries one immutable backend-neutral value with schema
+Each physical child-stage execution receives one immutable backend-neutral value with schema
 `mjtensu.mldb-v2/stage-input/v1`. It combines Plan-fixed intent with runtime Model lineage that may
-become available only after training acceptance.
+become available only after training acceptance. A backend-native Pipeline may predeclare the child
+node earlier, but the exact StageInput is materialized only when the MLDB semantic gate opens.
 
 ```yaml
 schema: mjtensu.mldb-v2/stage-input/v1
@@ -79,9 +80,11 @@ this snapshot only from canonically accepted immutable records.
 
 ## Rules
 
-- Construction is allowed only for a coordinate ready under `spec:mldb.v2.study.execution_readiness`.
+- Construction is allowed only after the coordinate's semantic gate is open under `spec:mldb.v2.study.execution_readiness`.
+- Backend Pipeline predeclaration of a node does not count as StageInput construction or semantic release.
 - The harness verifies Plan digest, pins, IDs, ArtifactRefs, implementation hashes, and manifest
   digests before domain invocation.
 - Controller-local paths, credentials, and ClearML SDK objects are forbidden.
-- Backend adapters may encode this value into backend configuration but MUST preserve it exactly.
+- Backend adapters may encode this value into Pipeline/Task configuration but MUST preserve it exactly.
+- For newly-trained Models, Evaluation `runtime_model` must come from accepted canonical lineage, not directly from upstream backend Task metadata.
 - Stage input is operational transport data, not a canonical entity under `mldb_data/`.
