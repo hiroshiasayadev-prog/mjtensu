@@ -198,6 +198,28 @@ def _metadata(stage_input: StageInput, *, study_id: str, ownership_key: str) -> 
     return metadata
 
 
+def _local_id(reference: object) -> str:
+    return _validate_typed_reference(reference).split("/", 1)[1]
+
+
+def _task_name(stage_input: StageInput, *, study_id: str) -> str:
+    stage = stage_input["stage"]
+    if type(stage) is not dict:
+        raise ValueError("StageInput stage must be a mapping")
+    if stage_input["kind"] == "training":
+        architecture = _local_id(stage.get("architecture"))
+        stage_label = "train"
+    else:
+        runtime_model = stage_input["runtime_model"]
+        if type(runtime_model) is not dict:
+            raise ValueError("evaluation StageInput requires runtime_model")
+        architecture = _local_id(runtime_model.get("architecture"))
+        stage_label = stage.get("name")
+        if type(stage_label) is not str or not stage_label:
+            raise ValueError("evaluation stage name must be non-empty")
+    return f"{architecture} | {stage_label} | {_local_id(study_id)} | {stage_input['trial']}"
+
+
 def _canonical_copy(value: object) -> object:
     return json.loads(_canonical_json_bytes(value))
 
@@ -313,10 +335,9 @@ class ClearMLAdmissionService:
             "mldb.harness": _HARNESS_SYMBOL,
             "mldb.source_commit": stage_input["source_commit"],
         }
-        coordinate = stage_input["coordinate"] or "train"
         request = ClearMLCreateRequest(
             project=project,
-            task_name=f"MLDB {stage_input['trial']} {coordinate}",
+            task_name=_task_name(stage_input, study_id=study_id),
             metadata=metadata,
             configuration=configuration,
             launch=ClearMLRemoteLaunch(

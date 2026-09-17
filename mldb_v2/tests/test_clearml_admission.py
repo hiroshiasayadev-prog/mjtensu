@@ -319,17 +319,27 @@ def test_remote_launch_uses_exact_common_execution_harness_and_pinned_commit() -
     assert "rotated" not in request.launch.harness_symbol
 
 
-def test_task_name_is_presentation_only_not_recovery_identity() -> None:
+def test_task_name_is_human_readable_but_not_recovery_identity() -> None:
     client = FakeClient()
     stage_input = _training_stage_input()
     ClearMLAdmissionService(client=client).admit(stage_input=stage_input)
     request = client.requests[0]
-    assert request.task_name
+    assert request.task_name == "architecture | train | study-a | trial-0001"
 
     client.requests.clear()
     replay = ClearMLAdmissionService(client=client).admit(stage_input=stage_input)
     assert replay.recovered is True
     assert client.requests == []
+
+
+def test_evaluation_task_name_shows_architecture_and_stage() -> None:
+    client = FakeClient()
+    stage_input = _evaluation_stage_input()
+    ClearMLAdmissionService(client=client).admit(stage_input=stage_input)
+
+    assert client.requests[0].task_name == (
+        "architecture | final-holdout | study-a | trial-0001"
+    )
 
 
 def test_admission_module_remains_clearml_sdk_optional_and_admission_only() -> None:
