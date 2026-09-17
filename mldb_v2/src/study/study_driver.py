@@ -198,18 +198,121 @@ def _ensure_backend_study_execution(
         )
 
 
+def _local_reference_name(value: object) -> str:
+    text = str(value)
+    return text.split("/", 1)[1] if "/" in text else text
+
+
+def _trial_projection_context(
+    *,
+    resolver: CanonicalRepositoryResolver,
+    plan_trial: Mapping[str, object] | None,
+    result_trial: Mapping[str, object],
+) -> tuple[str, str | None, str | None]:
+    trial_id = str(result_trial["trial"])
+    architecture_id: str | None = None
+    model_id: str | None = None
+    source = plan_trial.get("source") if isinstance(plan_trial, Mapping) else None
+    if isinstance(source, Mapping) and source.get("kind") == "training":
+        raw_architecture = source.get("architecture")
+        if type(raw_architecture) is str:
+            architecture_id = raw_architecture
+        training = result_trial.get("training")
+        if isinstance(training, Mapping) and type(training.get("result")) is str:
+            try:
+                training_result = resolver.resolve(
+                    kind=EntityKind.TRAINING_RESULT,
+                    entity_id=training["result"],
+                )
+            except (FileNotFoundError, ValueError):
+                training_result = None
+            if isinstance(training_result, Mapping):
+                payload = training_result.get("result")
+                if isinstance(payload, Mapping) and type(payload.get("model")) is str:
+                    model_id = str(payload["model"])
+    elif isinstance(source, Mapping) and source.get("kind") == "existing_model":
+        raw_model = source.get("model")
+        if type(raw_model) is str:
+            model_id = raw_model
+            try:
+                model = resolver.resolve(kind=EntityKind.MODEL, entity_id=model_id)
+            except (FileNotFoundError, ValueError):
+                model = None
+            if isinstance(model, Mapping) and type(model.get("training_result")) is str:
+                try:
+                    training_result = resolver.resolve(
+                        kind=EntityKind.TRAINING_RESULT,
+                        entity_id=model["training_result"],
+                    )
+                except (FileNotFoundError, ValueError):
+                    training_result = None
+                if isinstance(training_result, Mapping) and type(training_result.get("architecture")) is str:
+                    architecture_id = str(training_result["architecture"])
+
+    label = trial_id
+    if architecture_id is not None:
+        try:
+            architecture = resolver.resolve(
+                kind=EntityKind.ARCHITECTURE,
+                entity_id=architecture_id,
+            )
+        except (FileNotFoundError, ValueError):
+            architecture = None
+        if isinstance(architecture, Mapping) and type(architecture.get("name")) is str:
+            label = str(architecture["name"])
+        else:
+            label = _local_reference_name(architecture_id)
+    elif model_id is not None:
+        label = _local_reference_name(model_id)
+    return label, architecture_id, model_id
+
+
 def _study_summary_projection(
     *,
     resolver: CanonicalRepositoryResolver,
     result: StudyResult,
 ) -> dict[str, object]:
-    rows: list[dict[str, object]] = []
+    try:
+        plan = _validate_study_plan(
+            resolver.resolve(kind=EntityKind.STUDY_PLAN, entity_id=result["plan"])
+        )
+    except (FileNotFoundError, ValueError):
+        plan = None
+    plan_trials = {
+        str(trial["trial"]): trial
+        for trial in (plan["trials"] if plan is not None else [])
+    }
+
+    contexts: dict[str, tuple[str, str | None, str | None]] = {}
+    base_counts: dict[str, int] = {}
     for trial in result["trials"]:
+        trial_id = str(trial["trial"])
+        context = _trial_projection_context(
+            resolver=resolver,
+            plan_trial=plan_trials.get(trial_id),
+            result_trial=trial,
+        )
+        contexts[trial_id] = context
+        base_counts[context[0]] = base_counts.get(context[0], 0) + 1
+
+    rows: list[dict[str, object]] = []
+    comparisons_by_stage: dict[str, dict[str, object]] = {}
+    for trial in result["trials"]:
+        trial_id = str(trial["trial"])
+        base_label, architecture_id, model_id = contexts[trial_id]
+        trial_label = (
+            base_label
+            if base_counts[base_label] == 1
+            else f"{base_label} · {trial_id}"
+        )
         training = trial["training"]
         if training is not None:
             rows.append(
                 {
-                    "trial": trial["trial"],
+                    "trial": trial_id,
+                    "trial_label": trial_label,
+                    "architecture": architecture_id,
+                    "model": model_id,
                     "kind": "training",
                     "stage": "training",
                     "coordinate": None,
@@ -221,6 +324,7 @@ def _study_summary_projection(
         for evaluation in trial["evaluations"]:
             metrics: dict[str, object] = {}
             result_id = evaluation["result"]
+            evaluation_model = model_id
             if evaluation["disposition"] == "completed" and result_id is not None:
                 try:
                     document = resolver.resolve(
@@ -230,26 +334,51 @@ def _study_summary_projection(
                 except (FileNotFoundError, ValueError):
                     document = None
                 if isinstance(document, Mapping):
+                    if type(document.get("model")) is str:
+                        evaluation_model = str(document["model"])
                     payload = document.get("result")
                     if isinstance(payload, Mapping) and isinstance(payload.get("metrics"), Mapping):
                         metrics = copy.deepcopy(dict(payload["metrics"]))
-            rows.append(
+            stage = str(evaluation["stage"])
+            row = {
+                "trial": trial_id,
+                "trial_label": trial_label,
+                "architecture": architecture_id,
+                "model": evaluation_model,
+                "kind": "evaluation",
+                "stage": stage,
+                "coordinate": evaluation["coordinate"],
+                "disposition": evaluation["disposition"],
+                "result": result_id,
+                "metrics": metrics,
+            }
+            rows.append(row)
+
+            comparison = comparisons_by_stage.setdefault(
+                stage,
+                {"stage": stage, "metrics": [], "rows": []},
+            )
+            metric_names = cast(list[str], comparison["metrics"])
+            for metric in metrics:
+                if type(metric) is str and metric not in metric_names:
+                    metric_names.append(metric)
+            cast(list[dict[str, object]], comparison["rows"]).append(
                 {
-                    "trial": trial["trial"],
-                    "kind": "evaluation",
-                    "stage": evaluation["stage"],
-                    "coordinate": evaluation["coordinate"],
+                    "trial": trial_id,
+                    "trial_label": trial_label,
+                    "architecture": architecture_id,
+                    "model": evaluation_model,
                     "disposition": evaluation["disposition"],
-                    "result": result_id,
-                    "metrics": metrics,
+                    "metrics": copy.deepcopy(metrics),
                 }
             )
     return {
-        "schema": "mjtensu.mldb-v2/study-summary-projection/v1",
+        "schema": "mjtensu.mldb-v2/study-summary-projection/v2",
         "study_result": result["id"],
         "study": result["study"],
         "status": result["status"],
         "rows": rows,
+        "comparisons": list(comparisons_by_stage.values()),
     }
 
 

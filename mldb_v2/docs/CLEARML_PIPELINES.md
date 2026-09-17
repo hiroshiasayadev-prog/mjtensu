@@ -76,7 +76,9 @@ Pipeline Run: shufflenet-spatial-screen-v1 / run-...
   deployment      4/4
 ```
 
-Opening a child node shows detailed Task telemetry/artifacts/logs. The Pipeline/controller summary may mirror only the small set of values useful for Study-level comparison.
+Opening a child node shows detailed Task telemetry/artifacts/logs. Training curves and dense Evaluation diagnostics stay on those child Tasks.
+
+For multi-Model Evaluation, MLDB builds a Study-level comparison projection from accepted canonical Evaluation Results. The ClearML controller renders one compact comparison table per Evaluation stage, with readable trial labels derived from Model/Architecture lineage. Do not mirror every trial-metric pair as a controller single-value scalar; that produces one meaningless one-bar chart per value and does not scale. Immutable `trial-XXXX` / evaluation-coordinate identities remain in metadata and canonical records even when the UI label is human-readable.
 
 ## 6. Retry, cache, and rerun policy
 

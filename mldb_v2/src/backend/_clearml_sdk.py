@@ -255,6 +255,81 @@ def _local_runtime_root(settings: ClearMLSDKSettings) -> Path | None:
     return path if path.is_absolute() else repository_root / path
 
 
+def _local_pinned_data_root(settings: ClearMLSDKSettings) -> Path | None:
+    if settings.local_repository_root is None:
+        return None
+    repository_root = Path(settings.local_repository_root).resolve()
+    path = Path(settings.pinned_data_root)
+    return path if path.is_absolute() else repository_root / path
+
+
+def _local_reference_name(reference: object) -> str:
+    text = str(reference)
+    return text.split("/", 1)[1] if "/" in text else text
+
+
+def _pipeline_trial_labels(
+    settings: ClearMLSDKSettings,
+    plan: Mapping[str, object],
+) -> dict[str, str]:
+    root = _local_pinned_data_root(settings)
+    resolver = CanonicalRepositoryResolver(root) if root is not None else None
+    raw_trials = plan.get("trials")
+    if type(raw_trials) is not list:
+        return {}
+    base_labels: dict[str, str] = {}
+    for raw_trial in raw_trials:
+        if type(raw_trial) is not dict or type(raw_trial.get("trial")) is not str:
+            continue
+        trial_id = str(raw_trial["trial"])
+        source = raw_trial.get("source")
+        architecture_id: str | None = None
+        fallback: str = trial_id
+        if isinstance(source, Mapping) and source.get("kind") == "training":
+            if type(source.get("architecture")) is str:
+                architecture_id = str(source["architecture"])
+                fallback = _local_reference_name(architecture_id)
+        elif isinstance(source, Mapping) and source.get("kind") == "existing_model":
+            if type(source.get("model")) is str:
+                model_id = str(source["model"])
+                fallback = _local_reference_name(model_id)
+                if resolver is not None:
+                    try:
+                        model = resolver.resolve(kind=EntityKind.MODEL, entity_id=model_id)
+                        training_result_id = model.get("training_result")
+                        if type(training_result_id) is str:
+                            training_result = resolver.resolve(
+                                kind=EntityKind.TRAINING_RESULT,
+                                entity_id=training_result_id,
+                            )
+                            if type(training_result.get("architecture")) is str:
+                                architecture_id = str(training_result["architecture"])
+                    except (FileNotFoundError, ValueError):
+                        pass
+        label = fallback
+        if architecture_id is not None and resolver is not None:
+            try:
+                architecture = resolver.resolve(
+                    kind=EntityKind.ARCHITECTURE,
+                    entity_id=architecture_id,
+                )
+                if type(architecture.get("name")) is str and architecture["name"]:
+                    label = str(architecture["name"])
+                else:
+                    label = _local_reference_name(architecture_id)
+            except (FileNotFoundError, ValueError):
+                label = _local_reference_name(architecture_id)
+        base_labels[trial_id] = label
+
+    counts: dict[str, int] = {}
+    for label in base_labels.values():
+        counts[label] = counts.get(label, 0) + 1
+    return {
+        trial: label if counts[label] == 1 else f"{label} · {trial}"
+        for trial, label in base_labels.items()
+    }
+
+
 def _build_runtime_snapshots(
     settings: ClearMLSDKSettings, stage_input: Mapping[str, object]
 ) -> dict[str, object] | None:
@@ -541,23 +616,58 @@ def _cancellation_state(status: str) -> ClearMLCancellationState:
     return ClearMLCancellationState.TERMINAL
 
 
-def _native_pipeline_dag(topology: Mapping[str, object], *, queue: str | None) -> dict[str, object]:
+def _native_pipeline_dag(
+    topology: Mapping[str, object],
+    *,
+    queue: str | None,
+    trial_labels: Mapping[str, str] | None = None,
+) -> dict[str, object]:
     raw_steps = topology.get("steps")
     if type(raw_steps) is not list:
         raise ClearMLSDKError("MLDB Pipeline topology steps are malformed")
-    Node = _load_pipeline_controller_class().Node
-    dag: dict[str, object] = {}
+    labels = dict(trial_labels or {})
+    prepared: list[dict[str, object]] = []
+    display_names: dict[str, str] = {}
+    used_display_names: set[str] = set()
     for raw in raw_steps:
         if type(raw) is not dict:
             raise ClearMLSDKError("MLDB Pipeline topology step is malformed")
         name = raw.get("name")
         parents = raw.get("parents")
         stage = raw.get("stage")
-        if type(name) is not str or not name or type(parents) is not list or type(stage) is not str:
+        trial = raw.get("trial")
+        kind = raw.get("kind")
+        coordinate = raw.get("coordinate")
+        if (
+            type(name) is not str
+            or not name
+            or type(parents) is not list
+            or type(stage) is not str
+            or type(trial) is not str
+            or type(kind) is not str
+        ):
             raise ClearMLSDKError("MLDB Pipeline topology step fields are malformed")
+        suffix = "training" if kind == "training" else stage
+        display = f"{labels.get(trial, trial)} | {suffix}"
+        if display in used_display_names:
+            extra = coordinate if type(coordinate) is str else name
+            display = f"{display} · {extra}"
+        used_display_names.add(display)
+        display_names[name] = display
+        prepared.append(raw)
+
+    Node = _load_pipeline_controller_class().Node
+    dag: dict[str, object] = {}
+    for raw in prepared:
+        logical_name = cast(str, raw["name"])
+        parents = cast(list[object], raw["parents"])
+        stage = cast(str, raw["stage"])
+        trial = cast(str, raw["trial"])
+        display_name = display_names[logical_name]
+        translated_parents = [display_names[str(parent)] for parent in parents]
         node = Node(
-            name=name,
-            parents=list(parents),
+            name=display_name,
+            parents=translated_parents,
             queue=queue,
             cache_executed_step=False,
             stage=stage,
@@ -568,8 +678,26 @@ def _native_pipeline_dag(topology: Mapping[str, object], *, queue: str | None) -
             if key not in {"job", "name", "task_factory_func"}
         }
         serialized["job_id"] = node.executed or (node.job.task_id() if node.job else None)
-        dag[name] = serialized
+        serialized["mldb.logical_step"] = logical_name
+        serialized["mldb.trial"] = trial
+        dag[display_name] = serialized
     return dag
+
+
+def _native_pipeline_node(
+    native: Mapping[str, object], logical_step: str
+) -> dict[str, object] | None:
+    direct = native.get(logical_step)
+    if type(direct) is dict:
+        return direct
+    matches = [
+        raw
+        for raw in native.values()
+        if type(raw) is dict and raw.get("mldb.logical_step") == logical_step
+    ]
+    if len(matches) > 1:
+        raise ClearMLSDKError("ClearML Pipeline logical step is ambiguous")
+    return matches[0] if matches else None
 
 
 class ClearMLSDKAdapter:
@@ -800,9 +928,16 @@ class ClearMLSDKAdapter:
             name=_PIPELINE_CONFIG,
             config_dict=dict(request.configuration),
         )
+        plan_config = request.configuration.get("mldb.plan")
+        trial_labels = (
+            _pipeline_trial_labels(self._settings, plan_config)
+            if isinstance(plan_config, Mapping)
+            else {}
+        )
         native_dag = _native_pipeline_dag(
             topology,
             queue=self._settings.step_queue,
+            trial_labels=trial_labels,
         )
         _set_native_pipeline_configuration(task, native_dag)
         version = "1.0.0"
@@ -869,8 +1004,8 @@ class ClearMLSDKAdapter:
                 step = f"{trial}-{coordinate}"
             else:
                 continue
-            node = native.get(step)
-            if type(node) is not dict:
+            node = _native_pipeline_node(native, step)
+            if node is None:
                 continue
             executed = node.get("executed")
             if type(executed) is str and executed and node.get("job_id") != executed:
@@ -1029,7 +1164,7 @@ class ClearMLSDKAdapter:
         except Exception:
             return
 
-    def _project_pipeline_summary_scalars(
+    def _project_pipeline_summary_tables(
         self,
         *,
         task: object,
@@ -1042,33 +1177,49 @@ class ClearMLSDKAdapter:
             logger = get_logger()
         except Exception:
             return
-        report_single_value = getattr(logger, "report_single_value", None)
-        if not callable(report_single_value):
+        report_table = getattr(logger, "report_table", None)
+        if not callable(report_table):
             return
-        rows = summary.get("rows")
-        if type(rows) is not list:
+        comparisons = summary.get("comparisons")
+        if type(comparisons) is not list:
             return
-        for row in rows:
-            if type(row) is not dict:
+        for comparison in comparisons:
+            if type(comparison) is not dict:
                 continue
-            trial = row.get("trial")
-            stage = row.get("stage")
-            metrics = row.get("metrics")
-            if type(trial) is not str or type(stage) is not str or not isinstance(metrics, Mapping):
+            stage = comparison.get("stage")
+            metric_names = comparison.get("metrics")
+            rows = comparison.get("rows")
+            if type(stage) is not str or type(metric_names) is not list or type(rows) is not list:
                 continue
-            for metric, value in metrics.items():
-                if type(metric) is not str or type(value) not in {int, float}:
+            metrics = [name for name in metric_names if type(name) is str]
+            table: list[list[object]] = [["Trial", "Status", *metrics]]
+            for row in rows:
+                if type(row) is not dict:
                     continue
-                numeric = float(value)
-                if not math.isfinite(numeric):
+                trial = row.get("trial_label") or row.get("trial")
+                disposition = row.get("disposition")
+                values = row.get("metrics")
+                if type(trial) is not str or type(disposition) is not str or not isinstance(values, Mapping):
                     continue
-                try:
-                    report_single_value(
-                        name=f"{trial}/{stage}/{metric}",
-                        value=numeric,
-                    )
-                except Exception:
-                    continue
+                rendered: list[object] = [trial, disposition]
+                for metric in metrics:
+                    value = values.get(metric, "")
+                    if type(value) in {int, float}:
+                        numeric = float(value)
+                        value = numeric if math.isfinite(numeric) else ""
+                    rendered.append(value)
+                table.append(rendered)
+            if len(table) == 1:
+                continue
+            try:
+                report_table(
+                    title="Study Comparison",
+                    series=stage,
+                    iteration=0,
+                    table_plot=table,
+                )
+            except Exception:
+                continue
 
     def project_pipeline_summary(
         self,
@@ -1084,7 +1235,7 @@ class ClearMLSDKAdapter:
                 name=_PIPELINE_SUMMARY_CONFIG,
                 config_dict=payload,
             )
-        self._project_pipeline_summary_scalars(task=task, summary=payload)
+        self._project_pipeline_summary_tables(task=task, summary=payload)
         self._sync_pipeline_node_statuses(pipeline=task, summary=payload)
         self._project_pipeline_execution_views(task=task)
 
@@ -1145,8 +1296,8 @@ class ClearMLSDKAdapter:
         native = _configuration(pipeline, _NATIVE_PIPELINE_CONFIG)
         if native is None:
             raise ClearMLSDKError("ClearML Pipeline native DAG configuration is missing")
-        node = native.get(pipeline_step)
-        if type(node) is not dict:
+        node = _native_pipeline_node(native, pipeline_step)
+        if node is None:
             raise ClearMLSDKError("ClearML Pipeline step does not exist in native DAG")
         existing = node.get("executed")
         if existing is not None and existing != task_id:

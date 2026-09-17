@@ -354,10 +354,15 @@ def test_sdk_adapter_creates_native_controller_task_without_enqueuing_children()
     assert "pipeline" in task.system_tags
     assert "Pipeline" in task.configs
     native = task.configs["Pipeline"]
-    assert native["trial-0001-train"]["stage"] == "training"
-    assert native["trial-0001-eval-0001"]["parents"] == ["trial-0001-train"]
-    assert native["trial-0001-eval-0002"]["cache_executed_step"] is False
-    assert native["trial-0001-train"]["job_id"] is None
+    training_node = native["arch-v1 | training"]
+    quality_node = native["arch-v1 | quality"]
+    deployment_node = native["arch-v1 | deployment"]
+    assert training_node["stage"] == "training"
+    assert training_node["mldb.logical_step"] == "trial-0001-train"
+    assert quality_node["parents"] == ["arch-v1 | training"]
+    assert quality_node["mldb.logical_step"] == "trial-0001-eval-0001"
+    assert deployment_node["cache_executed_step"] is False
+    assert training_node["job_id"] is None
     assert task.raw_configs["Pipeline"]["type"] == "dictionary"
     assert task.raw_configs["Pipeline"]["value"].lstrip().startswith("{")
     assert json.loads(task.raw_configs["Pipeline"]["value"]) == native
@@ -379,18 +384,30 @@ def test_sdk_adapter_creates_native_controller_task_without_enqueuing_children()
     assert [record.task_id for record in legacy_found] == ["sdk-pipeline-1"]
 
 
-def test_sdk_adapter_projects_bounded_study_summary_config_and_scalars() -> None:
+def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion() -> None:
     FakeSDKTask.reset()
     plan = _plan()
     result = _result(plan)
     adapter = ClearMLSDKAdapter(ClearMLSDKSettings(), task_class=FakeSDKTask)
     pipeline_id = cast(str, adapter.create_pipeline_run(_pipeline_request(plan, result)))
     summary = {
-        "schema": "mjtensu.mldb-v2/study-summary-projection/v1",
+        "schema": "mjtensu.mldb-v2/study-summary-projection/v2",
         "study_result": result["id"],
         "study": result["study"],
         "status": "submitted",
-        "rows": [{"trial": "trial-0001", "stage": "quality", "metrics": {"accuracy": 0.9}}],
+        "rows": [{
+            "trial": "trial-0001", "trial_label": "Readable model", "kind": "evaluation",
+            "stage": "quality", "coordinate": "eval-0001", "disposition": "completed",
+            "result": "demo/eval-result", "metrics": {"accuracy": 0.9},
+        }],
+        "comparisons": [{
+            "stage": "quality",
+            "metrics": ["accuracy"],
+            "rows": [{
+                "trial": "trial-0001", "trial_label": "Readable model",
+                "disposition": "completed", "metrics": {"accuracy": 0.9},
+            }],
+        }],
     }
 
     adapter.project_pipeline_summary(execution_id=pipeline_id, summary=summary)
@@ -399,15 +416,22 @@ def test_sdk_adapter_projects_bounded_study_summary_config_and_scalars() -> None
     assert controller is not None
     assert controller.configs["mldb.study_summary"] == summary
     assert controller.uploads == []
-    assert controller.single_values == {"trial-0001/quality/accuracy": 0.9}
+    assert controller.single_values == {}
+    comparison = next(
+        report for report in controller.table_reports
+        if report["title"] == "Study Comparison"
+    )
+    assert comparison["series"] == "quality"
+    assert comparison["table_plot"] == [
+        ["Trial", "Status", "accuracy"],
+        ["Readable model", "completed", 0.9],
+    ]
     assert controller.plotly_reports[-1]["title"] == "Pipeline"
     assert controller.plotly_reports[-1]["series"] == "Execution Flow"
-    assert controller.table_reports[-1]["title"] == "Pipeline Details"
-    assert controller.table_reports[-1]["series"] == "Execution Details"
     assert controller.status == "in_progress"
 
 
-def test_pipeline_summary_scalar_failure_is_observational() -> None:
+def test_pipeline_summary_table_failure_is_observational() -> None:
     FakeSDKTask.reset()
     plan = _plan()
     result = _result(plan)
@@ -416,16 +440,24 @@ def test_pipeline_summary_scalar_failure_is_observational() -> None:
     controller = FakeSDKTask.get_task(task_id=pipeline_id)
     assert controller is not None
 
-    def fail_report(name: str, value: float) -> None:
+    def fail_report(**kwargs) -> None:
         raise RuntimeError("metrics backend unavailable")
 
-    controller.report_single_value = fail_report  # type: ignore[method-assign]
+    controller.report_table = fail_report  # type: ignore[method-assign]
     summary = {
-        "schema": "mjtensu.mldb-v2/study-summary-projection/v1",
+        "schema": "mjtensu.mldb-v2/study-summary-projection/v2",
         "study_result": result["id"],
         "study": result["study"],
         "status": "submitted",
-        "rows": [{"trial": "trial-0001", "stage": "quality", "metrics": {"accuracy": 0.9}}],
+        "rows": [],
+        "comparisons": [{
+            "stage": "quality",
+            "metrics": ["accuracy"],
+            "rows": [{
+                "trial": "trial-0001", "trial_label": "Readable model",
+                "disposition": "completed", "metrics": {"accuracy": 0.9},
+            }],
+        }],
     }
 
     adapter.project_pipeline_summary(execution_id=pipeline_id, summary=summary)
@@ -488,29 +520,31 @@ def test_ready_child_is_bound_to_pipeline_before_queue_and_replay_is_idempotent(
     assert f"pipe:{pipeline_id}" in child.tags
     assert child.properties["mldb.pipeline_execution"] == pipeline_id
     assert child.properties["mldb.pipeline_step"] == "trial-0001-train"
-    node = controller.configs["Pipeline"]["trial-0001-train"]
+    node = controller.configs["Pipeline"]["arch-v1 | training"]
     assert node["executed"] == child.id
     assert node["job_id"] == child.id
 
     pending_summary = {
-        "schema": "mjtensu.mldb-v2/study-summary-projection/v1",
+        "schema": "mjtensu.mldb-v2/study-summary-projection/v2",
         "study_result": result["id"],
         "study": result["study"],
         "status": "submitted",
         "rows": [{
-            "trial": "trial-0001", "kind": "training", "stage": "training",
-            "coordinate": None, "disposition": "pending", "result": None, "metrics": {},
+            "trial": "trial-0001", "trial_label": "arch-v1", "kind": "training",
+            "stage": "training", "coordinate": None, "disposition": "pending",
+            "result": None, "metrics": {},
         }],
+        "comparisons": [],
     }
     adapter.project_pipeline_summary(execution_id=pipeline_id, summary=pending_summary)
-    assert controller.configs["Pipeline"]["trial-0001-train"]["status"] == "queued"
+    assert controller.configs["Pipeline"]["arch-v1 | training"]["status"] == "queued"
 
     child.status = "in_progress"
     adapter.project_pipeline_summary(execution_id=pipeline_id, summary=pending_summary)
-    assert controller.configs["Pipeline"]["trial-0001-train"]["status"] == "running"
+    assert controller.configs["Pipeline"]["arch-v1 | training"]["status"] == "running"
 
     completed_summary = deepcopy(pending_summary)
     completed_summary["rows"][0]["disposition"] = "completed"
     completed_summary["rows"][0]["result"] = "demo/training-result-v1"
     adapter.project_pipeline_summary(execution_id=pipeline_id, summary=completed_summary)
-    assert controller.configs["Pipeline"]["trial-0001-train"]["status"] == "completed"
+    assert controller.configs["Pipeline"]["arch-v1 | training"]["status"] == "completed"

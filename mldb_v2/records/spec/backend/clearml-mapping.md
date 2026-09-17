@@ -42,9 +42,9 @@ Existing-Model trials may expose their Evaluation nodes immediately after MLDB v
 
 The Pipeline Run is the primary ClearML UI entrypoint for one MLDB Study Result. Child Tasks SHOULD be grouped into stable Pipeline stages suitable for human navigation, for example `training`, named Evaluation groups, and deployment/diagnostic groups when the Study contains them.
 
-Selected child metrics/artifacts/models MAY be mirrored to the Pipeline/controller Task for Study-level comparison. Such mirroring is presentation only and MUST NOT create a second formal metric authority.
+Selected child metrics/artifacts/models MAY be mirrored to the Pipeline/controller Task for Study-level comparison. When the same Evaluation stage is applied to multiple trial Models, MLDB SHOULD aggregate the accepted canonical Evaluation metrics by stage into a bounded comparison projection, and the ClearML adapter SHOULD render that projection as one comparison table per Evaluation stage rather than one controller scalar/chart per trial-metric pair. Detailed per-trial telemetry remains on the child Evaluation Tasks. Such mirroring is presentation only and MUST NOT create a second formal metric authority.
 
-Task and Pipeline names are human-readable presentation and MUST NOT be parsed as identity.
+Pipeline trial/step labels SHOULD use human-readable Model/Architecture lineage when available while retaining the immutable MLDB trial/coordinate identity in metadata. Task and Pipeline names are presentation only and MUST NOT be parsed as identity.
 
 ## Required metadata
 
