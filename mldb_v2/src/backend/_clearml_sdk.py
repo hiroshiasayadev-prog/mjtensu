@@ -845,6 +845,13 @@ class ClearMLSDKAdapter:
         if child_meta.get("mldb.study_result") != pipeline_meta.get("mldb.study_result"):
             raise ClearMLSDKError("ClearML child Task and Pipeline StudyResult do not match")
 
+        projected_pipeline = child_meta.get("mldb.pipeline_execution")
+        projected_step = child_meta.get("mldb.pipeline_step")
+        if projected_pipeline not in {None, pipeline_execution_id}:
+            raise ClearMLSDKError("ClearML child Task Pipeline identity does not match")
+        if projected_step not in {None, pipeline_step}:
+            raise ClearMLSDKError("ClearML child Task Pipeline step does not match")
+
         native = _configuration(pipeline, _NATIVE_PIPELINE_CONFIG)
         if native is None:
             raise ClearMLSDKError("ClearML Pipeline native DAG configuration is missing")
@@ -854,11 +861,23 @@ class ClearMLSDKAdapter:
         existing = node.get("executed")
         if existing is not None and existing != task_id:
             raise ClearMLSDKError("ClearML Pipeline step is already bound to another Task")
-        node["executed"] = task_id
-        pipeline.set_configuration_object(
-            name=_NATIVE_PIPELINE_CONFIG,
-            config_dict=native,
-        )
+
+        child_data = getattr(child, "data", None)
+        parent = getattr(child_data, "parent", None)
+        if parent is None:
+            parent = getattr(child, "parent", None)
+        if parent == pipeline_execution_id:
+            if existing != task_id:
+                node["executed"] = task_id
+                pipeline.set_configuration_object(
+                    name=_NATIVE_PIPELINE_CONFIG,
+                    config_dict=native,
+                )
+            return
+        if parent not in {None, ""}:
+            raise ClearMLSDKError("ClearML child Task is already bound to another parent")
+        if _status(child) not in {"created", "in_progress"}:
+            raise ClearMLSDKError("ClearML unbound child Task is no longer mutable")
 
         set_parent = getattr(child, "set_parent", None)
         if not callable(set_parent):
@@ -872,6 +891,11 @@ class ClearMLSDKAdapter:
             if pipeline_tag not in tags:
                 tags.append(pipeline_tag)
                 set_tags(tags)
+        node["executed"] = task_id
+        pipeline.set_configuration_object(
+            name=_NATIVE_PIPELINE_CONFIG,
+            config_dict=native,
+        )
 
     def create_task(self, request: ClearMLCreateRequest) -> str | None:
         stage_input = _restore_stage_input(request.launch.stage_input_json)

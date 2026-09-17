@@ -250,6 +250,8 @@ class FakeSDKTask:
         return list(self.tags)
 
     def set_parent(self, parent) -> None:
+        if self.status not in {"created", "in_progress"}:
+            raise ValueError("queued Task parent is immutable")
         self.parent = str(parent)
 
     def set_parameters_as_dict(self, value) -> None:
