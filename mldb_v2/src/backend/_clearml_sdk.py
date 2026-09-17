@@ -930,9 +930,20 @@ class ClearMLSDKAdapter:
 
             index = {name: i for i, name in enumerate(ordered)}
             labels: list[str] = []
+            colors: list[str] = []
             sources: list[int] = []
             targets: list[int] = []
             values: list[int] = []
+            color_lookup = {
+                "failed": "red",
+                "cached": "darkslateblue",
+                "completed": "blue",
+                "aborted": "royalblue",
+                "queued": "#bdf5bd",
+                "running": "green",
+                "skipped": "gray",
+                "pending": "lightsteelblue",
+            }
             table = [["Pipeline Step", "Task ID", "Status", "Stage", "Parents"]]
             for name in ordered:
                 raw = cast(dict[str, object], native[name])
@@ -940,7 +951,8 @@ class ClearMLSDKAdapter:
                 stage = str(raw.get("stage") or "")
                 task_id = str(raw.get("job_id") or raw.get("executed") or "")
                 parents = [str(parent) for parent in (raw.get("parents") or [])]
-                labels.append(f"{name}<br />{status}")
+                labels.append(f"{name}<br />")
+                colors.append(color_lookup.get(status, ""))
                 for parent in parents:
                     sources.append(index[parent])
                     targets.append(index[name])
@@ -949,15 +961,20 @@ class ClearMLSDKAdapter:
 
             linked = set(sources) | set(targets)
             flow = {
-                "type": "sankey",
-                "orientation": "h",
-                "node": {"label": labels, "hovertemplate": "%{label}<extra></extra>"},
                 "link": {
                     "source": sources,
                     "target": targets,
                     "value": values,
                     "hovertemplate": "<extra></extra>",
                 },
+                "node": {
+                    "label": labels,
+                    "color": colors,
+                    "hovertemplate": "%{label}<extra></extra>",
+                },
+                "textfont": {"color": "rgba(0,0,0,0)", "size": 1},
+                "type": "sankey",
+                "orientation": "h",
             }
             data: list[dict[str, object]] = [flow]
             singles = [i for i in range(len(ordered)) if i not in linked]
@@ -981,7 +998,6 @@ class ClearMLSDKAdapter:
                 figure={
                     "data": data,
                     "layout": {
-                        "hovermode": "closest",
                         "xaxis": {"visible": False},
                         "yaxis": {"visible": False},
                     },
