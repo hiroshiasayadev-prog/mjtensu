@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from pathlib import Path
 from typing import cast
@@ -201,6 +202,7 @@ class FakeSDKTask:
         self.system_tags: list[str] = []
         self.properties: dict[str, str] = {}
         self.configs: dict[str, dict[str, object]] = {}
+        self.raw_configs: dict[str, dict[str, str]] = {}
         self.packages: list[str] = []
         self.parameters: dict[str, object] = {}
         self.runtime_properties: dict[str, object] = {}
@@ -278,6 +280,10 @@ class FakeSDKTask:
     def set_configuration_object(self, *, name, config_dict) -> None:
         self.configs[name] = deepcopy(config_dict)
 
+    def _set_configuration(self, *, name, config_type, config_text) -> None:
+        self.raw_configs[name] = {"type": config_type, "value": config_text}
+        self.configs[name] = json.loads(config_text)
+
     def get_configuration_object_as_dict(self, name):
         value = self.configs.get(name)
         return deepcopy(value) if value is not None else None
@@ -352,6 +358,9 @@ def test_sdk_adapter_creates_native_controller_task_without_enqueuing_children()
     assert native["trial-0001-eval-0001"]["parents"] == ["trial-0001-train"]
     assert native["trial-0001-eval-0002"]["cache_executed_step"] is False
     assert native["trial-0001-train"]["job_id"] is None
+    assert task.raw_configs["Pipeline"]["type"] == "dictionary"
+    assert task.raw_configs["Pipeline"]["value"].lstrip().startswith("{")
+    assert json.loads(task.raw_configs["Pipeline"]["value"]) == native
     assert task.parameters["properties/version"] == "1.0.0"
     assert task.parameters["pipeline/add_pipeline_tags"] == "True"
     assert task.runtime_properties["version"] == "1.0.0"

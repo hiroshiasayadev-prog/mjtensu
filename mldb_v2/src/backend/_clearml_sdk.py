@@ -478,6 +478,29 @@ def _configuration(task: object, name: str) -> dict[str, object] | None:
     return normalized
 
 
+def _set_native_pipeline_configuration(
+    task: object, dag: Mapping[str, object]
+) -> None:
+    payload = json.dumps(
+        dict(dag),
+        indent=2,
+        ensure_ascii=False,
+        allow_nan=False,
+    )
+    native_setter = getattr(task, "_set_configuration", None)
+    if callable(native_setter):
+        native_setter(
+            name=_NATIVE_PIPELINE_CONFIG,
+            config_type="dictionary",
+            config_text=payload,
+        )
+        return
+    setter = getattr(task, "set_configuration_object", None)
+    if not callable(setter):
+        raise ClearMLSDKError("ClearML Task does not expose configuration mutation")
+    setter(name=_NATIVE_PIPELINE_CONFIG, config_dict=dict(dag))
+
+
 def _project_name(task: object) -> str | None:
     getter = getattr(task, "get_project_name", None)
     value = getter() if callable(getter) else None
@@ -781,10 +804,7 @@ class ClearMLSDKAdapter:
             topology,
             queue=self._settings.step_queue,
         )
-        task.set_configuration_object(
-            name=_NATIVE_PIPELINE_CONFIG,
-            config_dict=native_dag,
-        )
+        _set_native_pipeline_configuration(task, native_dag)
         version = "1.0.0"
         set_parameters = getattr(task, "set_parameters_as_dict", None)
         if callable(set_parameters):
@@ -890,10 +910,7 @@ class ClearMLSDKAdapter:
                 node["status"] = status
                 changed = True
         if changed:
-            pipeline.set_configuration_object(
-                name=_NATIVE_PIPELINE_CONFIG,
-                config_dict=native,
-            )
+            _set_native_pipeline_configuration(pipeline, native)
 
     def _project_pipeline_execution_views(self, *, task: object) -> None:
         """Best-effort native ClearML Pipeline flow/table projection."""
@@ -1143,10 +1160,7 @@ class ClearMLSDKAdapter:
             if existing != task_id or node.get("job_id") != task_id:
                 node["executed"] = task_id
                 node["job_id"] = task_id
-                pipeline.set_configuration_object(
-                    name=_NATIVE_PIPELINE_CONFIG,
-                    config_dict=native,
-                )
+                _set_native_pipeline_configuration(pipeline, native)
             return
         if parent not in {None, ""}:
             raise ClearMLSDKError("ClearML child Task is already bound to another parent")
@@ -1167,10 +1181,7 @@ class ClearMLSDKAdapter:
                 set_tags(tags)
         node["executed"] = task_id
         node["job_id"] = task_id
-        pipeline.set_configuration_object(
-            name=_NATIVE_PIPELINE_CONFIG,
-            config_dict=native,
-        )
+        _set_native_pipeline_configuration(pipeline, native)
 
     def create_task(self, request: ClearMLCreateRequest) -> str | None:
         stage_input = _restore_stage_input(request.launch.stage_input_json)
