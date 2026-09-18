@@ -378,7 +378,7 @@ def _pipeline_trial_labels(
     for label in base_labels.values():
         counts[label] = counts.get(label, 0) + 1
     return {
-        trial: label if counts[label] == 1 else f"{label} ﾂｷ {trial}"
+        trial: label if counts[label] == 1 else f"{label} ・ゑｽｷ {trial}"
         for trial, label in base_labels.items()
     }
 
@@ -706,7 +706,7 @@ def _native_pipeline_dag(
         display = f"{labels.get(trial, trial)} | {suffix}"
         if display in used_display_names:
             extra = coordinate if type(coordinate) is str else name
-            display = f"{display} ﾂｷ {extra}"
+            display = f"{display} ・ゑｽｷ {extra}"
         used_display_names.add(display)
         display_names[name] = display
         prepared.append(raw)
@@ -793,90 +793,95 @@ def _comparison_bar_figure(
     *,
     stage: str,
     evaluation_name: str | None,
-    metric_names: Sequence[str],
-    metric_preferences: Mapping[str, str] | None,
+    metric_name: str,
+    metric_preference: str,
     rows: Sequence[Mapping[str, object]],
 ) -> dict[str, object] | None:
-    metrics = [name for name in metric_names if type(name) is str]
-    if not metrics:
+    if type(metric_name) is not str or not metric_name:
         return None
 
     labels: list[str] = []
-    row_metrics: list[Mapping[str, object]] = []
+    values: list[float | None] = []
     for row in rows:
         trial = row.get("trial_label") or row.get("trial")
-        values = row.get("metrics")
-        if type(trial) is not str or not isinstance(values, Mapping):
+        raw_metrics = row.get("metrics")
+        if type(trial) is not str or not isinstance(raw_metrics, Mapping):
             continue
+        value = raw_metrics.get(metric_name)
+        numeric: float | None = None
+        if type(value) in {int, float}:
+            candidate = float(value)
+            if math.isfinite(candidate):
+                numeric = candidate
         labels.append(trial)
-        row_metrics.append(values)
+        values.append(numeric)
 
-    data: list[dict[str, object]] = []
-    for metric_index, metric in enumerate(metrics):
-        values: list[float | None] = []
-        for raw_metrics in row_metrics:
-            value = raw_metrics.get(metric)
-            numeric: float | None = None
-            if type(value) in {int, float}:
-                candidate = float(value)
-                if math.isfinite(candidate):
-                    numeric = candidate
-            values.append(numeric)
-        trace: dict[str, object] = {
-            "type": "bar",
-            "orientation": "h",
-            "x": values,
-            "y": labels,
-            "visible": metric_index == 0,
-            "showlegend": False,
-            "name": metric,
-            "hovertemplate": f"%{{y}}<br>{metric}: %{{x:.6g}}<extra></extra>",
-        }
-        preference = (metric_preferences or {}).get(metric, "neutral")
-        colors = _comparison_rank_colors(values, preference=preference)
-        if colors is not None:
-            trace["marker"] = {"color": colors}
-        data.append(trace)
+    if not labels:
+        return None
+
+    preference = metric_preference if metric_preference in {"higher", "lower", "neutral"} else "neutral"
+    preference_label = {
+        "higher": "higher is better",
+        "lower": "lower is better",
+        "neutral": "neutral",
+    }[preference]
+    hover_preference = {
+        "higher": "higher is better",
+        "lower": "lower is better",
+        "neutral": "no preferred direction",
+    }[preference]
+    trace: dict[str, object] = {
+        "type": "bar",
+        "orientation": "h",
+        "x": values,
+        "y": labels,
+        "showlegend": False,
+        "name": metric_name,
+        "hovertemplate": (
+            f"%{{y}}<br>{metric_name}: %{{x:.6g}}<br>{hover_preference}<extra></extra>"
+        ),
+    }
+    colors = _comparison_rank_colors(values, preference=preference)
+    if colors is not None:
+        trace["marker"] = {"color": colors}
 
     title_prefix = evaluation_name or stage
-    buttons: list[dict[str, object]] = []
-    for selected, metric in enumerate(metrics):
-        buttons.append({
-            "label": metric,
-            "method": "update",
-            "args": [
-                {"visible": [index == selected for index in range(len(metrics))]},
-                {
-                    "title": {"text": f"{title_prefix} - {metric}"},
-                    "xaxis": {"title": {"text": metric}, "automargin": True},
-                },
-            ],
-        })
-
     layout: dict[str, object] = {
-        "title": {"text": f"{title_prefix} - {metrics[0]}"},
+        "title": {"text": f"{metric_name} ? {preference_label}"},
         "showlegend": False,
         "height": 320,
-        "margin": {"l": 80, "r": 30, "t": 90, "b": 50},
-        "xaxis": {"title": {"text": metrics[0]}, "automargin": True},
+        "margin": {"l": 80, "r": 30, "t": 70, "b": 50},
+        "hovermode": "closest",
+        "hoverlabel": {
+            "bgcolor": "#1F2937",
+            "bordercolor": "#6B7280",
+            "font": {"color": "#FFFFFF"},
+        },
+        "xaxis": {"title": {"text": metric_name}, "automargin": True},
         "yaxis": {
             "automargin": True,
             "categoryorder": "array",
             "categoryarray": list(reversed(labels)),
         },
-        "updatemenus": [{
-            "type": "dropdown",
-            "direction": "down",
-            "active": 0,
-            "showactive": True,
-            "x": 0,
-            "xanchor": "left",
-            "y": 1.16,
-            "yanchor": "top",
-            "buttons": buttons,
-        }],
+        "meta": {
+            "evaluation": stage,
+            "evaluation_name": title_prefix,
+            "metric": metric_name,
+            "preference": preference,
+        },
     }
-    return {"data": data, "layout": layout}
+    if preference in {"higher", "lower"}:
+        layout["annotations"] = [{
+            "xref": "paper",
+            "yref": "paper",
+            "x": 1,
+            "y": 1.08,
+            "xanchor": "right",
+            "yanchor": "bottom",
+            "showarrow": False,
+            "text": "Blue = better ? Red = worse",
+        }]
+    return {"data": [trace], "layout": layout}
 
 
 def _pipeline_evaluation_comment(comparisons: Sequence[object]) -> str | None:
@@ -1477,20 +1482,25 @@ class ClearMLSDKAdapter:
                     pass
 
             if callable(report_plotly):
-                figure = _comparison_bar_figure(
-                    stage=stage,
-                    evaluation_name=(
-                        evaluation_name if type(evaluation_name) is str else None
-                    ),
-                    metric_names=metrics,
-                    metric_preferences=preferences,
-                    rows=normalized_rows,
-                )
-                if figure is not None:
+                for metric in metrics:
+                    preference = preferences.get(metric, "neutral")
+                    figure = _comparison_bar_figure(
+                        stage=stage,
+                        evaluation_name=(
+                            evaluation_name if type(evaluation_name) is str else None
+                        ),
+                        metric_name=metric,
+                        metric_preference=(
+                            preference if type(preference) is str else "neutral"
+                        ),
+                        rows=normalized_rows,
+                    )
+                    if figure is None:
+                        continue
                     try:
                         report_plotly(
-                            title="Model Comparison",
-                            series=stage,
+                            title=f"Model Comparison - {stage}",
+                            series=metric,
                             iteration=0,
                             figure=figure,
                         )

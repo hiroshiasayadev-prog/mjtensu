@@ -405,32 +405,47 @@ def test_comparison_bar_colors_follow_metric_preference_without_reordering() -> 
         {"trial_label": "model-c", "metrics": {"accuracy": 0.80, "latency_ms": 2.0, "diagnostic": 3.0}},
         {"trial_label": "model-d", "metrics": {"accuracy": 0.60, "latency_ms": 3.0, "diagnostic": 4.0}},
     ]
-    figure = _comparison_bar_figure(
+    accuracy = _comparison_bar_figure(
         stage="quality",
         evaluation_name="Quality",
-        metric_names=["accuracy", "latency_ms", "diagnostic"],
-        metric_preferences={
-            "accuracy": "higher",
-            "latency_ms": "lower",
-            "diagnostic": "neutral",
-        },
+        metric_name="accuracy",
+        metric_preference="higher",
+        rows=rows,
+    )
+    latency = _comparison_bar_figure(
+        stage="quality",
+        evaluation_name="Quality",
+        metric_name="latency_ms",
+        metric_preference="lower",
+        rows=rows,
+    )
+    diagnostic = _comparison_bar_figure(
+        stage="quality",
+        evaluation_name="Quality",
+        metric_name="diagnostic",
+        metric_preference="neutral",
         rows=rows,
     )
 
-    assert figure is not None
-    accuracy, latency, diagnostic = figure["data"]
-    assert accuracy["y"] == ["model-a", "model-b", "model-c", "model-d"]
-    assert accuracy["marker"]["color"] == ["#2F6FED", "#F6B0B0", "#9CC7FF", "#D9534F"]
-    assert latency["marker"]["color"] == ["#D9534F", "#2F6FED", "#9CC7FF", "#F6B0B0"]
-    assert "marker" not in diagnostic
+    assert accuracy is not None and latency is not None and diagnostic is not None
+    assert accuracy["data"][0]["y"] == ["model-a", "model-b", "model-c", "model-d"]
+    assert accuracy["data"][0]["marker"]["color"] == ["#2F6FED", "#F6B0B0", "#9CC7FF", "#D9534F"]
+    assert latency["data"][0]["marker"]["color"] == ["#D9534F", "#2F6FED", "#9CC7FF", "#F6B0B0"]
+    assert "marker" not in diagnostic["data"][0]
+    assert accuracy["layout"]["title"]["text"] == "accuracy ? higher is better"
+    assert latency["layout"]["title"]["text"] == "latency_ms ? lower is better"
+    assert diagnostic["layout"]["title"]["text"] == "diagnostic ? neutral"
+    assert "updatemenus" not in accuracy["layout"]
+    assert accuracy["layout"]["hovermode"] == "closest"
+    assert accuracy["layout"]["hoverlabel"]["font"]["color"] == "#FFFFFF"
 
 
 def test_comparison_bar_ties_share_rank_color() -> None:
     figure = _comparison_bar_figure(
         stage="quality",
         evaluation_name=None,
-        metric_names=["score"],
-        metric_preferences={"score": "higher"},
+        metric_name="score",
+        metric_preference="higher",
         rows=[
             {"trial_label": "a", "metrics": {"score": 1.0}},
             {"trial_label": "b", "metrics": {"score": 1.0}},
@@ -520,25 +535,24 @@ def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion()
     ]
     assert comparison["extra_layout"] == {"height": 320}
 
-    bars = next(
+    bars = [
         report for report in controller.plotly_reports
-        if report["title"] == "Model Comparison"
-    )
-    assert bars["series"] == "quality"
-    figure = bars["figure"]
-    assert figure["layout"]["height"] == 320
-    assert "grid" not in figure["layout"]
-    assert [trace["name"] for trace in figure["data"]] == ["accuracy", "loss"]
-    assert [trace["visible"] for trace in figure["data"]] == [True, False]
-    assert figure["data"][0]["type"] == "bar"
-    assert figure["data"][0]["orientation"] == "h"
-    assert figure["data"][0]["x"] == [0.9]
-    assert figure["data"][0]["y"] == ["Readable model"]
-    assert figure["data"][1]["x"] == [0.2]
-    menu = figure["layout"]["updatemenus"][0]
-    assert menu["type"] == "dropdown"
-    assert [button["label"] for button in menu["buttons"]] == ["accuracy", "loss"]
-    assert menu["buttons"][1]["args"][0]["visible"] == [False, True]
+        if report["title"] == "Model Comparison - quality"
+    ]
+    assert [report["series"] for report in bars] == ["accuracy", "loss"]
+    accuracy_figure = bars[0]["figure"]
+    loss_figure = bars[1]["figure"]
+    assert accuracy_figure["layout"]["height"] == 320
+    assert "grid" not in accuracy_figure["layout"]
+    assert "updatemenus" not in accuracy_figure["layout"]
+    assert len(accuracy_figure["data"]) == 1
+    assert accuracy_figure["data"][0]["name"] == "accuracy"
+    assert accuracy_figure["data"][0]["type"] == "bar"
+    assert accuracy_figure["data"][0]["orientation"] == "h"
+    assert accuracy_figure["data"][0]["x"] == [0.9]
+    assert accuracy_figure["data"][0]["y"] == ["Readable model"]
+    assert loss_figure["data"][0]["name"] == "loss"
+    assert loss_figure["data"][0]["x"] == [0.2]
     assert not any(
         report["title"] == "Pipeline" and report["series"] == "Execution Flow"
         for report in controller.plotly_reports
