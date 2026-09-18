@@ -211,6 +211,7 @@ class FakeSDKTask:
         self.single_values: dict[str, float] = {}
         self.plotly_reports: list[dict[str, object]] = []
         self.table_reports: list[dict[str, object]] = []
+        self.comment = ""
 
     @classmethod
     def reset(cls) -> None:
@@ -307,6 +308,9 @@ class FakeSDKTask:
     def report_table(self, **kwargs) -> None:
         self.table_reports.append(deepcopy(kwargs))
 
+    def set_comment(self, comment: str) -> None:
+        self.comment = comment
+
     def get_project_name(self):
         return self.project
 
@@ -402,17 +406,17 @@ def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion()
             "evaluation_name": "Quality holdout",
             "evaluation_description": "Measures held-out classification quality.",
             "disposition": "completed",
-            "result": "demo/eval-result", "metrics": {"accuracy": 0.9},
+            "result": "demo/eval-result", "metrics": {"accuracy": 0.9, "loss": 0.2},
         }],
         "comparisons": [{
             "stage": "quality",
             "evaluation_protocol": "demo/eval-v1",
             "evaluation_name": "Quality holdout",
             "evaluation_description": "Measures held-out classification quality.",
-            "metrics": ["accuracy"],
+            "metrics": ["accuracy", "loss"],
             "rows": [{
                 "trial": "trial-0001", "trial_label": "Readable model",
-                "disposition": "completed", "metrics": {"accuracy": 0.9},
+                "disposition": "completed", "metrics": {"accuracy": 0.9, "loss": 0.2},
             }],
         }],
     }
@@ -425,20 +429,16 @@ def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion()
     assert controller.uploads == []
     assert controller.single_values == {}
 
-    guide = next(
-        report for report in controller.table_reports
-        if report["title"] == "Evaluation Guide"
+    assert not any(
+        report["title"] == "Evaluation Guide"
+        for report in controller.table_reports
     )
-    assert guide["series"] == "Definitions"
-    assert guide["table_plot"] == [
-        ["Evaluation", "Name", "Protocol", "Description"],
-        [
-            "quality",
-            "Quality holdout",
-            "demo/eval-v1",
-            "Measures held-out classification quality.",
-        ],
-    ]
+    assert controller.comment == (
+        "MLDB evaluation guide\n\n"
+        "quality - Quality holdout\n"
+        "Protocol: demo/eval-v1\n"
+        "Measures held-out classification quality."
+    )
 
     comparison = next(
         report for report in controller.table_reports
@@ -446,19 +446,30 @@ def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion()
     )
     assert comparison["series"] == "quality"
     assert comparison["table_plot"] == [
-        ["Trial", "Status", "accuracy"],
-        ["Readable model", "completed", 0.9],
+        ["Trial", "Status", "accuracy", "loss"],
+        ["Readable model", "completed", 0.9, 0.2],
     ]
+    assert comparison["extra_layout"] == {"height": 320}
 
     bars = next(
         report for report in controller.plotly_reports
         if report["title"] == "Model Comparison"
     )
     assert bars["series"] == "quality"
-    assert bars["figure"]["data"][0]["type"] == "bar"
-    assert bars["figure"]["data"][0]["orientation"] == "h"
-    assert bars["figure"]["data"][0]["x"] == [0.9]
-    assert bars["figure"]["data"][0]["y"] == ["Readable model"]
+    figure = bars["figure"]
+    assert figure["layout"]["height"] == 320
+    assert "grid" not in figure["layout"]
+    assert [trace["name"] for trace in figure["data"]] == ["accuracy", "loss"]
+    assert [trace["visible"] for trace in figure["data"]] == [True, False]
+    assert figure["data"][0]["type"] == "bar"
+    assert figure["data"][0]["orientation"] == "h"
+    assert figure["data"][0]["x"] == [0.9]
+    assert figure["data"][0]["y"] == ["Readable model"]
+    assert figure["data"][1]["x"] == [0.2]
+    menu = figure["layout"]["updatemenus"][0]
+    assert menu["type"] == "dropdown"
+    assert [button["label"] for button in menu["buttons"]] == ["accuracy", "loss"]
+    assert menu["buttons"][1]["args"][0]["visible"] == [False, True]
     assert not any(
         report["title"] == "Pipeline" and report["series"] == "Execution Flow"
         for report in controller.plotly_reports

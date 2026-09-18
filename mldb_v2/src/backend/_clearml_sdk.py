@@ -711,62 +711,100 @@ def _comparison_bar_figure(
     if not metrics:
         return None
 
-    columns = 1 if len(metrics) == 1 else 2
-    subplot_rows = int(math.ceil(len(metrics) / columns))
-    data: list[dict[str, object]] = []
-    layout: dict[str, object] = {
-        "title": {"text": evaluation_name or stage},
-        "grid": {
-            "rows": subplot_rows,
-            "columns": columns,
-            "pattern": "independent",
-            "roworder": "top to bottom",
-        },
-        "showlegend": False,
-        "height": max(420, 250 * subplot_rows),
-        "margin": {"l": 80, "r": 30, "t": 80, "b": 60},
-    }
+    labels: list[str] = []
+    row_metrics: list[Mapping[str, object]] = []
+    for row in rows:
+        trial = row.get("trial_label") or row.get("trial")
+        values = row.get("metrics")
+        if type(trial) is not str or not isinstance(values, Mapping):
+            continue
+        labels.append(trial)
+        row_metrics.append(values)
 
-    for metric_index, metric in enumerate(metrics, start=1):
-        labels: list[str] = []
+    data: list[dict[str, object]] = []
+    for metric_index, metric in enumerate(metrics):
         values: list[float | None] = []
-        for row in rows:
-            trial = row.get("trial_label") or row.get("trial")
-            raw_metrics = row.get("metrics")
-            if type(trial) is not str or not isinstance(raw_metrics, Mapping):
-                continue
+        for raw_metrics in row_metrics:
             value = raw_metrics.get(metric)
             numeric: float | None = None
             if type(value) in {int, float}:
                 candidate = float(value)
                 if math.isfinite(candidate):
                     numeric = candidate
-            labels.append(trial)
             values.append(numeric)
+        data.append({
+            "type": "bar",
+            "orientation": "h",
+            "x": values,
+            "y": labels,
+            "visible": metric_index == 0,
+            "showlegend": False,
+            "name": metric,
+            "hovertemplate": f"%{{y}}<br>{metric}: %{{x:.6g}}<extra></extra>",
+        })
 
-        axis_suffix = "" if metric_index == 1 else str(metric_index)
-        data.append(
-            {
-                "type": "bar",
-                "orientation": "h",
-                "x": values,
-                "y": labels,
-                "xaxis": f"x{axis_suffix}",
-                "yaxis": f"y{axis_suffix}",
-                "hovertemplate": f"%{{y}}<br>{metric}: %{{x:.6g}}<extra></extra>",
-            }
-        )
-        layout[f"xaxis{axis_suffix}"] = {
-            "title": {"text": metric},
-            "automargin": True,
-        }
-        layout[f"yaxis{axis_suffix}"] = {
+    title_prefix = evaluation_name or stage
+    buttons: list[dict[str, object]] = []
+    for selected, metric in enumerate(metrics):
+        buttons.append({
+            "label": metric,
+            "method": "update",
+            "args": [
+                {"visible": [index == selected for index in range(len(metrics))]},
+                {
+                    "title": {"text": f"{title_prefix} - {metric}"},
+                    "xaxis": {"title": {"text": metric}, "automargin": True},
+                },
+            ],
+        })
+
+    layout: dict[str, object] = {
+        "title": {"text": f"{title_prefix} - {metrics[0]}"},
+        "showlegend": False,
+        "height": 320,
+        "margin": {"l": 80, "r": 30, "t": 90, "b": 50},
+        "xaxis": {"title": {"text": metrics[0]}, "automargin": True},
+        "yaxis": {
             "automargin": True,
             "categoryorder": "array",
             "categoryarray": list(reversed(labels)),
-        }
-
+        },
+        "updatemenus": [{
+            "type": "dropdown",
+            "direction": "down",
+            "active": 0,
+            "showactive": True,
+            "x": 0,
+            "xanchor": "left",
+            "y": 1.16,
+            "yanchor": "top",
+            "buttons": buttons,
+        }],
+    }
     return {"data": data, "layout": layout}
+
+
+def _pipeline_evaluation_comment(comparisons: Sequence[object]) -> str | None:
+    sections: list[str] = []
+    for comparison in comparisons:
+        if not isinstance(comparison, Mapping):
+            continue
+        stage = comparison.get("stage")
+        if type(stage) is not str:
+            continue
+        name = comparison.get("evaluation_name")
+        protocol = comparison.get("evaluation_protocol")
+        description = comparison.get("evaluation_description")
+        heading = stage if type(name) is not str or not name else f"{stage} - {name}"
+        details = [heading]
+        if type(protocol) is str and protocol:
+            details.append(f"Protocol: {protocol}")
+        if type(description) is str and description:
+            details.append(description)
+        sections.append("\n".join(details))
+    if not sections:
+        return None
+    return "MLDB evaluation guide\n\n" + "\n\n".join(sections)
 
 
 class ClearMLSDKAdapter:
@@ -1252,38 +1290,6 @@ class ClearMLSDKAdapter:
         if type(comparisons) is not list:
             return
 
-        guide: list[list[object]] = [[
-            "Evaluation",
-            "Name",
-            "Protocol",
-            "Description",
-        ]]
-        for comparison in comparisons:
-            if type(comparison) is not dict:
-                continue
-            stage = comparison.get("stage")
-            protocol = comparison.get("evaluation_protocol")
-            evaluation_name = comparison.get("evaluation_name")
-            description = comparison.get("evaluation_description")
-            if type(stage) is not str:
-                continue
-            guide.append([
-                stage,
-                evaluation_name if type(evaluation_name) is str else "",
-                protocol if type(protocol) is str else "",
-                description if type(description) is str else "",
-            ])
-        if len(guide) > 1 and callable(report_table):
-            try:
-                report_table(
-                    title="Evaluation Guide",
-                    series="Definitions",
-                    iteration=0,
-                    table_plot=guide,
-                )
-            except Exception:
-                pass
-
         for comparison in comparisons:
             if type(comparison) is not dict:
                 continue
@@ -1321,6 +1327,7 @@ class ClearMLSDKAdapter:
                         series=stage,
                         iteration=0,
                         table_plot=table,
+                        extra_layout={"height": 320},
                     )
                 except Exception:
                     pass
@@ -1359,6 +1366,15 @@ class ClearMLSDKAdapter:
                 name=_PIPELINE_SUMMARY_CONFIG,
                 config_dict=payload,
             )
+        comparisons = payload.get("comparisons")
+        if type(comparisons) is list:
+            comment = _pipeline_evaluation_comment(comparisons)
+            set_comment = getattr(task, "set_comment", None)
+            if comment is not None and callable(set_comment):
+                try:
+                    set_comment(comment)
+                except Exception:
+                    pass
         self._project_pipeline_summary_tables(task=task, summary=payload)
         self._sync_pipeline_node_statuses(pipeline=task, summary=payload)
 
