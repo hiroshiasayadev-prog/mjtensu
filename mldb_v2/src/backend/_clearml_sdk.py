@@ -1530,10 +1530,18 @@ class ClearMLSDKAdapter:
                     set_comment(comment)
                 except Exception:
                     pass
-        self._project_pipeline_summary_tables(task=task, summary=payload)
-        self._sync_pipeline_node_statuses(pipeline=task, summary=payload)
 
         study_status = payload.get("status")
+        # ClearML Plot events with the same metric/variant/iteration are append-like
+        # rather than a reliable overwrite surface. Emitting comparison plots for
+        # every in-progress projection can therefore leave a stale partial plot
+        # visible after the final Study summary arrives. Keep the live canonical
+        # summary/config and native Pipeline node statuses updated continuously,
+        # but emit controller comparison tables/plots only for a terminal Study.
+        if study_status in {"completed", "completed_with_failures", "failed", "cancelled"}:
+            self._project_pipeline_summary_tables(task=task, summary=payload)
+        self._sync_pipeline_node_statuses(pipeline=task, summary=payload)
+
         task_status = _status(task)
         if study_status in {"submitted", "cancelling"} and task_status == "created":
             task.mark_started(force=True)

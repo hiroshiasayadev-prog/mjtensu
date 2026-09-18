@@ -470,7 +470,7 @@ def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion()
         "schema": "mjtensu.mldb-v2/study-summary-projection/v3",
         "study_result": result["id"],
         "study": result["study"],
-        "status": "submitted",
+        "status": "completed",
         "rows": [{
             "trial": "trial-0001", "trial_label": "Readable model", "kind": "evaluation",
             "stage": "quality", "coordinate": "eval-0001",
@@ -557,6 +557,48 @@ def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion()
         report["title"] == "Pipeline" and report["series"] == "Execution Flow"
         for report in controller.plotly_reports
     )
+    assert controller.status == "completed"
+
+
+
+
+def test_pipeline_summary_defers_comparison_events_until_terminal_status() -> None:
+    FakeSDKTask.reset()
+    plan = _plan()
+    result = _result(plan)
+    adapter = ClearMLSDKAdapter(ClearMLSDKSettings(), task_class=FakeSDKTask)
+    pipeline_id = cast(str, adapter.create_pipeline_run(_pipeline_request(plan, result)))
+    summary = {
+        "schema": "mjtensu.mldb-v2/study-summary-projection/v3",
+        "study_result": result["id"],
+        "study": result["study"],
+        "status": "submitted",
+        "rows": [],
+        "comparisons": [{
+            "stage": "quality",
+            "evaluation_protocol": "demo/eval-v1",
+            "evaluation_name": "Quality holdout",
+            "evaluation_description": "Measures held-out classification quality.",
+            "metrics": ["accuracy"],
+            "metric_preferences": {"accuracy": "higher"},
+            "metric_descriptions": {"accuracy": "Held-out accuracy."},
+            "rows": [{
+                "trial": "trial-0001",
+                "trial_label": "Readable model",
+                "disposition": "completed",
+                "metrics": {"accuracy": 0.9},
+            }],
+        }],
+    }
+
+    adapter.project_pipeline_summary(execution_id=pipeline_id, summary=summary)
+
+    controller = FakeSDKTask.get_task(task_id=pipeline_id)
+    assert controller is not None
+    assert controller.configs["mldb.study_summary"] == summary
+    assert controller.comment is not None
+    assert controller.table_reports == []
+    assert controller.plotly_reports == []
     assert controller.status == "in_progress"
 
 
@@ -577,7 +619,7 @@ def test_pipeline_summary_table_failure_is_observational() -> None:
         "schema": "mjtensu.mldb-v2/study-summary-projection/v2",
         "study_result": result["id"],
         "study": result["study"],
-        "status": "submitted",
+        "status": "completed",
         "rows": [],
         "comparisons": [{
             "stage": "quality",
@@ -592,7 +634,7 @@ def test_pipeline_summary_table_failure_is_observational() -> None:
     adapter.project_pipeline_summary(execution_id=pipeline_id, summary=summary)
 
     assert controller.configs["mldb.study_summary"] == summary
-    assert controller.status == "in_progress"
+    assert controller.status == "completed"
 
 
 def test_concrete_backend_exposes_pipeline_capability_without_replacing_stage_port() -> None:
