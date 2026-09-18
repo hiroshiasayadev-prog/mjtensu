@@ -18,7 +18,11 @@ from mldb_v2.src.backend._clearml_pipeline import (
     _pipeline_ownership_key,
     _pipeline_topology,
 )
-from mldb_v2.src.backend._clearml_sdk import ClearMLSDKAdapter, ClearMLSDKSettings
+from mldb_v2.src.backend._clearml_sdk import (
+    ClearMLSDKAdapter,
+    ClearMLSDKSettings,
+    _comparison_bar_figure,
+)
 from mldb_v2.src.backend._config import BackendConfig
 from mldb_v2.src.backend.clearml_backend import clearml_backend_factory
 from mldb_v2.src.results.study_result import StudyResult, _validate_study_result
@@ -388,6 +392,53 @@ def test_sdk_adapter_creates_native_controller_task_without_enqueuing_children()
     assert [record.task_id for record in legacy_found] == ["sdk-pipeline-1"]
 
 
+def test_comparison_bar_colors_follow_metric_preference_without_reordering() -> None:
+    rows = [
+        {"trial_label": "model-a", "metrics": {"accuracy": 0.90, "latency_ms": 4.0, "diagnostic": 1.0}},
+        {"trial_label": "model-b", "metrics": {"accuracy": 0.70, "latency_ms": 1.0, "diagnostic": 2.0}},
+        {"trial_label": "model-c", "metrics": {"accuracy": 0.80, "latency_ms": 2.0, "diagnostic": 3.0}},
+        {"trial_label": "model-d", "metrics": {"accuracy": 0.60, "latency_ms": 3.0, "diagnostic": 4.0}},
+    ]
+    figure = _comparison_bar_figure(
+        stage="quality",
+        evaluation_name="Quality",
+        metric_names=["accuracy", "latency_ms", "diagnostic"],
+        metric_preferences={
+            "accuracy": "higher",
+            "latency_ms": "lower",
+            "diagnostic": "neutral",
+        },
+        rows=rows,
+    )
+
+    assert figure is not None
+    accuracy, latency, diagnostic = figure["data"]
+    assert accuracy["y"] == ["model-a", "model-b", "model-c", "model-d"]
+    assert accuracy["marker"]["color"] == ["#2F6FED", "#F6B0B0", "#9CC7FF", "#D9534F"]
+    assert latency["marker"]["color"] == ["#D9534F", "#2F6FED", "#9CC7FF", "#F6B0B0"]
+    assert "marker" not in diagnostic
+
+
+def test_comparison_bar_ties_share_rank_color() -> None:
+    figure = _comparison_bar_figure(
+        stage="quality",
+        evaluation_name=None,
+        metric_names=["score"],
+        metric_preferences={"score": "higher"},
+        rows=[
+            {"trial_label": "a", "metrics": {"score": 1.0}},
+            {"trial_label": "b", "metrics": {"score": 1.0}},
+            {"trial_label": "c", "metrics": {"score": 0.5}},
+            {"trial_label": "d", "metrics": {"score": 0.5}},
+        ],
+    )
+
+    assert figure is not None
+    assert figure["data"][0]["marker"]["color"] == [
+        "#2F6FED", "#2F6FED", "#D9534F", "#D9534F"
+    ]
+
+
 def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion() -> None:
     FakeSDKTask.reset()
     plan = _plan()
@@ -414,6 +465,7 @@ def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion()
             "evaluation_name": "Quality holdout",
             "evaluation_description": "Measures held-out classification quality.",
             "metrics": ["accuracy", "loss"],
+            "metric_preferences": {"accuracy": "higher", "loss": "lower"},
             "rows": [{
                 "trial": "trial-0001", "trial_label": "Readable model",
                 "disposition": "completed", "metrics": {"accuracy": 0.9, "loss": 0.2},

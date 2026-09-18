@@ -185,6 +185,41 @@ class FakeBackend:
             raise ConnectionError("transient")
 
 
+def test_evaluation_projection_context_resolves_metric_preferences() -> None:
+    class PreferenceResolver:
+        def resolve(self, *, kind, entity_id):
+            assert kind == EntityKind.EVALUATION_PROTOCOL
+            assert entity_id == "demo/eval-v1"
+            return {
+                "name": "Quality",
+                "description": "Compare quality and cost.",
+                "metrics": {
+                    "accuracy": {"type": "number", "required": True, "preference": "higher"},
+                    "latency_ms": {"type": "number", "required": True, "preference": "lower"},
+                    "diagnostic": {"type": "number", "required": False},
+                },
+            }
+
+    context = driver._evaluation_projection_context(
+        resolver=PreferenceResolver(),  # type: ignore[arg-type]
+        plan_trial={
+            "evaluations": [{
+                "coordinate": "eval-0001",
+                "evaluation_protocol": "demo/eval-v1",
+            }]
+        },
+        coordinate="eval-0001",
+    )
+
+    assert context == (
+        "demo/eval-v1",
+        "Quality",
+        "Compare quality and cost.",
+        ["accuracy", "latency_ms", "diagnostic"],
+        {"accuracy": "higher", "latency_ms": "lower", "diagnostic": "neutral"},
+    )
+
+
 def _single_trial_plan(*, evaluations: int = 1) -> dict[str, object]:
     base = ready_fx._plan()
     payload = {

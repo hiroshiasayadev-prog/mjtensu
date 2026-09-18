@@ -700,11 +700,42 @@ def _native_pipeline_node(
     return matches[0] if matches else None
 
 
+_COMPARISON_RANK_PALETTE = ("#2F6FED", "#9CC7FF", "#F6B0B0", "#D9534F")
+_COMPARISON_MISSING_COLOR = "rgba(0,0,0,0)"
+
+
+def _comparison_rank_colors(
+    values: Sequence[float | None], *, preference: str
+) -> list[str] | None:
+    if preference not in {"higher", "lower"}:
+        return None
+    finite = sorted(
+        {value for value in values if value is not None and math.isfinite(value)},
+        reverse=preference == "higher",
+    )
+    if not finite:
+        return None
+    if len(finite) == 1:
+        by_value = {finite[0]: _COMPARISON_RANK_PALETTE[0]}
+    else:
+        by_value: dict[float, str] = {}
+        last_palette = len(_COMPARISON_RANK_PALETTE) - 1
+        last_rank = len(finite) - 1
+        for rank, value in enumerate(finite):
+            palette_index = int(math.floor((rank * last_palette / last_rank) + 0.5))
+            by_value[value] = _COMPARISON_RANK_PALETTE[palette_index]
+    return [
+        _COMPARISON_MISSING_COLOR if value is None else by_value[value]
+        for value in values
+    ]
+
+
 def _comparison_bar_figure(
     *,
     stage: str,
     evaluation_name: str | None,
     metric_names: Sequence[str],
+    metric_preferences: Mapping[str, str] | None,
     rows: Sequence[Mapping[str, object]],
 ) -> dict[str, object] | None:
     metrics = [name for name in metric_names if type(name) is str]
@@ -732,7 +763,7 @@ def _comparison_bar_figure(
                 if math.isfinite(candidate):
                     numeric = candidate
             values.append(numeric)
-        data.append({
+        trace: dict[str, object] = {
             "type": "bar",
             "orientation": "h",
             "x": values,
@@ -741,7 +772,12 @@ def _comparison_bar_figure(
             "showlegend": False,
             "name": metric,
             "hovertemplate": f"%{{y}}<br>{metric}: %{{x:.6g}}<extra></extra>",
-        })
+        }
+        preference = (metric_preferences or {}).get(metric, "neutral")
+        colors = _comparison_rank_colors(values, preference=preference)
+        if colors is not None:
+            trace["marker"] = {"color": colors}
+        data.append(trace)
 
     title_prefix = evaluation_name or stage
     buttons: list[dict[str, object]] = []
@@ -1296,9 +1332,13 @@ class ClearMLSDKAdapter:
             stage = comparison.get("stage")
             evaluation_name = comparison.get("evaluation_name")
             metric_names = comparison.get("metrics")
+            metric_preferences = comparison.get("metric_preferences")
             rows = comparison.get("rows")
             if type(stage) is not str or type(metric_names) is not list or type(rows) is not list:
                 continue
+            preferences = (
+                metric_preferences if isinstance(metric_preferences, Mapping) else {}
+            )
             metrics = [name for name in metric_names if type(name) is str]
             table: list[list[object]] = [["Trial", "Status", *metrics]]
             normalized_rows: list[Mapping[str, object]] = []
@@ -1339,6 +1379,7 @@ class ClearMLSDKAdapter:
                         evaluation_name if type(evaluation_name) is str else None
                     ),
                     metric_names=metrics,
+                    metric_preferences=preferences,
                     rows=normalized_rows,
                 )
                 if figure is not None:

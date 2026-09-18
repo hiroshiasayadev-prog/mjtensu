@@ -313,12 +313,28 @@ def test_evaluation_protocol_rejects_unknown_top_level_and_empty_outputs() -> No
     {"type": "string", "required": True},
     {"type": "number", "required": 1},
     {"type": "integer", "required": False, "unknown": 1},
+    {"type": "number", "required": True, "preference": "largest"},
+    {"type": "number", "required": True, "preference": 1},
     {"type": "number"},
 ])
 def test_evaluation_metric_exact_contract(declaration: object) -> None:
     value = _evaluation(); value["metrics"] = {"score": declaration}
     with pytest.raises(ValueError):
         _parse_evaluation_protocol_document(value, expected_id="demo/eval-v1")
+
+
+def test_evaluation_metric_preference_contract() -> None:
+    for preference in ("higher", "lower", "neutral"):
+        value = _evaluation()
+        value["metrics"] = {
+            "score": {"type": "number", "required": True, "preference": preference}
+        }
+        parsed = _parse_evaluation_protocol_document(value, expected_id="demo/eval-v1")
+        assert parsed["metrics"]["score"]["preference"] == preference
+
+    value = _evaluation()
+    parsed = _parse_evaluation_protocol_document(value, expected_id="demo/eval-v1")
+    assert "preference" not in parsed["metrics"]["score"]
 
 
 @pytest.mark.parametrize("declaration", [
@@ -493,7 +509,7 @@ def test_public_typed_dict_shapes_match_frozen_contract() -> None:
     assert EvaluationProtocolImplementation.__required_keys__ == frozenset({"entrypoint"})
     assert EvaluationProtocolImplementation.__optional_keys__ == frozenset({"sha256", "sources"})
     assert EvaluationMetricDeclaration.__required_keys__ == frozenset({"type", "required"})
-    assert EvaluationMetricDeclaration.__optional_keys__ == frozenset({"description"})
+    assert EvaluationMetricDeclaration.__optional_keys__ == frozenset({"description", "preference"})
     assert EvaluationArtifactDeclaration.__required_keys__ == frozenset({"format", "schema", "required"})
     assert EvaluationArtifactDeclaration.__optional_keys__ == frozenset({"description"})
 

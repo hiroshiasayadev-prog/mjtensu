@@ -2,7 +2,7 @@
 
 - **id**: `spec:mldb.v2.evaluation.evaluation_protocol_format`
 - **status**: draft
-- **date**: 2026-09-09
+- **date**: 2026-09-18
 - **parent**: `spec:mldb.v2.evaluation`
 - **contract_class**: `format`
 
@@ -34,8 +34,13 @@ At least one entry across `metrics` and `artifacts` is required.
 Each `parameters.<key>` follows `spec:mldb.v2.common.public_parameters`.
 
 Each `metrics.<key>` is exactly a mapping with required `type` (`integer` or `number`) and required
-boolean `required`; optional `description` is allowed. `number` accepts finite integer or floating
-values except boolean; `integer` accepts integer except boolean.
+boolean `required`; optional `description` and optional `preference` are allowed. `preference`, when
+present, is exactly one of `higher`, `lower`, or `neutral`; omission is semantically equivalent to
+`neutral`. `higher` means larger finite values are preferable for human comparison, `lower` means
+smaller finite values are preferable, and `neutral` declares that the metric has no generic
+better/worse direction. This metadata is comparison semantics only: it MUST NOT change result
+acceptance, Study lifecycle, automatic model selection, or optimization behavior. `number` accepts
+finite integer or floating values except boolean; `integer` accepts integer except boolean.
 
 Each `artifacts.<key>` is exactly a mapping with required non-empty `format`, required non-empty
 versioned `schema`, required boolean `required`, and optional `description`.
@@ -49,8 +54,8 @@ Same-basename `<local-id>.py` is required and exposes `evaluate` according to
 `spec:mldb.v2.evaluation.evaluate_interface`. Local ID ends in `-v<positive-integer>`.
 
 A sealed protocol is immutable. Changing parameter keys/defaults/constraints, metric meaning/type/
-requiredness, artifact format/schema/requiredness, or result-affecting executable behavior requires a
-new revision.
+requiredness/preference, artifact format/schema/requiredness, or result-affecting executable behavior
+requires a new revision.
 
 Backend scalars/plots not declared here remain telemetry only. Missing optional outputs are permitted
 without a partial-success state; missing required outputs fail result acceptance.

@@ -2,7 +2,7 @@
 
 - **id**: `spec:mldb.v2.backend.clearml_mapping`
 - **status**: draft
-- **date**: 2026-09-17
+- **date**: 2026-09-18
 - **parent**: `spec:mldb.v2.backend`
 - **contract_class**: `adapter`
 
@@ -43,6 +43,8 @@ Existing-Model trials may expose their Evaluation nodes immediately after MLDB v
 The Pipeline Run is the primary ClearML UI entrypoint for one MLDB Study Result. Child Tasks SHOULD be grouped into stable Pipeline stages suitable for human navigation, for example `training`, named Evaluation groups, and deployment/diagnostic groups when the Study contains them.
 
 Selected child metrics/artifacts/models MAY be mirrored to the Pipeline/controller Task for Study-level comparison. When the same Evaluation stage is applied to multiple trial Models, MLDB SHOULD aggregate the accepted canonical Evaluation metrics by stage into a bounded comparison projection. The ClearML adapter SHOULD render that projection as one compact comparison table plus one fixed-height categorical bar plot per Evaluation stage. When multiple metrics exist, the bar plot SHOULD switch the visible metric within the same Plotly figure rather than stacking metric subplots vertically or creating one controller chart per trial-metric pair. Detailed per-trial telemetry remains on the child Evaluation Tasks, and controller Scalars MUST NOT be repurposed merely to simulate cross-model categorical comparison.
+
+The comparison projection SHOULD carry each formal metric's Evaluation Protocol `preference`. For `higher` or `lower`, the ClearML categorical bars SHOULD use rank-oriented color semantics from preferable to less preferable while preserving trial order; equal values SHOULD receive the same rank color. For `neutral` or omitted preference, the adapter SHOULD leave Plotly's normal bar color unchanged. Preference metadata is visualization semantics only and MUST NOT become an implicit winner-selection or optimization policy.
 
 The comparison projection SHOULD also carry the referenced Evaluation Protocol identity plus its reusable human-facing `name` and `description`; the adapter SHOULD surface those definitions through the controller Task description/comment rather than adding a separate sparse Plot. Evaluation prose belongs to the Protocol definition rather than being duplicated in every Study.
 

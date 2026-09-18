@@ -29,6 +29,7 @@ class EvaluationMetricDeclaration(TypedDict):
     type: Literal["integer", "number"]
     required: bool
     description: NotRequired[str]
+    preference: NotRequired[Literal["higher", "lower", "neutral"]]
 
 
 class EvaluationArtifactDeclaration(TypedDict):
@@ -70,7 +71,7 @@ def _validate_metric_declarations(value: object) -> dict[str, EvaluationMetricDe
         mapping = _require_exact_keys(
             declaration,
             required={"type", "required"},
-            optional={"description"},
+            optional={"description", "preference"},
             label=f"metric {key}",
         )
         metric_type = mapping["type"]
@@ -84,6 +85,11 @@ def _validate_metric_declarations(value: object) -> dict[str, EvaluationMetricDe
             parsed["description"] = _require_string(
                 mapping["description"], label="metric description"
             )
+        if "preference" in mapping:
+            preference = mapping["preference"]
+            if type(preference) is not str or preference not in {"higher", "lower", "neutral"}:
+                raise ValueError("metric preference must be exactly higher, lower, or neutral")
+            parsed["preference"] = preference  # type: ignore[typeddict-item]
         result[key] = parsed
     return result
 

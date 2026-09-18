@@ -17,6 +17,7 @@ class EvaluationMetricDeclaration(TypedDict):
     type: Literal["integer", "number"]
     required: bool
     description: NotRequired[str]
+    preference: NotRequired[Literal["higher", "lower", "neutral"]]
 
 
 class EvaluationArtifactDeclaration(TypedDict):
