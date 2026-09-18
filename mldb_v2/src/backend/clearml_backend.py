@@ -138,6 +138,18 @@ def _option_string(
     return value
 
 
+def _option_stage_routes(config: BackendConfig) -> dict[str, dict[str, object]]:
+    value = config.options.get("stage_routes", {})
+    if type(value) is not dict:
+        raise ClearMLBackendError("ClearML backend option 'stage_routes' must be a mapping")
+    routes: dict[str, dict[str, object]] = {}
+    for stage, route in value.items():
+        if type(stage) is not str or not stage or type(route) is not dict:
+            raise ClearMLBackendError("ClearML stage_routes entries are malformed")
+        routes[stage] = dict(route)
+    return routes
+
+
 def clearml_backend_factory(config: BackendConfig) -> ClearMLBackend:
     """Resolve operational config to one SDK-neutral/genuine ClearMLBackend."""
     if not isinstance(config, BackendConfig) or config.backend_type != "clearml":
@@ -147,6 +159,7 @@ def clearml_backend_factory(config: BackendConfig) -> ClearMLBackend:
     if client is None:
         client = ClearMLSDKAdapter.from_backend_config(config)
     queue = _option_string(config, "queue")
+    stage_routes = _option_stage_routes(config)
     recovery_raw = config.options.get("recovery_search_attempts", 3)
     if type(recovery_raw) is not int or recovery_raw < 1:
         raise ClearMLBackendError(
@@ -156,6 +169,7 @@ def clearml_backend_factory(config: BackendConfig) -> ClearMLBackend:
     admission = ClearMLAdmissionService(
         client=cast(object, client),  # runtime structural Protocol
         queue=queue,
+        stage_routes=stage_routes,
         recovery_search_attempts=recovery_raw,
     )
     observation = ClearMLObservationService(client=cast(object, client))

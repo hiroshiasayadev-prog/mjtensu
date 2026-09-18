@@ -212,6 +212,8 @@ class ClearMLSDKSettings:
     runtime_data_root: str | None = None
     artifact_uri_prefix: str | None = None
     step_queue: str | None = None
+    stage_routes: Mapping[str, Mapping[str, object]] = field(default_factory=dict)
+    prebuilt_runtime: bool = False
     work_root: str = ".mldb-v2-clearml"
     log_reports: int = 20
 
@@ -230,6 +232,24 @@ class ClearMLSDKSettings:
                 raise ValueError(f"{name} must be a non-empty trimmed string")
         if (self.access_key is None) != (self.secret_key is None):
             raise ValueError("ClearML access_key and secret_key must be supplied together")
+        if type(self.prebuilt_runtime) is not bool:
+            raise ValueError("prebuilt_runtime must be boolean")
+        for stage, route in self.stage_routes.items():
+            if type(stage) is not str or not stage or stage.strip() != stage or not isinstance(route, Mapping):
+                raise ValueError("stage_routes entries must use non-empty stage names and mappings")
+            unknown = set(route) - {"queue", "docker_gpu"}
+            if unknown:
+                raise ValueError(f"stage route {stage!r} has unknown fields: {sorted(unknown)!r}")
+            if "queue" in route:
+                queue = route["queue"]
+                if type(queue) is not str or not queue or queue.strip() != queue:
+                    raise ValueError(f"stage route {stage!r} queue must be a non-empty trimmed string")
+            if "docker_gpu" in route:
+                docker_gpu = route["docker_gpu"]
+                if docker_gpu is not None and (
+                    type(docker_gpu) is not str or not docker_gpu or docker_gpu.strip() != docker_gpu
+                ):
+                    raise ValueError(f"stage route {stage!r} docker_gpu must be null or a non-empty trimmed string")
         if type(self.log_reports) is not int or self.log_reports < 1:
             raise ValueError("log_reports must be a positive integer")
 
@@ -246,6 +266,37 @@ def _optional_string(options: Mapping[str, object], name: str) -> str | None:
 def _string_option(options: Mapping[str, object], name: str, default: str) -> str:
     value = _optional_string(options, name)
     return default if value is None else value
+
+
+def _stage_routes_option(options: Mapping[str, object]) -> dict[str, dict[str, object]]:
+    value = options.get("stage_routes", {})
+    if type(value) is not dict:
+        raise ClearMLSDKError("ClearML option 'stage_routes' must be a mapping")
+    routes: dict[str, dict[str, object]] = {}
+    for stage, route in value.items():
+        if type(stage) is not str or not stage or type(route) is not dict:
+            raise ClearMLSDKError("ClearML stage_routes entries are malformed")
+        routes[stage] = dict(route)
+    return routes
+
+
+def _stage_name_from_input(stage_input: Mapping[str, object]) -> str:
+    if stage_input.get("kind") == "training":
+        return "training"
+    stage = stage_input.get("stage")
+    if not isinstance(stage, Mapping):
+        raise ClearMLSDKError("ClearML StageInput stage is malformed")
+    name = stage.get("name")
+    if type(name) is not str or not name:
+        raise ClearMLSDKError("ClearML Evaluation StageInput stage name is malformed")
+    return name
+
+
+def _stage_route(
+    stage_routes: Mapping[str, Mapping[str, object]], stage: str
+) -> Mapping[str, object]:
+    route = stage_routes.get(stage)
+    return {} if route is None else route
 
 
 def _local_runtime_root(settings: ClearMLSDKSettings) -> Path | None:
@@ -327,7 +378,7 @@ def _pipeline_trial_labels(
     for label in base_labels.values():
         counts[label] = counts.get(label, 0) + 1
     return {
-        trial: label if counts[label] == 1 else f"{label} · {trial}"
+        trial: label if counts[label] == 1 else f"{label} ﾂｷ {trial}"
         for trial, label in base_labels.items()
     }
 
@@ -622,12 +673,14 @@ def _native_pipeline_dag(
     topology: Mapping[str, object],
     *,
     queue: str | None,
+    stage_routes: Mapping[str, Mapping[str, object]] | None = None,
     trial_labels: Mapping[str, str] | None = None,
 ) -> dict[str, object]:
     raw_steps = topology.get("steps")
     if type(raw_steps) is not list:
         raise ClearMLSDKError("MLDB Pipeline topology steps are malformed")
     labels = dict(trial_labels or {})
+    routes = stage_routes or {}
     prepared: list[dict[str, object]] = []
     display_names: dict[str, str] = {}
     used_display_names: set[str] = set()
@@ -653,7 +706,7 @@ def _native_pipeline_dag(
         display = f"{labels.get(trial, trial)} | {suffix}"
         if display in used_display_names:
             extra = coordinate if type(coordinate) is str else name
-            display = f"{display} · {extra}"
+            display = f"{display} ﾂｷ {extra}"
         used_display_names.add(display)
         display_names[name] = display
         prepared.append(raw)
@@ -667,10 +720,14 @@ def _native_pipeline_dag(
         trial = cast(str, raw["trial"])
         display_name = display_names[logical_name]
         translated_parents = [display_names[str(parent)] for parent in parents]
+        route = _stage_route(routes, stage)
+        node_queue = route.get("queue", queue)
+        if node_queue is not None and type(node_queue) is not str:
+            raise ClearMLSDKError("ClearML stage route queue is malformed")
         node = Node(
             name=display_name,
             parents=translated_parents,
-            queue=queue,
+            queue=cast(str | None, node_queue),
             cache_executed_step=False,
             stage=stage,
         )
@@ -866,6 +923,9 @@ class ClearMLSDKAdapter:
         reports = options.get("log_reports", 20)
         if type(reports) is not int or reports < 1:
             raise ClearMLSDKError("ClearML log_reports must be a positive integer")
+        prebuilt_runtime = options.get("prebuilt_runtime", False)
+        if type(prebuilt_runtime) is not bool:
+            raise ClearMLSDKError("ClearML prebuilt_runtime must be boolean")
         settings = ClearMLSDKSettings(
             api_host=_optional_string(options, "api_host"),
             web_host=_optional_string(options, "web_host"),
@@ -891,6 +951,8 @@ class ClearMLSDKAdapter:
             runtime_data_root=_optional_string(options, "runtime_data_root"),
             artifact_uri_prefix=_optional_string(options, "artifact_uri_prefix"),
             step_queue=_optional_string(options, "queue"),
+            stage_routes=_stage_routes_option(options),
+            prebuilt_runtime=prebuilt_runtime,
             work_root=_string_option(options, "work_root", ".mldb-v2-clearml"),
             log_reports=reports,
         )
@@ -1082,6 +1144,7 @@ class ClearMLSDKAdapter:
         native_dag = _native_pipeline_dag(
             topology,
             queue=self._settings.step_queue,
+            stage_routes=self._settings.stage_routes,
             trial_labels=trial_labels,
         )
         _set_native_pipeline_configuration(task, native_dag)
@@ -1535,10 +1598,18 @@ class ClearMLSDKAdapter:
         if task is None:
             return None
         task_id = _task_id(task)
+        stage_name = _stage_name_from_input(stage_input)
+        route = _stage_route(self._settings.stage_routes, stage_name)
+        docker_gpu = self._settings.docker_gpu
+        if "docker_gpu" in route:
+            routed_gpu = route["docker_gpu"]
+            if routed_gpu is not None and type(routed_gpu) is not str:
+                raise ClearMLSDKError("ClearML stage route docker_gpu is malformed")
+            docker_gpu = cast(str | None, routed_gpu)
         if self._settings.docker_image is not None:
             docker_arguments: list[str] = []
-            if self._settings.docker_gpu is not None:
-                docker_arguments.extend(["--gpus", self._settings.docker_gpu])
+            if docker_gpu is not None:
+                docker_arguments.extend(["--gpus", docker_gpu])
             if self._settings.docker_shm_size is not None:
                 docker_arguments.extend(["--shm-size", self._settings.docker_shm_size])
             docker_arguments.extend([
@@ -1548,6 +1619,10 @@ class ClearMLSDKAdapter:
                 "-e", "MINIO_ROOT_USER",
                 "-e", "MINIO_ROOT_PASSWORD",
             ])
+            if self._settings.prebuilt_runtime:
+                docker_arguments.extend([
+                    "-e", "CLEARML_AGENT_SKIP_PIP_VENV_INSTALL=/opt/conda/bin/python",
+                ])
             if self._settings.docker_env_file is not None:
                 docker_arguments.append(f"--env-file={self._settings.docker_env_file}")
             task.set_base_docker(

@@ -274,6 +274,33 @@ def _select_existing(
     return record
 
 
+def _stage_name(stage_input: StageInput) -> str:
+    if stage_input["kind"] == "training":
+        return "training"
+    stage = stage_input["stage"]
+    if type(stage) is not dict:
+        raise ValueError("StageInput stage must be a mapping")
+    name = stage.get("name")
+    if type(name) is not str or not name:
+        raise ValueError("Evaluation StageInput stage name must be a non-empty string")
+    return name
+
+
+def _queue_for_stage(
+    stage_input: StageInput,
+    *,
+    default_queue: str | None,
+    stage_routes: Mapping[str, Mapping[str, object]],
+) -> str | None:
+    route = stage_routes.get(_stage_name(stage_input))
+    if route is None or "queue" not in route:
+        return default_queue
+    queue = route["queue"]
+    if type(queue) is not str or not queue:
+        raise ValueError("ClearML stage route queue must be a non-empty string")
+    return queue
+
+
 class ClearMLAdmissionService:
     """Idempotently admit exactly one ready StageInput to ClearML."""
 
@@ -282,6 +309,7 @@ class ClearMLAdmissionService:
         *,
         client: ClearMLAdmissionClient,
         queue: str | None = None,
+        stage_routes: Mapping[str, Mapping[str, object]] | None = None,
         recovery_search_attempts: int = 3,
     ) -> None:
         if queue is not None and (type(queue) is not str or not queue):
@@ -290,6 +318,7 @@ class ClearMLAdmissionService:
             raise ValueError("recovery_search_attempts must be a positive integer")
         self._client = client
         self._queue = queue
+        self._stage_routes = {key: dict(value) for key, value in (stage_routes or {}).items()}
         self._recovery_search_attempts = recovery_search_attempts
 
     def _search(
@@ -398,7 +427,11 @@ class ClearMLAdmissionService:
                 source_commit=str(stage_input["source_commit"]),
                 harness_symbol=_HARNESS_SYMBOL,
                 stage_input_json=stage_input_json,
-                queue=self._queue,
+                queue=_queue_for_stage(
+                    stage_input,
+                    default_queue=self._queue,
+                    stage_routes=self._stage_routes,
+                ),
                 pipeline_execution_id=pipeline_execution_id,
                 pipeline_step=pipeline_step,
             ),

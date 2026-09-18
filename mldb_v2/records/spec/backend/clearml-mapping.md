@@ -34,6 +34,10 @@ The adapter projects the immutable Study Plan into a ClearML Pipeline DAG. Train
 
 MLDB releases only semantically eligible logical stages to the backend. After release, the ClearML adapter owns physical Task creation/enqueue, queue placement, worker selection, retry/liveness, and cancellation. MLDB does not run a second queue or resource scheduler beside ClearML.
 
+ClearML queue/resource routing is backend operational configuration, not Study/Evaluation semantics. The adapter MAY define a default queue plus exact logical-stage overrides. A stage override MAY select a different ClearML queue and MAY override the Docker GPU selector, including explicit `null` to omit `--gpus` for CPU-only work. Routing metadata MUST NOT be written into canonical `StageInput`, Study, Protocol, Plan, or Result records. The same resolved route MUST be represented in both the native Pipeline node projection and the child Task enqueue operation.
+
+A prebuilt ClearML task image MAY provide the pinned runtime dependencies. When prebuilt-runtime mode is enabled, the adapter MAY instruct ClearML Agent to reuse the image's system Python instead of creating a fresh per-Task virtualenv, while retaining the Task requirements declaration for compatibility checking/provenance. The prebuilt image therefore becomes deployment infrastructure and MUST be rebuilt whenever the pinned remote runtime package contract changes.
+
 Plan dependencies are necessary but not sufficient for downstream release. A newly-trained trial's Evaluation nodes remain semantically gated until MLDB accepts the Training candidate and canonical Model lineage. The Pipeline projection may predeclare those nodes for UI, but the adapter must not create/enqueue the child Task until that acceptance boundary opens.
 
 Existing-Model trials may expose their Evaluation nodes immediately after MLDB validates the existing Model lineage required by the Plan.

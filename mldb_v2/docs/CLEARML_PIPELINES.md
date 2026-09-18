@@ -36,6 +36,9 @@ ClearML owns the operational mechanics that are not the scientific meaning of th
 
 MLDB should not grow a second queue, retry scheduler, heartbeat service, worker registry, or resource scheduler beside ClearML.
 
+Stage-specific placement is still allowed at the adapter boundary. Production composition accepts an operational stage-route map; for example `onnx-cpu-latency` can be routed to a dedicated `latency-cpu` queue with `docker_gpu: null`, while every unlisted stage falls back to the normal `default` queue and global Docker GPU setting. This routing does not enter the Study or Evaluation Protocol YAML because queue names and worker topology are deployment concerns.
+For the validated deployment, one Linux agent process subscribes to `latency-cpu` before `default`. This preserves a single canonical CPU identity and prevents two MLDB Tasks from contending on that host through separate agent processes. Heterogeneous workers may join `default`, but they must not join `latency-cpu`.
+
 ## 3. What MLDB keeps
 
 MLDB remains authoritative for Study/Plan identity, trial/stage semantics, source pinning, Protocol contracts, semantic dependency gates, accepted Model lineage, formal result acceptance, and canonical Training/Evaluation/Study Results.

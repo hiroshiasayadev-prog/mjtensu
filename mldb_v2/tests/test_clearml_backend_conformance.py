@@ -630,6 +630,35 @@ def test_production_sdk_adapter_uses_lazy_credentials_searchable_metadata_and_qu
     assert FakeSDKTask.dequeue_calls == ["sdk-1"]
 
 
+def test_sdk_prebuilt_runtime_cpu_route_uses_system_python_without_gpu_flag() -> None:
+    FakeSDKTask.reset()
+    settings = ClearMLSDKSettings(
+        docker_image="mldb-clearml-runner:torch2.5.1-cu124-v1",
+        docker_gpu="all",
+        docker_shm_size="2g",
+        stage_routes={"holdout": {"queue": "latency-cpu", "docker_gpu": None}},
+        prebuilt_runtime=True,
+    )
+    adapter = ClearMLSDKAdapter(settings, task_class=FakeSDKTask)
+    task_id = adapter.create_task(_sdk_request(_evaluation_stage_input()))
+
+    assert task_id == "sdk-1"
+    assert FakeSDKTask.docker_calls == [{
+        "docker_image": "mldb-clearml-runner:torch2.5.1-cu124-v1",
+        "docker_arguments": [
+            "--shm-size", "2g",
+            "-e", "AWS_ACCESS_KEY_ID",
+            "-e", "AWS_SECRET_ACCESS_KEY",
+            "-e", "AWS_SESSION_TOKEN",
+            "-e", "MINIO_ROOT_USER",
+            "-e", "MINIO_ROOT_PASSWORD",
+            "-e", "CLEARML_AGENT_SKIP_PIP_VENV_INSTALL=/opt/conda/bin/python",
+        ],
+    }]
+    assert "--gpus" not in FakeSDKTask.docker_calls[0]["docker_arguments"]
+    assert FakeSDKTask.package_calls and "onnxruntime==1.28.0" in FakeSDKTask.package_calls[0]
+
+
 def test_sdk_terminal_failure_without_harness_payload_is_safe_failure_not_success() -> None:
     FakeSDKTask.reset()
     adapter = ClearMLSDKAdapter(task_class=FakeSDKTask)

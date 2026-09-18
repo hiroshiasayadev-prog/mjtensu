@@ -186,6 +186,28 @@ def test_evaluation_admission_maps_coordinate_model_and_protocol_metadata() -> N
     assert metadata["mldb.protocol"] == "demo/eval-protocol"
 
 
+def test_stage_queue_route_overrides_default_for_matching_evaluation_only() -> None:
+    evaluation_client = FakeClient()
+    evaluation = _evaluation_stage_input()
+    original = deepcopy(evaluation)
+    ClearMLAdmissionService(
+        client=evaluation_client,
+        queue="default",
+        stage_routes={"final-holdout": {"queue": "latency-cpu", "docker_gpu": None}},
+    ).admit(stage_input=evaluation)
+    assert evaluation_client.requests[0].launch.queue == "latency-cpu"
+    assert evaluation == original
+    assert "queue" not in evaluation
+
+    training_client = FakeClient()
+    ClearMLAdmissionService(
+        client=training_client,
+        queue="default",
+        stage_routes={"final-holdout": {"queue": "latency-cpu", "docker_gpu": None}},
+    ).admit(stage_input=_training_stage_input())
+    assert training_client.requests[0].launch.queue == "default"
+
+
 def test_namespace_project_is_shared_across_studies() -> None:
     first = FakeClient()
     second = FakeClient()

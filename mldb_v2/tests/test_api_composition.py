@@ -107,6 +107,8 @@ def test_existing_runtime_configuration_mapping_matches_consumers() -> None:
         "CLEARML_API_ACCESS_KEY": "test-access",
         "CLEARML_API_SECRET_KEY": "test-secret",
         "MLDB_V2_CLEARML_QUEUE": "default",
+        "MLDB_V2_CLEARML_STAGE_ROUTES_JSON": '{"onnx-cpu-latency":{"queue":"latency-cpu","docker_gpu":null}}',
+        "MLDB_V2_CLEARML_PREBUILT_RUNTIME": "true",
         "MLDB_V2_CLEARML_REPOSITORY": "https://github.com/example/repo.git",
         "MLDB_V2_CLEARML_DOCKER_IMAGE": "python:3.10-slim-bookworm",
         "MLDB_V2_CLEARML_DOCKER_ENV_FILE": "/srv/bugrat/clearml/.env",
@@ -130,6 +132,11 @@ def test_existing_runtime_configuration_mapping_matches_consumers() -> None:
     assert settings.access_key == environment["CLEARML_API_ACCESS_KEY"]
     assert settings.secret_key == environment["CLEARML_API_SECRET_KEY"]
     assert backend_config.options["queue"] == "default"
+    assert backend_config.options["stage_routes"] == {
+        "onnx-cpu-latency": {"queue": "latency-cpu", "docker_gpu": None}
+    }
+    assert settings.stage_routes == backend_config.options["stage_routes"]
+    assert settings.prebuilt_runtime is True
     assert settings.repository == "https://github.com/example/repo.git"
     assert settings.docker_image == "python:3.10-slim-bookworm"
     assert settings.docker_env_file == "/srv/bugrat/clearml/.env"
@@ -192,3 +199,14 @@ def test_composition_runtime_dependency_hygiene() -> None:
         parameter.kind is inspect.Parameter.KEYWORD_ONLY
         for parameter in signature.parameters.values()
     )
+
+
+def test_clearml_stage_routes_reject_malformed_operational_config() -> None:
+    with pytest.raises(ValueError, match="valid JSON"):
+        composition._clearml_backend_config({"MLDB_V2_CLEARML_STAGE_ROUTES_JSON": "{"})
+    with pytest.raises(ValueError, match="unknown fields"):
+        composition._clearml_backend_config({
+            "MLDB_V2_CLEARML_STAGE_ROUTES_JSON": '{"latency":{"worker":"host-a"}}'
+        })
+    with pytest.raises(ValueError, match="boolean"):
+        composition._clearml_backend_config({"MLDB_V2_CLEARML_PREBUILT_RUNTIME": "maybe"})

@@ -23,8 +23,10 @@ The currently validated external services are:
 | ClearML Web | `https://clearml.thebugrat.dev/` |
 | ClearML API | `https://clearml-api.thebugrat.dev/` |
 | ClearML Files | `https://clearml-files.thebugrat.dev/` |
-| ClearML queue | `default` |
-| Validated worker | `bugrat-gpu0` |
+| ClearML default queue | `default` |
+| Canonical CPU-latency queue | `latency-cpu` |
+| Validated general/GPU worker | `bugrat-gpu0` |
+| Canonical latency worker | `bugrat-gpu0` (same single worker process; `latency-cpu` has higher queue priority) |
 | Validated GPU | NVIDIA GeForce RTX 3090, 24 GB |
 | S3 endpoint | `https://mldb-s3.thebugrat.dev` |
 | S3 region | `us-east-1` |
@@ -54,7 +56,9 @@ Environment variables consumed by the production composition include:
 | `CLEARML_API_ACCESS_KEY` | ClearML authentication | yes |
 | `CLEARML_API_SECRET_KEY` | ClearML authentication | yes |
 | `MLDB_V2_DEFAULT_BACKEND` | default backend used when `run` omits `--backend` | no |
-| `MLDB_V2_CLEARML_QUEUE` | ClearML queue name | no |
+| `MLDB_V2_CLEARML_QUEUE` | default ClearML queue name | no |
+| `MLDB_V2_CLEARML_STAGE_ROUTES_JSON` | backend-only JSON map from logical stage name to queue / Docker GPU overrides | no |
+| `MLDB_V2_CLEARML_PREBUILT_RUNTIME` | reuse the prebuilt image's system Python instead of creating a per-Task venv | no |
 | `MLDB_V2_CLEARML_REPOSITORY` | Git repository URL used by ClearML source execution | no |
 | `MLDB_V2_CLEARML_DOCKER_IMAGE` | worker container image | no |
 | `MLDB_V2_CLEARML_DOCKER_ENV_FILE` | optional Docker env-file path | may contain secrets |
@@ -72,8 +76,10 @@ The validated local `.env` now also carries these non-secret runtime defaults so
 
     MLDB_V2_DEFAULT_BACKEND=clearml
     MLDB_V2_CLEARML_QUEUE=default
+    MLDB_V2_CLEARML_STAGE_ROUTES_JSON={"onnx-cpu-latency":{"queue":"latency-cpu","docker_gpu":null}}
     MLDB_V2_CLEARML_REPOSITORY=https://github.com/hiroshiasayadev-prog/mjtensu.git
-    MLDB_V2_CLEARML_DOCKER_IMAGE=pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+    MLDB_V2_CLEARML_DOCKER_IMAGE=mldb-clearml-runner:torch2.5.1-cu124-v1
+    MLDB_V2_CLEARML_PREBUILT_RUNTIME=true
     MLDB_V2_CLEARML_DOCKER_GPU=all
     MLDB_V2_CLEARML_DOCKER_SHM_SIZE=2g
 
@@ -85,6 +91,14 @@ Normal startup is therefore just:
     .\mldb.cmd doctor
 
 If you bypass `mldb.cmd` and invoke `python -m mldb_v2.src.cli` directly, `.env` is not loaded by the Python module and `MLDB_REPO_ROOT` is not supplied automatically. Prefer the wrapper for normal operation.
+
+### CPU latency queue and comparability
+
+`onnx-cpu-latency` is a benchmark stage, not ordinary throughput work. Route it only to `latency-cpu`. The canonical Linux worker `bugrat-gpu0` subscribes to `latency-cpu` first and `default` second. Because it is one ClearML Agent process, it executes at most one MLDB Task at a time on that host, so a default Evaluation cannot overlap a latency benchmark there. Do **not** subscribe a Windows development worker, another CPU model, or any heterogeneous machine to `latency-cpu`; doing so changes benchmark hardware and invalidates direct historical/model comparison. Additional workers may subscribe to `default` for ordinary Training/Evaluation once they have the required runtime image and data access.
+
+Queue isolation fixes worker identity and prevents same-agent overlap, but unrelated host processes can still perturb timing. For comparable latency numbers, keep other CPU-heavy host workloads away from the benchmark window. If host contention cannot be controlled, treat the latency values as non-comparable and rerun under controlled load. Keep the Protocol's batch size, ORT provider, intra/inter-op thread counts, execution mode, and runtime versions fixed as well.
+
+The prebuilt task image `mldb-clearml-runner:torch2.5.1-cu124-v1` contains the pinned MLDB remote runtime dependencies. `MLDB_V2_CLEARML_PREBUILT_RUNTIME=true` tells the ClearML task launcher to reuse `/opt/conda/bin/python` instead of building a fresh virtualenv; Task requirements remain declared and are reconciled against that interpreter. Rebuild the image when `_REMOTE_PACKAGES` changes.
 
 ## 3. Preflight before a run
 

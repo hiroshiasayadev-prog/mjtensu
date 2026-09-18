@@ -350,7 +350,10 @@ def test_sdk_adapter_creates_native_controller_task_without_enqueuing_children()
     plan = _plan()
     result = _result(plan)
     adapter = ClearMLSDKAdapter(
-        ClearMLSDKSettings(step_queue="gpu-a"),
+        ClearMLSDKSettings(
+            step_queue="gpu-a",
+            stage_routes={"deployment": {"queue": "latency-cpu", "docker_gpu": None}},
+        ),
         task_class=FakeSDKTask,
     )
     task_id = adapter.create_pipeline_run(_pipeline_request(plan, result))
@@ -369,6 +372,9 @@ def test_sdk_adapter_creates_native_controller_task_without_enqueuing_children()
     assert training_node["mldb.logical_step"] == "trial-0001-train"
     assert quality_node["parents"] == ["arch-v1 | training"]
     assert quality_node["mldb.logical_step"] == "trial-0001-eval-0001"
+    assert training_node["queue"] == "gpu-a"
+    assert quality_node["queue"] == "gpu-a"
+    assert deployment_node["queue"] == "latency-cpu"
     assert deployment_node["cache_executed_step"] is False
     assert training_node["job_id"] is None
     assert task.raw_configs["Pipeline"]["type"] == "dictionary"

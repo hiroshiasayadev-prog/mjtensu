@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -40,6 +41,56 @@ def _optional_environment_value(
     if type(value) is not str:
         raise TypeError(f"runtime environment value {name} must be a string")
     return value
+
+
+def _optional_environment_bool(
+    environment: Mapping[str, str], name: str
+) -> bool | None:
+    value = _optional_environment_value(environment, name)
+    if value is None:
+        return None
+    normalized = value.lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} must be a boolean value")
+
+
+def _clearml_stage_routes(environment: Mapping[str, str]) -> dict[str, dict[str, object]]:
+    raw = _optional_environment_value(environment, "MLDB_V2_CLEARML_STAGE_ROUTES_JSON")
+    if raw is None:
+        return {}
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise ValueError("MLDB_V2_CLEARML_STAGE_ROUTES_JSON must be valid JSON") from error
+    if type(value) is not dict:
+        raise ValueError("MLDB_V2_CLEARML_STAGE_ROUTES_JSON must be a JSON object")
+    routes: dict[str, dict[str, object]] = {}
+    for stage, route in value.items():
+        if type(stage) is not str or not stage or stage.strip() != stage:
+            raise ValueError("ClearML stage route names must be non-empty trimmed strings")
+        if type(route) is not dict or not route:
+            raise ValueError(f"ClearML stage route {stage!r} must be a non-empty object")
+        unknown = set(route) - {"queue", "docker_gpu"}
+        if unknown:
+            raise ValueError(f"ClearML stage route {stage!r} has unknown fields: {sorted(unknown)!r}")
+        parsed: dict[str, object] = {}
+        if "queue" in route:
+            queue = route["queue"]
+            if type(queue) is not str or not queue or queue.strip() != queue:
+                raise ValueError(f"ClearML stage route {stage!r} queue must be a non-empty trimmed string")
+            parsed["queue"] = queue
+        if "docker_gpu" in route:
+            docker_gpu = route["docker_gpu"]
+            if docker_gpu is not None and (
+                type(docker_gpu) is not str or not docker_gpu or docker_gpu.strip() != docker_gpu
+            ):
+                raise ValueError(f"ClearML stage route {stage!r} docker_gpu must be null or a non-empty trimmed string")
+            parsed["docker_gpu"] = docker_gpu
+        routes[stage] = parsed
+    return routes
 
 
 def _configured_default_backend(environment: Mapping[str, str]) -> str | None:
@@ -81,6 +132,16 @@ def _clearml_backend_config(
         value = _optional_environment_value(environment, environment_name)
         if value is not None:
             options[option_name] = value
+
+    stage_routes = _clearml_stage_routes(environment)
+    if stage_routes:
+        options["stage_routes"] = stage_routes
+
+    prebuilt_runtime = _optional_environment_bool(
+        environment, "MLDB_V2_CLEARML_PREBUILT_RUNTIME"
+    )
+    if prebuilt_runtime is not None:
+        options["prebuilt_runtime"] = prebuilt_runtime
 
     runtime_data_root = _optional_environment_value(
         environment, "MLDB_V2_RUNTIME_DATA_ROOT"
