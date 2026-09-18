@@ -78,7 +78,11 @@ Pipeline Run: shufflenet-spatial-screen-v1 / run-...
 
 Opening a child node shows detailed Task telemetry/artifacts/logs. Training curves and dense Evaluation diagnostics stay on those child Tasks.
 
-For multi-Model Evaluation, MLDB builds a Study-level comparison projection from accepted canonical Evaluation Results. The ClearML controller renders one compact comparison table per Evaluation stage, with readable trial labels derived from Model/Architecture lineage. Do not mirror every trial-metric pair as a controller single-value scalar; that produces one meaningless one-bar chart per value and does not scale. Immutable `trial-XXXX` / evaluation-coordinate identities remain in metadata and canonical records even when the UI label is human-readable.
+For multi-Model Evaluation, MLDB builds a Study-level comparison projection from accepted canonical Evaluation Results. The ClearML controller renders one compact comparison table and one bounded multi-metric bar-panel per Evaluation stage, with readable trial labels derived from Model/Architecture lineage. Each metric subplot compares the trial Models directly instead of producing one single-value chart per trial-metric pair. Controller Scalars are not used for this cross-sectional comparison; time-series Training/Evaluation telemetry remains on the child Tasks.
+
+Evaluation explanations come from the reusable Evaluation Protocol definition itself. MLDB projects the Protocol `name` / `description` into an `Evaluation Guide` table on the controller, so the UI explains what each comparison stage measures without duplicating prose in the Study. Immutable `trial-XXXX` / evaluation-coordinate identities remain in metadata and canonical records even when the UI label is human-readable.
+
+The native ClearML Pipeline DAG is the execution-flow view. MLDB does not publish a second custom Sankey/"Execution Flow" plot on the controller; for Existing-Model Studies such a duplicate plot degenerates into disconnected circles and adds no execution information.
 
 ## 6. Retry, cache, and rerun policy
 

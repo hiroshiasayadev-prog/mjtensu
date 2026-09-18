@@ -391,17 +391,24 @@ def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion()
     adapter = ClearMLSDKAdapter(ClearMLSDKSettings(), task_class=FakeSDKTask)
     pipeline_id = cast(str, adapter.create_pipeline_run(_pipeline_request(plan, result)))
     summary = {
-        "schema": "mjtensu.mldb-v2/study-summary-projection/v2",
+        "schema": "mjtensu.mldb-v2/study-summary-projection/v3",
         "study_result": result["id"],
         "study": result["study"],
         "status": "submitted",
         "rows": [{
             "trial": "trial-0001", "trial_label": "Readable model", "kind": "evaluation",
-            "stage": "quality", "coordinate": "eval-0001", "disposition": "completed",
+            "stage": "quality", "coordinate": "eval-0001",
+            "evaluation_protocol": "demo/eval-v1",
+            "evaluation_name": "Quality holdout",
+            "evaluation_description": "Measures held-out classification quality.",
+            "disposition": "completed",
             "result": "demo/eval-result", "metrics": {"accuracy": 0.9},
         }],
         "comparisons": [{
             "stage": "quality",
+            "evaluation_protocol": "demo/eval-v1",
+            "evaluation_name": "Quality holdout",
+            "evaluation_description": "Measures held-out classification quality.",
             "metrics": ["accuracy"],
             "rows": [{
                 "trial": "trial-0001", "trial_label": "Readable model",
@@ -417,6 +424,22 @@ def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion()
     assert controller.configs["mldb.study_summary"] == summary
     assert controller.uploads == []
     assert controller.single_values == {}
+
+    guide = next(
+        report for report in controller.table_reports
+        if report["title"] == "Evaluation Guide"
+    )
+    assert guide["series"] == "Definitions"
+    assert guide["table_plot"] == [
+        ["Evaluation", "Name", "Protocol", "Description"],
+        [
+            "quality",
+            "Quality holdout",
+            "demo/eval-v1",
+            "Measures held-out classification quality.",
+        ],
+    ]
+
     comparison = next(
         report for report in controller.table_reports
         if report["title"] == "Study Comparison"
@@ -426,8 +449,20 @@ def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion()
         ["Trial", "Status", "accuracy"],
         ["Readable model", "completed", 0.9],
     ]
-    assert controller.plotly_reports[-1]["title"] == "Pipeline"
-    assert controller.plotly_reports[-1]["series"] == "Execution Flow"
+
+    bars = next(
+        report for report in controller.plotly_reports
+        if report["title"] == "Model Comparison"
+    )
+    assert bars["series"] == "quality"
+    assert bars["figure"]["data"][0]["type"] == "bar"
+    assert bars["figure"]["data"][0]["orientation"] == "h"
+    assert bars["figure"]["data"][0]["x"] == [0.9]
+    assert bars["figure"]["data"][0]["y"] == ["Readable model"]
+    assert not any(
+        report["title"] == "Pipeline" and report["series"] == "Execution Flow"
+        for report in controller.plotly_reports
+    )
     assert controller.status == "in_progress"
 
 

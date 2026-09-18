@@ -700,6 +700,75 @@ def _native_pipeline_node(
     return matches[0] if matches else None
 
 
+def _comparison_bar_figure(
+    *,
+    stage: str,
+    evaluation_name: str | None,
+    metric_names: Sequence[str],
+    rows: Sequence[Mapping[str, object]],
+) -> dict[str, object] | None:
+    metrics = [name for name in metric_names if type(name) is str]
+    if not metrics:
+        return None
+
+    columns = 1 if len(metrics) == 1 else 2
+    subplot_rows = int(math.ceil(len(metrics) / columns))
+    data: list[dict[str, object]] = []
+    layout: dict[str, object] = {
+        "title": {"text": evaluation_name or stage},
+        "grid": {
+            "rows": subplot_rows,
+            "columns": columns,
+            "pattern": "independent",
+            "roworder": "top to bottom",
+        },
+        "showlegend": False,
+        "height": max(420, 250 * subplot_rows),
+        "margin": {"l": 80, "r": 30, "t": 80, "b": 60},
+    }
+
+    for metric_index, metric in enumerate(metrics, start=1):
+        labels: list[str] = []
+        values: list[float | None] = []
+        for row in rows:
+            trial = row.get("trial_label") or row.get("trial")
+            raw_metrics = row.get("metrics")
+            if type(trial) is not str or not isinstance(raw_metrics, Mapping):
+                continue
+            value = raw_metrics.get(metric)
+            numeric: float | None = None
+            if type(value) in {int, float}:
+                candidate = float(value)
+                if math.isfinite(candidate):
+                    numeric = candidate
+            labels.append(trial)
+            values.append(numeric)
+
+        axis_suffix = "" if metric_index == 1 else str(metric_index)
+        data.append(
+            {
+                "type": "bar",
+                "orientation": "h",
+                "x": values,
+                "y": labels,
+                "xaxis": f"x{axis_suffix}",
+                "yaxis": f"y{axis_suffix}",
+                "hovertemplate": f"%{{y}}<br>{metric}: %{{x:.6g}}<extra></extra>",
+            }
+        )
+        layout[f"xaxis{axis_suffix}"] = {
+            "title": {"text": metric},
+            "automargin": True,
+        }
+        layout[f"yaxis{axis_suffix}"] = {
+            "automargin": True,
+            "categoryorder": "array",
+            "categoryarray": list(reversed(labels)),
+        }
+
+    return {"data": data, "layout": layout}
+
+
 class ClearMLSDKAdapter:
     """One lazy SDK adapter satisfying admission/observation/cancel/log Protocols."""
 
@@ -1178,21 +1247,55 @@ class ClearMLSDKAdapter:
         except Exception:
             return
         report_table = getattr(logger, "report_table", None)
-        if not callable(report_table):
-            return
+        report_plotly = getattr(logger, "report_plotly", None)
         comparisons = summary.get("comparisons")
         if type(comparisons) is not list:
             return
+
+        guide: list[list[object]] = [[
+            "Evaluation",
+            "Name",
+            "Protocol",
+            "Description",
+        ]]
         for comparison in comparisons:
             if type(comparison) is not dict:
                 continue
             stage = comparison.get("stage")
+            protocol = comparison.get("evaluation_protocol")
+            evaluation_name = comparison.get("evaluation_name")
+            description = comparison.get("evaluation_description")
+            if type(stage) is not str:
+                continue
+            guide.append([
+                stage,
+                evaluation_name if type(evaluation_name) is str else "",
+                protocol if type(protocol) is str else "",
+                description if type(description) is str else "",
+            ])
+        if len(guide) > 1 and callable(report_table):
+            try:
+                report_table(
+                    title="Evaluation Guide",
+                    series="Definitions",
+                    iteration=0,
+                    table_plot=guide,
+                )
+            except Exception:
+                pass
+
+        for comparison in comparisons:
+            if type(comparison) is not dict:
+                continue
+            stage = comparison.get("stage")
+            evaluation_name = comparison.get("evaluation_name")
             metric_names = comparison.get("metrics")
             rows = comparison.get("rows")
             if type(stage) is not str or type(metric_names) is not list or type(rows) is not list:
                 continue
             metrics = [name for name in metric_names if type(name) is str]
             table: list[list[object]] = [["Trial", "Status", *metrics]]
+            normalized_rows: list[Mapping[str, object]] = []
             for row in rows:
                 if type(row) is not dict:
                     continue
@@ -1201,6 +1304,7 @@ class ClearMLSDKAdapter:
                 values = row.get("metrics")
                 if type(trial) is not str or type(disposition) is not str or not isinstance(values, Mapping):
                     continue
+                normalized_rows.append(row)
                 rendered: list[object] = [trial, disposition]
                 for metric in metrics:
                     value = values.get(metric, "")
@@ -1209,17 +1313,37 @@ class ClearMLSDKAdapter:
                         value = numeric if math.isfinite(numeric) else ""
                     rendered.append(value)
                 table.append(rendered)
-            if len(table) == 1:
-                continue
-            try:
-                report_table(
-                    title="Study Comparison",
-                    series=stage,
-                    iteration=0,
-                    table_plot=table,
+
+            if len(table) > 1 and callable(report_table):
+                try:
+                    report_table(
+                        title="Study Comparison",
+                        series=stage,
+                        iteration=0,
+                        table_plot=table,
+                    )
+                except Exception:
+                    pass
+
+            if callable(report_plotly):
+                figure = _comparison_bar_figure(
+                    stage=stage,
+                    evaluation_name=(
+                        evaluation_name if type(evaluation_name) is str else None
+                    ),
+                    metric_names=metrics,
+                    rows=normalized_rows,
                 )
-            except Exception:
-                continue
+                if figure is not None:
+                    try:
+                        report_plotly(
+                            title="Model Comparison",
+                            series=stage,
+                            iteration=0,
+                            figure=figure,
+                        )
+                    except Exception:
+                        pass
 
     def project_pipeline_summary(
         self,
@@ -1237,7 +1361,6 @@ class ClearMLSDKAdapter:
             )
         self._project_pipeline_summary_tables(task=task, summary=payload)
         self._sync_pipeline_node_statuses(pipeline=task, summary=payload)
-        self._project_pipeline_execution_views(task=task)
 
         study_status = payload.get("status")
         task_status = _status(task)

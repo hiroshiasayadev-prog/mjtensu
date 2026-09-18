@@ -267,6 +267,57 @@ def _trial_projection_context(
     return label, architecture_id, model_id
 
 
+def _evaluation_projection_context(
+    *,
+    resolver: CanonicalRepositoryResolver,
+    plan_trial: Mapping[str, object] | None,
+    coordinate: object,
+) -> tuple[str | None, str | None, str | None, list[str]]:
+    if not isinstance(plan_trial, Mapping):
+        return None, None, None, []
+    evaluations = plan_trial.get("evaluations")
+    if type(evaluations) is not list:
+        return None, None, None, []
+    plan_evaluation = next(
+        (
+            item
+            for item in evaluations
+            if isinstance(item, Mapping) and item.get("coordinate") == coordinate
+        ),
+        None,
+    )
+    if not isinstance(plan_evaluation, Mapping):
+        return None, None, None, []
+    raw_protocol = plan_evaluation.get("evaluation_protocol")
+    if type(raw_protocol) is not str:
+        return None, None, None, []
+
+    protocol_id = raw_protocol
+    protocol_name = _local_reference_name(protocol_id)
+    protocol_description: str | None = None
+    metric_names: list[str] = []
+    try:
+        protocol = resolver.resolve(
+            kind=EntityKind.EVALUATION_PROTOCOL,
+            entity_id=protocol_id,
+        )
+    except (FileNotFoundError, ValueError):
+        protocol = None
+    if isinstance(protocol, Mapping):
+        if type(protocol.get("name")) is str and protocol["name"]:
+            protocol_name = str(protocol["name"])
+        if type(protocol.get("description")) is str and protocol["description"]:
+            protocol_description = str(protocol["description"])
+        raw_metrics = protocol.get("metrics")
+        if isinstance(raw_metrics, Mapping):
+            metric_names = [
+                str(metric)
+                for metric in raw_metrics
+                if type(metric) is str
+            ]
+    return protocol_id, protocol_name, protocol_description, metric_names
+
+
 def _study_summary_projection(
     *,
     resolver: CanonicalRepositoryResolver,
@@ -296,7 +347,7 @@ def _study_summary_projection(
         base_counts[context[0]] = base_counts.get(context[0], 0) + 1
 
     rows: list[dict[str, object]] = []
-    comparisons_by_stage: dict[str, dict[str, object]] = {}
+    comparisons_by_stage: dict[tuple[str, str | None], dict[str, object]] = {}
     for trial in result["trials"]:
         trial_id = str(trial["trial"])
         base_label, architecture_id, model_id = contexts[trial_id]
@@ -321,6 +372,7 @@ def _study_summary_projection(
                     "metrics": {},
                 }
             )
+        plan_trial = plan_trials.get(trial_id)
         for evaluation in trial["evaluations"]:
             metrics: dict[str, object] = {}
             result_id = evaluation["result"]
@@ -340,6 +392,16 @@ def _study_summary_projection(
                     if isinstance(payload, Mapping) and isinstance(payload.get("metrics"), Mapping):
                         metrics = copy.deepcopy(dict(payload["metrics"]))
             stage = str(evaluation["stage"])
+            (
+                evaluation_protocol,
+                evaluation_name,
+                evaluation_description,
+                protocol_metric_names,
+            ) = _evaluation_projection_context(
+                resolver=resolver,
+                plan_trial=plan_trial,
+                coordinate=evaluation["coordinate"],
+            )
             row = {
                 "trial": trial_id,
                 "trial_label": trial_label,
@@ -348,6 +410,9 @@ def _study_summary_projection(
                 "kind": "evaluation",
                 "stage": stage,
                 "coordinate": evaluation["coordinate"],
+                "evaluation_protocol": evaluation_protocol,
+                "evaluation_name": evaluation_name,
+                "evaluation_description": evaluation_description,
                 "disposition": evaluation["disposition"],
                 "result": result_id,
                 "metrics": metrics,
@@ -355,8 +420,15 @@ def _study_summary_projection(
             rows.append(row)
 
             comparison = comparisons_by_stage.setdefault(
-                stage,
-                {"stage": stage, "metrics": [], "rows": []},
+                (stage, evaluation_protocol),
+                {
+                    "stage": stage,
+                    "evaluation_protocol": evaluation_protocol,
+                    "evaluation_name": evaluation_name,
+                    "evaluation_description": evaluation_description,
+                    "metrics": list(protocol_metric_names),
+                    "rows": [],
+                },
             )
             metric_names = cast(list[str], comparison["metrics"])
             for metric in metrics:
@@ -373,7 +445,7 @@ def _study_summary_projection(
                 }
             )
     return {
-        "schema": "mjtensu.mldb-v2/study-summary-projection/v2",
+        "schema": "mjtensu.mldb-v2/study-summary-projection/v3",
         "study_result": result["id"],
         "study": result["study"],
         "status": result["status"],
