@@ -425,10 +425,20 @@ def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion()
     assert controller.uploads == []
     assert controller.single_values == {}
 
-    assert not any(
-        report["title"] == "Evaluation Guide"
-        for report in controller.table_reports
+    guide = next(
+        report for report in controller.table_reports
+        if report["title"] == "Evaluation Guide"
     )
+    assert guide["series"] == "Definitions"
+    assert guide["table_plot"] == [
+        ["Evaluation", "Name", "Protocol", "Description"],
+        [
+            "quality",
+            "Quality holdout",
+            "demo/eval-v1",
+            "Measures held-out classification quality.",
+        ],
+    ]
 
     comparison = next(
         report for report in controller.table_reports
@@ -438,15 +448,6 @@ def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion()
     assert comparison["table_plot"] == [
         ["Trial", "Status", "accuracy"],
         ["Readable model", "completed", 0.9],
-    ]
-    assert comparison["extra_data"] == {
-        "domain": {"x": [0, 1], "y": [0.62, 1]},
-    }
-    annotations = comparison["extra_layout"]["annotations"]
-    assert [item["text"] for item in annotations] == [
-        "<b>Quality holdout</b>",
-        "Protocol: demo/eval-v1",
-        "Measures held-out classification quality.",
     ]
 
     bars = next(

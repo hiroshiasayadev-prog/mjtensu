@@ -6,7 +6,6 @@ import hashlib
 import json
 import math
 import os
-import textwrap
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -1253,6 +1252,38 @@ class ClearMLSDKAdapter:
         if type(comparisons) is not list:
             return
 
+        guide: list[list[object]] = [[
+            "Evaluation",
+            "Name",
+            "Protocol",
+            "Description",
+        ]]
+        for comparison in comparisons:
+            if type(comparison) is not dict:
+                continue
+            stage = comparison.get("stage")
+            protocol = comparison.get("evaluation_protocol")
+            evaluation_name = comparison.get("evaluation_name")
+            description = comparison.get("evaluation_description")
+            if type(stage) is not str:
+                continue
+            guide.append([
+                stage,
+                evaluation_name if type(evaluation_name) is str else "",
+                protocol if type(protocol) is str else "",
+                description if type(description) is str else "",
+            ])
+        if len(guide) > 1 and callable(report_table):
+            try:
+                report_table(
+                    title="Evaluation Guide",
+                    series="Definitions",
+                    iteration=0,
+                    table_plot=guide,
+                )
+            except Exception:
+                pass
+
         for comparison in comparisons:
             if type(comparison) is not dict:
                 continue
@@ -1285,51 +1316,11 @@ class ClearMLSDKAdapter:
 
             if len(table) > 1 and callable(report_table):
                 try:
-                    row_count = len(table) - 1
-                    table_fraction = min(0.75, max(0.38, (60 + 32 * row_count) / 388))
-                    table_bottom = 1.0 - table_fraction
-                    protocol = comparison.get("evaluation_protocol")
-                    description = comparison.get("evaluation_description")
-                    explanation: list[dict[str, object]] = []
-                    if type(evaluation_name) is str and evaluation_name:
-                        explanation.append({
-                            "text": f"<b>{evaluation_name}</b>",
-                            "xref": "paper", "yref": "paper",
-                            "x": 0, "y": max(0.18, table_bottom - 0.06),
-                            "xanchor": "left", "yanchor": "top",
-                            "showarrow": False, "align": "left",
-                            "font": {"size": 14},
-                        })
-                    if type(protocol) is str and protocol:
-                        explanation.append({
-                            "text": f"Protocol: {protocol}",
-                            "xref": "paper", "yref": "paper",
-                            "x": 0, "y": max(0.11, table_bottom - 0.14),
-                            "xanchor": "left", "yanchor": "top",
-                            "showarrow": False, "align": "left",
-                            "font": {"size": 11},
-                        })
-                    if type(description) is str and description:
-                        wrapped = "<br>".join(textwrap.wrap(
-                            description, width=120, break_long_words=False, break_on_hyphens=False
-                        ))
-                        explanation.append({
-                            "text": wrapped,
-                            "xref": "paper", "yref": "paper",
-                            "x": 0, "y": max(0.04, table_bottom - 0.23),
-                            "xanchor": "left", "yanchor": "top",
-                            "showarrow": False, "align": "left",
-                            "font": {"size": 11},
-                        })
                     report_table(
                         title="Study Comparison",
                         series=stage,
                         iteration=0,
                         table_plot=table,
-                        extra_data={
-                            "domain": {"x": [0, 1], "y": [table_bottom, 1]},
-                        },
-                        extra_layout={"annotations": explanation},
                     )
                 except Exception:
                     pass
