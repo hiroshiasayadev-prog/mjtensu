@@ -194,8 +194,18 @@ def test_evaluation_projection_context_resolves_metric_preferences() -> None:
                 "name": "Quality",
                 "description": "Compare quality and cost.",
                 "metrics": {
-                    "accuracy": {"type": "number", "required": True, "preference": "higher"},
-                    "latency_ms": {"type": "number", "required": True, "preference": "lower"},
+                    "accuracy": {
+                        "type": "number",
+                        "required": True,
+                        "preference": "higher",
+                        "description": "Held-out accuracy.",
+                    },
+                    "latency_ms": {
+                        "type": "number",
+                        "required": True,
+                        "preference": "lower",
+                        "description": "Inference latency in milliseconds.",
+                    },
                     "diagnostic": {"type": "number", "required": False},
                 },
             }
@@ -217,6 +227,10 @@ def test_evaluation_projection_context_resolves_metric_preferences() -> None:
         "Compare quality and cost.",
         ["accuracy", "latency_ms", "diagnostic"],
         {"accuracy": "higher", "latency_ms": "lower", "diagnostic": "neutral"},
+        {
+            "accuracy": "Held-out accuracy.",
+            "latency_ms": "Inference latency in milliseconds.",
+        },
     )
 
 

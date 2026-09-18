@@ -272,12 +272,12 @@ def _evaluation_projection_context(
     resolver: CanonicalRepositoryResolver,
     plan_trial: Mapping[str, object] | None,
     coordinate: object,
-) -> tuple[str | None, str | None, str | None, list[str], dict[str, str]]:
+) -> tuple[str | None, str | None, str | None, list[str], dict[str, str], dict[str, str]]:
     if not isinstance(plan_trial, Mapping):
-        return None, None, None, [], {}
+        return None, None, None, [], {}, {}
     evaluations = plan_trial.get("evaluations")
     if type(evaluations) is not list:
-        return None, None, None, [], {}
+        return None, None, None, [], {}, {}
     plan_evaluation = next(
         (
             item
@@ -287,16 +287,17 @@ def _evaluation_projection_context(
         None,
     )
     if not isinstance(plan_evaluation, Mapping):
-        return None, None, None, [], {}
+        return None, None, None, [], {}, {}
     raw_protocol = plan_evaluation.get("evaluation_protocol")
     if type(raw_protocol) is not str:
-        return None, None, None, [], {}
+        return None, None, None, [], {}, {}
 
     protocol_id = raw_protocol
     protocol_name = _local_reference_name(protocol_id)
     protocol_description: str | None = None
     metric_names: list[str] = []
     metric_preferences: dict[str, str] = {}
+    metric_descriptions: dict[str, str] = {}
     try:
         protocol = resolver.resolve(
             kind=EntityKind.EVALUATION_PROTOCOL,
@@ -320,8 +321,18 @@ def _evaluation_projection_context(
                     raw_preference = declaration.get("preference")
                     if type(raw_preference) is str and raw_preference in {"higher", "lower", "neutral"}:
                         preference = raw_preference
+                    raw_description = declaration.get("description")
+                    if type(raw_description) is str and raw_description:
+                        metric_descriptions[metric] = raw_description
                 metric_preferences[metric] = preference
-    return protocol_id, protocol_name, protocol_description, metric_names, metric_preferences
+    return (
+        protocol_id,
+        protocol_name,
+        protocol_description,
+        metric_names,
+        metric_preferences,
+        metric_descriptions,
+    )
 
 
 def _study_summary_projection(
@@ -404,6 +415,7 @@ def _study_summary_projection(
                 evaluation_description,
                 protocol_metric_names,
                 protocol_metric_preferences,
+                protocol_metric_descriptions,
             ) = _evaluation_projection_context(
                 resolver=resolver,
                 plan_trial=plan_trial,
@@ -435,16 +447,19 @@ def _study_summary_projection(
                     "evaluation_description": evaluation_description,
                     "metrics": list(protocol_metric_names),
                     "metric_preferences": dict(protocol_metric_preferences),
+                    "metric_descriptions": dict(protocol_metric_descriptions),
                     "rows": [],
                 },
             )
             metric_names = cast(list[str], comparison["metrics"])
             metric_preferences = cast(dict[str, str], comparison["metric_preferences"])
+            metric_descriptions = cast(dict[str, str], comparison["metric_descriptions"])
             for metric in metrics:
                 if type(metric) is str and metric not in metric_names:
                     metric_names.append(metric)
                 if type(metric) is str:
                     metric_preferences.setdefault(metric, "neutral")
+                    metric_descriptions.setdefault(metric, "")
             cast(list[dict[str, object]], comparison["rows"]).append(
                 {
                     "trial": trial_id,

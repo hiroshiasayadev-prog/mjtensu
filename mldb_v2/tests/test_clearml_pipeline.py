@@ -472,6 +472,10 @@ def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion()
             "evaluation_description": "Measures held-out classification quality.",
             "metrics": ["accuracy", "loss"],
             "metric_preferences": {"accuracy": "higher", "loss": "lower"},
+            "metric_descriptions": {
+                "accuracy": "Held-out classification accuracy.",
+                "loss": "Held-out classification loss.",
+            },
             "rows": [{
                 "trial": "trial-0001", "trial_label": "Readable model",
                 "disposition": "completed", "metrics": {"accuracy": 0.9, "loss": 0.2},
@@ -487,10 +491,17 @@ def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion()
     assert controller.uploads == []
     assert controller.single_values == {}
 
-    assert not any(
-        report["title"] == "Evaluation Guide"
-        for report in controller.table_reports
+    guide = next(
+        report for report in controller.table_reports
+        if report["title"] == "Evaluation Metrics"
     )
+    assert guide["series"] == "Guide"
+    assert guide["table_plot"] == [
+        ["Evaluation", "Metric", "Meaning", "Better"],
+        ["quality", "accuracy", "Held-out classification accuracy.", "higher"],
+        ["quality", "loss", "Held-out classification loss.", "lower"],
+    ]
+    assert "extra_layout" not in guide
     assert controller.comment == (
         "MLDB evaluation guide\n\n"
         "quality - Quality holdout\n"

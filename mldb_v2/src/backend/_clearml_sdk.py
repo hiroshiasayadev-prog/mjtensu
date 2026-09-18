@@ -1391,6 +1391,45 @@ class ClearMLSDKAdapter:
         if type(comparisons) is not list:
             return
 
+        if callable(report_table):
+            guide: list[list[object]] = [["Evaluation", "Metric", "Meaning", "Better"]]
+            for comparison in comparisons:
+                if type(comparison) is not dict:
+                    continue
+                stage = comparison.get("stage")
+                metric_names = comparison.get("metrics")
+                metric_preferences = comparison.get("metric_preferences")
+                metric_descriptions = comparison.get("metric_descriptions")
+                if type(stage) is not str or type(metric_names) is not list:
+                    continue
+                preferences = (
+                    metric_preferences if isinstance(metric_preferences, Mapping) else {}
+                )
+                descriptions = (
+                    metric_descriptions if isinstance(metric_descriptions, Mapping) else {}
+                )
+                for metric in metric_names:
+                    if type(metric) is not str:
+                        continue
+                    description = descriptions.get(metric, "")
+                    preference = preferences.get(metric, "neutral")
+                    guide.append([
+                        stage,
+                        metric,
+                        description if type(description) is str else "",
+                        preference if type(preference) is str else "neutral",
+                    ])
+            if len(guide) > 1:
+                try:
+                    report_table(
+                        title="Evaluation Metrics",
+                        series="Guide",
+                        iteration=0,
+                        table_plot=guide,
+                    )
+                except Exception:
+                    pass
+
         for comparison in comparisons:
             if type(comparison) is not dict:
                 continue
