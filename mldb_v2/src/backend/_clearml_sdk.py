@@ -1392,7 +1392,7 @@ class ClearMLSDKAdapter:
             return
 
         if callable(report_table):
-            guide: list[list[object]] = [["Evaluation", "Metric", "Meaning", "Better"]]
+            guide: list[list[object]] = [["Evaluation", "Metric", "Description", "Better"]]
             for comparison in comparisons:
                 if type(comparison) is not dict:
                     continue

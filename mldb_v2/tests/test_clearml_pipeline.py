@@ -497,7 +497,7 @@ def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion()
     )
     assert guide["series"] == "Guide"
     assert guide["table_plot"] == [
-        ["Evaluation", "Metric", "Meaning", "Better"],
+        ["Evaluation", "Metric", "Description", "Better"],
         ["quality", "accuracy", "Held-out classification accuracy.", "higher"],
         ["quality", "loss", "Held-out classification loss.", "lower"],
     ]

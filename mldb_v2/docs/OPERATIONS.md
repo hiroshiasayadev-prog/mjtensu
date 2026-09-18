@@ -92,6 +92,21 @@ Normal startup is therefore just:
 
 If you bypass `mldb.cmd` and invoke `python -m mldb_v2.src.cli` directly, `.env` is not loaded by the Python module and `MLDB_REPO_ROOT` is not supplied automatically. Prefer the wrapper for normal operation.
 
+
+### ClearML run hygiene and archiving
+
+Keep the default ClearML experiment view focused on currently relevant results. Once a diagnostic/intermediate run has served its purpose and its replacement has been verified, archive the superseded ClearML controller Task **and all child Tasks** together. Archiving is a UI/lifecycle operation only: do not delete the canonical MLDB Study Result, Evaluation Results, source commit, or persisted artifacts merely to reduce ClearML clutter.
+
+Recommended rule:
+
+- keep the latest accepted run for an active Study visible;
+- archive failed/cancelled troubleshooting runs after the cause is recorded and a replacement run is verified;
+- archive successful validation runs once a newer accepted revision supersedes them;
+- never archive a still-running run or the only accepted result for a Study;
+- archive the controller and child Tasks as one unit so Pipeline and task lists stay consistent.
+
+ClearML SDK exposes this as `Task.set_archived(True)`. Archived Tasks remain recoverable with archived-task views / API queries.
+
 ### CPU latency queue and comparability
 
 `onnx-cpu-latency` is a benchmark stage, not ordinary throughput work. Route it only to `latency-cpu`. The canonical Linux worker `bugrat-gpu0` subscribes to `latency-cpu` first and `default` second. Because it is one ClearML Agent process, it executes at most one MLDB Task at a time on that host, so a default Evaluation cannot overlap a latency benchmark there. Do **not** subscribe a Windows development worker, another CPU model, or any heterogeneous machine to `latency-cpu`; doing so changes benchmark hardware and invalidates direct historical/model comparison. Additional workers may subscribe to `default` for ordinary Training/Evaluation once they have the required runtime image and data access.
