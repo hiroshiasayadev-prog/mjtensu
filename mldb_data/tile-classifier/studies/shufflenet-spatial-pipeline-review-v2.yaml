@@ -1,0 +1,103 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/shufflenet-spatial-pipeline-review-v2",
+  "status": "sealed",
+  "name": "ShuffleNet spatial-retention quality and CPU latency review",
+  "description": "Re-evaluate the four completed ShuffleNet spatial-retention models without retraining in one ClearML Pipeline using direction-aware angle robustness, direction-aware manzu diagnostics, and single-thread ONNX Runtime CPU latency.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-70f6ddae5a5446478dbd0e15a9523d52-trial-0001-model",
+      "tile-classifier/run-70f6ddae5a5446478dbd0e15a9523d52-trial-0002-model",
+      "tile-classifier/run-70f6ddae5a5446478dbd0e15a9523d52-trial-0003-model",
+      "tile-classifier/run-70f6ddae5a5446478dbd0e15a9523d52-trial-0004-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "angle-robustness-v3",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-angle-robustness-v3",
+      "parameters": {
+        "eval_angles": {
+          "values": [
+            [
+              0.0,
+              15.0,
+              30.0,
+              45.0
+            ]
+          ]
+        },
+        "batch_size": {
+          "values": [
+            1024
+          ]
+        },
+        "cache_device": {
+          "values": [
+            "cuda"
+          ]
+        },
+        "cache_vram_fraction": {
+          "values": [
+            0.5
+          ]
+        }
+      }
+    },
+    {
+      "stage": "manzu-diagnostic",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-manzu-diagnostic-v2",
+      "parameters": {
+        "split": {
+          "values": [
+            "manual_val"
+          ]
+        },
+        "batch_size": {
+          "values": [
+            64
+          ]
+        },
+        "occlusion_patch": {
+          "values": [
+            8
+          ]
+        }
+      }
+    },
+    {
+      "stage": "onnx-cpu-latency",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-onnx-cpu-latency-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "measure_runs": {
+          "values": [
+            200
+          ]
+        },
+        "intra_op_threads": {
+          "values": [
+            1
+          ]
+        },
+        "inter_op_threads": {
+          "values": [
+            1
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-onnx-cpu-latency-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Tile shape ONNX Runtime CPU latency",
+  "description": "Export the loaded 1x64x64 grayscale classifier to ONNX opset 16 and benchmark CPUExecutionProvider inference. Measure only ONNX Runtime session.run latency; ONNX export, session creation, and preprocessing are excluded. Defaults use batch 1, one intra-op thread, one inter-op thread, sequential execution, warmup before timed runs, and preserve the exact benchmarked ONNX plus raw timing report.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "722a636de31eacdd32e76f8108248c9387fd0ac0b0846d86ee3d1beafafb65b8"
+  },
+  "parameters": {
+    "batch_size": {
+      "default": 1,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64,
+      "description": "ONNX inference batch size."
+    },
+    "warmup_runs": {
+      "default": 25,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000,
+      "description": "Untimed warmup session.run calls."
+    },
+    "measure_runs": {
+      "default": 200,
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 10000,
+      "description": "Timed session.run calls used for latency metrics."
+    },
+    "intra_op_threads": {
+      "default": 1,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 128,
+      "description": "ONNX Runtime intra-op CPU thread count."
+    },
+    "inter_op_threads": {
+      "default": 1,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 128,
+      "description": "ONNX Runtime inter-op CPU thread count; execution remains sequential."
+    }
+  },
+  "metrics": {
+    "latency_p50_ms": {
+      "type": "number",
+      "required": true,
+      "description": "Median measured ONNX Runtime session.run latency in milliseconds.",
+      "preference": "lower"
+    },
+    "latency_p95_ms": {
+      "type": "number",
+      "required": true,
+      "description": "Nearest-rank p95 measured ONNX Runtime session.run latency in milliseconds.",
+      "preference": "lower"
+    },
+    "latency_mean_ms": {
+      "type": "number",
+      "required": true,
+      "description": "Arithmetic mean measured ONNX Runtime session.run latency in milliseconds.",
+      "preference": "lower"
+    }
+  },
+  "artifacts": {
+    "onnx_model": {
+      "format": "onnx",
+      "schema": "mjtensu.recognition/tile-shape-onnx-model/v1",
+      "required": true,
+      "description": "Exact ONNX graph used by the CPU latency benchmark."
+    },
+    "latency_report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/tile-onnx-cpu-latency/v1",
+      "required": true,
+      "description": "Raw timing samples, benchmark environment, export metadata, and summary metrics."
+    }
+  }
+}

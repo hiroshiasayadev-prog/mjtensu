@@ -1,0 +1,133 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-manzu-diagnostic-v2",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "5m/6m/7m interpretable diagnostic with comparison semantics",
+  "description": "Diagnose 5m/6m/7m robustness and representation use on frozen manual validation crops. Aggregate metrics use every matching sample; nine deterministic exemplars explain hard, neighboring-class-fragile, and view-stable behavior with causal 8x8 occlusion. Telemetry step indexes the fixed perturbation order recorded in the summary table. Direct accuracy/margin metrics use higher-is-better and neighboring-class confusion uses lower-is-better; occlusion and representation diagnostics remain neutral because their magnitude has no universal model-quality ordering.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "039bad1c2e17e10d1523c390305a3b45751af888fb1b85869d0d64a51a7b2c57"
+  },
+  "parameters": {
+    "split": {
+      "default": "manual_val",
+      "type": "string"
+    },
+    "batch_size": {
+      "default": 64,
+      "type": "integer",
+      "minimum": 1
+    },
+    "occlusion_patch": {
+      "default": 8,
+      "type": "integer",
+      "minimum": 4,
+      "maximum": 16
+    }
+  },
+  "metrics": {
+    "front_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "mean_condition_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "worst_condition_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "front_true_margin_mean": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "mean_condition_true_margin": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "six_neighbor_confusion_max": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "occlusion_top_patch_share_mean": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral"
+    },
+    "occlusion_effective_patch_count_mean": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral"
+    },
+    "occlusion_peak_drop_mean": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral"
+    },
+    "representation_best_centroid_accuracy": {
+      "type": "number",
+      "required": false,
+      "preference": "neutral"
+    }
+  },
+  "artifacts": {
+    "summary_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/manzu-diagnostic-summary/v1",
+      "required": true
+    },
+    "perturbation_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/manzu-diagnostic-perturbations/v1",
+      "required": true
+    },
+    "robustness_plot": {
+      "format": "plotly-json",
+      "schema": "mjtensu.recognition/manzu-diagnostic-robustness-plot/v1",
+      "required": true
+    },
+    "confusion_plot": {
+      "format": "plotly-json",
+      "schema": "mjtensu.recognition/manzu-diagnostic-confusion-plot/v1",
+      "required": true
+    },
+    "layer_separation_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/manzu-diagnostic-layer-separation/v1",
+      "required": true
+    },
+    "layer_separation_plot": {
+      "format": "plotly-json",
+      "schema": "mjtensu.recognition/manzu-diagnostic-layer-separation-plot/v1",
+      "required": true
+    },
+    "contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.recognition/manzu-diagnostic-contact-sheet/v1",
+      "required": true
+    },
+    "per_sample_details": {
+      "format": "jsonl",
+      "schema": "mjtensu.recognition/manzu-diagnostic-samples/v1",
+      "required": true
+    },
+    "report_json": {
+      "format": "json",
+      "schema": "mjtensu.recognition/manzu-diagnostic-report/v1",
+      "required": true
+    },
+    "report_html": {
+      "format": "html",
+      "schema": "mjtensu.recognition/manzu-diagnostic-report-html/v1",
+      "required": true
+    }
+  }
+}

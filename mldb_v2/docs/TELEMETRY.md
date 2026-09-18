@@ -79,6 +79,21 @@ The classifier training loop has a meaningful per-epoch optimization loss and no
 
 Loss accumulation is detached and only the completed epoch aggregate becomes a Python float. No learning-rate series is emitted because it was not required for the intended experiment decisions.
 
+### Tile shape ONNX CPU latency Evaluation Protocol v1
+
+The deployment-oriented classifier latency Evaluation benchmarks the exact exported ONNX graph on a fixed CPU ONNX Runtime contract. Its reviewed telemetry is:
+
+- decision purpose: compare classifier architectures on CPU model-inference cost without mixing in preprocessing, export, or session-creation cost;
+- group: exact Study stage name via common terminal Evaluation projection;
+- series: `latency_p50_ms`, `latency_p95_ms`, `latency_mean_ms`;
+- value: milliseconds for one `onnxruntime.InferenceSession.run`; p50 is median, p95 is nearest-rank, and mean is arithmetic mean;
+- cadence: one terminal point per canonical metric after all timed runs complete;
+- step: common Evaluation terminal step `0`;
+- default cost: ONNX export/check plus 25 untimed warmups and 200 measured calls; raw timing samples are kept in the report artifact instead of emitted as 200 scalar points;
+- canonical relation: all three telemetry values are also terminal Evaluation metrics.
+
+The default benchmark pins `CPUExecutionProvider`, batch 1, one intra-op thread, one inter-op thread, `ORT_SEQUENTIAL`, and `ORT_ENABLE_ALL`. The exact benchmarked ONNX graph and raw timing/environment report are preserved as Evaluation artifacts.
+
 ### Rotated FCOS Train Protocol v3
 
 The detector already performs validation after each completed training epoch and uses a lexicographic model-selection key. Its reviewed telemetry is:

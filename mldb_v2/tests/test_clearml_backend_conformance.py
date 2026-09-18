@@ -605,6 +605,8 @@ def test_production_sdk_adapter_uses_lazy_credentials_searchable_metadata_and_qu
         ],
     }]
     assert FakeSDKTask.package_calls and "torch==2.5.1" in FakeSDKTask.package_calls[0]
+    assert "onnx==1.22.0" in FakeSDKTask.package_calls[0]
+    assert "onnxruntime==1.28.0" in FakeSDKTask.package_calls[0]
     assert FakeSDKTask.tasks[0].configs["mldb.runtime"]["s3_endpoint_url"] == "https://s3.invalid"
     assert FakeSDKTask.tasks[0].configs["mldb.runtime"]["s3_region"] == "test-region"
     assert FakeSDKTask.credentials_calls[0]["store_conf_file"] is False

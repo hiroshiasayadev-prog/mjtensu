@@ -52,6 +52,8 @@ _REMOTE_PACKAGES = (
     "boto3==1.43.93",
     "PyYAML==6.0.3",
     "numpy==1.26.4",
+    "onnx==1.22.0",
+    "onnxruntime==1.28.0",
     "torch==2.5.1",
     "torchvision==0.20.1",
 )
