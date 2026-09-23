@@ -1540,6 +1540,17 @@ class ClearMLSDKAdapter:
         # but emit controller comparison tables/plots only for a terminal Study.
         if study_status in {"completed", "completed_with_failures", "failed", "cancelled"}:
             self._project_pipeline_summary_tables(task=task, summary=payload)
+            # ClearML report_table/report_plotly enqueue events asynchronously,
+            # while mark_completed/mark_failed/mark_stopped only send a status
+            # transition and do not flush pending reports. Wait for the terminal
+            # comparison events before closing the controller Task so the final
+            # projection cannot disappear at process teardown.
+            flush = getattr(task, "flush", None)
+            if callable(flush):
+                try:
+                    flush(wait_for_uploads=True)
+                except Exception:
+                    pass
         self._sync_pipeline_node_statuses(pipeline=task, summary=payload)
 
         task_status = _status(task)

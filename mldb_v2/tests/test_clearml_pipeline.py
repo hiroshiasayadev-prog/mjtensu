@@ -215,6 +215,7 @@ class FakeSDKTask:
         self.single_values: dict[str, float] = {}
         self.plotly_reports: list[dict[str, object]] = []
         self.table_reports: list[dict[str, object]] = []
+        self.flush_calls: list[bool] = []
         self.comment = ""
 
     @classmethod
@@ -314,6 +315,10 @@ class FakeSDKTask:
 
     def set_comment(self, comment: str) -> None:
         self.comment = comment
+
+    def flush(self, wait_for_uploads: bool = False) -> bool:
+        self.flush_calls.append(wait_for_uploads)
+        return True
 
     def get_project_name(self):
         return self.project
@@ -557,6 +562,7 @@ def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion()
         report["title"] == "Pipeline" and report["series"] == "Execution Flow"
         for report in controller.plotly_reports
     )
+    assert controller.flush_calls == [True]
     assert controller.status == "completed"
 
 
@@ -599,6 +605,7 @@ def test_pipeline_summary_defers_comparison_events_until_terminal_status() -> No
     assert controller.comment is not None
     assert controller.table_reports == []
     assert controller.plotly_reports == []
+    assert controller.flush_calls == []
     assert controller.status == "in_progress"
 
 
