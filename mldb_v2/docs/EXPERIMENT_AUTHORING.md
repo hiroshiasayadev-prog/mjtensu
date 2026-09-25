@@ -19,6 +19,8 @@ Use the narrowest entity whose semantics changed:
 
 Do not create a new Protocol just because a public parameter value changes. Put value sweeps in the Study matrix.
 
+For formal Evaluation artifacts, decide their Study-level presentation in the Evaluation Protocol rather than in an individual Study. `study_view: hidden` (the default) keeps a diagnostic on the child Evaluation Task, `study_view: select` exposes one Study-level view with Model/trial selection, and `study_view: all` mirrors every Model/trial copy. Changing this field on a sealed Protocol requires a new Protocol revision even though it is presentation-only.
+
 ## 2. Reuse before creating
 
 Before adding files:

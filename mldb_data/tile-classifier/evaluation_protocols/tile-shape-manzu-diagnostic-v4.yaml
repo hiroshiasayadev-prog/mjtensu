@@ -1,0 +1,147 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-manzu-diagnostic-v4",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "5m/6m/7m interpretable diagnostic with selectable Study artifacts",
+  "description": "Diagnose 5m/6m/7m robustness and representation use on frozen manual validation crops. Formal metrics keep the v3 aggregation semantics. The Study-level UI additionally exposes the confusion matrix, robustness plot, layer-separation plot, and contact sheet as per-model selectable artifacts; detailed tables and raw reports remain child-level artifacts.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "039bad1c2e17e10d1523c390305a3b45751af888fb1b85869d0d64a51a7b2c57"
+  },
+  "parameters": {
+    "split": {
+      "default": "manual_val",
+      "type": "string"
+    },
+    "batch_size": {
+      "default": 64,
+      "type": "integer",
+      "minimum": 1
+    },
+    "occlusion_patch": {
+      "default": 8,
+      "type": "integer",
+      "minimum": 4,
+      "maximum": 16
+    }
+  },
+  "metrics": {
+    "front_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Classification accuracy across all target 5m/6m/7m samples under the front-facing condition."
+    },
+    "mean_condition_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Arithmetic mean of classification accuracy across every configured geometry and shift condition."
+    },
+    "worst_condition_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Minimum classification accuracy across every configured geometry and shift condition."
+    },
+    "front_true_margin_mean": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Mean front-facing true-class logit margin, defined as true-class logit minus the largest competing-class logit."
+    },
+    "mean_condition_true_margin": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Arithmetic mean across conditions of the mean true-class logit margin for all target samples."
+    },
+    "six_neighbor_confusion_max": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Maximum across conditions of the fraction of true 6m samples predicted specifically as neighboring 5m or 7m."
+    },
+    "occlusion_top_patch_share_mean": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral",
+      "description": "Mean across target samples of the largest positive true-margin drop divided by the sum of positive drops over all occlusion patches; larger values indicate more concentrated spatial reliance."
+    },
+    "occlusion_effective_patch_count_mean": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral",
+      "description": "Mean across target samples of the effective number of positive-impact occlusion patches, computed as squared sum of positive margin drops divided by the sum of squared positive drops."
+    },
+    "occlusion_peak_drop_mean": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral",
+      "description": "Mean across target samples of the largest non-negative true-class margin drop caused by occluding any single patch."
+    },
+    "representation_best_centroid_accuracy": {
+      "type": "number",
+      "required": false,
+      "preference": "neutral",
+      "description": "Maximum across feature layers of leave-one-out nearest-centroid accuracy for 5m/6m/7m using normalized spatially averaged layer features."
+    }
+  },
+  "artifacts": {
+    "summary_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/manzu-diagnostic-summary/v1",
+      "required": true
+    },
+    "perturbation_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/manzu-diagnostic-perturbations/v1",
+      "required": true
+    },
+    "robustness_plot": {
+      "format": "plotly-json",
+      "schema": "mjtensu.recognition/manzu-diagnostic-robustness-plot/v1",
+      "required": true,
+      "study_view": "select"
+    },
+    "confusion_plot": {
+      "format": "plotly-json",
+      "schema": "mjtensu.recognition/manzu-diagnostic-confusion-plot/v1",
+      "required": true,
+      "study_view": "select"
+    },
+    "layer_separation_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/manzu-diagnostic-layer-separation/v1",
+      "required": true
+    },
+    "layer_separation_plot": {
+      "format": "plotly-json",
+      "schema": "mjtensu.recognition/manzu-diagnostic-layer-separation-plot/v1",
+      "required": true,
+      "study_view": "select"
+    },
+    "contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.recognition/manzu-diagnostic-contact-sheet/v1",
+      "required": true,
+      "study_view": "select"
+    },
+    "per_sample_details": {
+      "format": "jsonl",
+      "schema": "mjtensu.recognition/manzu-diagnostic-samples/v1",
+      "required": true
+    },
+    "report_json": {
+      "format": "json",
+      "schema": "mjtensu.recognition/manzu-diagnostic-report/v1",
+      "required": true
+    },
+    "report_html": {
+      "format": "html",
+      "schema": "mjtensu.recognition/manzu-diagnostic-report-html/v1",
+      "required": true
+    }
+  }
+}

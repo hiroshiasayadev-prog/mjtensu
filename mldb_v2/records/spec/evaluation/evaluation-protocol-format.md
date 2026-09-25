@@ -43,7 +43,15 @@ acceptance, Study lifecycle, automatic model selection, or optimization behavior
 finite integer or floating values except boolean; `integer` accepts integer except boolean.
 
 Each `artifacts.<key>` is exactly a mapping with required non-empty `format`, required non-empty
-versioned `schema`, required boolean `required`, and optional `description`.
+versioned `schema`, required boolean `required`, optional `description`, and optional `study_view`.
+`study_view`, when present, is exactly one of `hidden`, `select`, or `all`; omission is semantically
+equivalent to `hidden`. `hidden` keeps the artifact on the child Evaluation execution only, `select`
+asks a Study-level UI to present one artifact surface with a trial/model selector, and `all` asks the
+Study-level UI to mirror every available trial/model artifact directly. This field is presentation
+semantics only: it MUST NOT alter artifact bytes, result acceptance, Study lifecycle, model selection,
+or optimization behavior. A backend MAY omit a requested Study-level rendering when the artifact
+format cannot be rendered, but that omission is observational and MUST NOT invalidate a canonical
+Evaluation Result.
 
 For `sealed`, `implementation.sha256` is required. `implementation.sources`, when present, declares exact same-namespace `lib/` helpers as defined by
 `spec:mldb.v2.verification.executable_integrity`.
@@ -54,7 +62,7 @@ Same-basename `<local-id>.py` is required and exposes `evaluate` according to
 `spec:mldb.v2.evaluation.evaluate_interface`. Local ID ends in `-v<positive-integer>`.
 
 A sealed protocol is immutable. Changing parameter keys/defaults/constraints, metric meaning/type/
-requiredness/preference, artifact format/schema/requiredness, or result-affecting executable behavior
+requiredness/preference, artifact format/schema/requiredness/`study_view`, or result-affecting executable behavior
 requires a new revision.
 
 Backend scalars/plots not declared here remain telemetry only. Missing optional outputs are permitted

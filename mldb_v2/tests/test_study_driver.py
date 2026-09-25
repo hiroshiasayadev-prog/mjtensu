@@ -208,6 +208,20 @@ def test_evaluation_projection_context_resolves_metric_preferences() -> None:
                     },
                     "diagnostic": {"type": "number", "required": False},
                 },
+                "artifacts": {
+                    "confusion_plot": {
+                        "format": "plotly-json",
+                        "schema": "demo/confusion/v1",
+                        "required": True,
+                        "description": "Confusion matrix.",
+                        "study_view": "select",
+                    },
+                    "details": {
+                        "format": "json",
+                        "schema": "demo/details/v1",
+                        "required": False,
+                    },
+                },
             }
 
     context = driver._evaluation_projection_context(
@@ -230,6 +244,18 @@ def test_evaluation_projection_context_resolves_metric_preferences() -> None:
         {
             "accuracy": "Held-out accuracy.",
             "latency_ms": "Inference latency in milliseconds.",
+        },
+        {
+            "confusion_plot": {
+                "format": "plotly-json",
+                "description": "Confusion matrix.",
+                "study_view": "select",
+            },
+            "details": {
+                "format": "json",
+                "description": "",
+                "study_view": "hidden",
+            },
         },
     )
 

@@ -25,6 +25,7 @@ class EvaluationArtifactDeclaration(TypedDict):
     schema: str
     required: bool
     description: NotRequired[str]
+    study_view: NotRequired[Literal["hidden", "select", "all"]]
 
 EvaluationMetricDeclarations: TypeAlias = Mapping[str, EvaluationMetricDeclaration]
 EvaluationArtifactDeclarations: TypeAlias = Mapping[str, EvaluationArtifactDeclaration]

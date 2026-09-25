@@ -272,12 +272,15 @@ def _evaluation_projection_context(
     resolver: CanonicalRepositoryResolver,
     plan_trial: Mapping[str, object] | None,
     coordinate: object,
-) -> tuple[str | None, str | None, str | None, list[str], dict[str, str], dict[str, str]]:
+) -> tuple[
+    str | None, str | None, str | None, list[str], dict[str, str], dict[str, str],
+    dict[str, dict[str, object]],
+]:
     if not isinstance(plan_trial, Mapping):
-        return None, None, None, [], {}, {}
+        return None, None, None, [], {}, {}, {}
     evaluations = plan_trial.get("evaluations")
     if type(evaluations) is not list:
-        return None, None, None, [], {}, {}
+        return None, None, None, [], {}, {}, {}
     plan_evaluation = next(
         (
             item
@@ -287,10 +290,10 @@ def _evaluation_projection_context(
         None,
     )
     if not isinstance(plan_evaluation, Mapping):
-        return None, None, None, [], {}, {}
+        return None, None, None, [], {}, {}, {}
     raw_protocol = plan_evaluation.get("evaluation_protocol")
     if type(raw_protocol) is not str:
-        return None, None, None, [], {}, {}
+        return None, None, None, [], {}, {}, {}
 
     protocol_id = raw_protocol
     protocol_name = _local_reference_name(protocol_id)
@@ -298,6 +301,7 @@ def _evaluation_projection_context(
     metric_names: list[str] = []
     metric_preferences: dict[str, str] = {}
     metric_descriptions: dict[str, str] = {}
+    artifact_views: dict[str, dict[str, object]] = {}
     try:
         protocol = resolver.resolve(
             kind=EntityKind.EVALUATION_PROTOCOL,
@@ -325,6 +329,19 @@ def _evaluation_projection_context(
                     if type(raw_description) is str and raw_description:
                         metric_descriptions[metric] = raw_description
                 metric_preferences[metric] = preference
+        raw_artifacts = protocol.get("artifacts")
+        if isinstance(raw_artifacts, Mapping):
+            for artifact, declaration in raw_artifacts.items():
+                if type(artifact) is not str or not isinstance(declaration, Mapping):
+                    continue
+                study_view = declaration.get("study_view", "hidden")
+                if study_view not in {"hidden", "select", "all"}:
+                    study_view = "hidden"
+                artifact_views[artifact] = {
+                    "format": declaration.get("format"),
+                    "description": declaration.get("description", ""),
+                    "study_view": study_view,
+                }
     return (
         protocol_id,
         protocol_name,
@@ -332,6 +349,7 @@ def _evaluation_projection_context(
         metric_names,
         metric_preferences,
         metric_descriptions,
+        artifact_views,
     )
 
 
@@ -392,6 +410,8 @@ def _study_summary_projection(
         plan_trial = plan_trials.get(trial_id)
         for evaluation in trial["evaluations"]:
             metrics: dict[str, object] = {}
+            artifacts: dict[str, object] = {}
+            execution_id: str | None = None
             result_id = evaluation["result"]
             evaluation_model = model_id
             if evaluation["disposition"] == "completed" and result_id is not None:
@@ -406,8 +426,20 @@ def _study_summary_projection(
                     if type(document.get("model")) is str:
                         evaluation_model = str(document["model"])
                     payload = document.get("result")
-                    if isinstance(payload, Mapping) and isinstance(payload.get("metrics"), Mapping):
-                        metrics = copy.deepcopy(dict(payload["metrics"]))
+                    if isinstance(payload, Mapping):
+                        if isinstance(payload.get("metrics"), Mapping):
+                            metrics = copy.deepcopy(dict(payload["metrics"]))
+                        if isinstance(payload.get("artifacts"), Mapping):
+                            artifacts = copy.deepcopy(dict(payload["artifacts"]))
+                    attempts = document.get("attempts")
+                    if type(attempts) is list:
+                        for attempt in reversed(attempts):
+                            if not isinstance(attempt, Mapping):
+                                continue
+                            raw_execution_id = attempt.get("execution_id")
+                            if type(raw_execution_id) is str and raw_execution_id:
+                                execution_id = raw_execution_id
+                                break
             stage = str(evaluation["stage"])
             (
                 evaluation_protocol,
@@ -416,6 +448,7 @@ def _study_summary_projection(
                 protocol_metric_names,
                 protocol_metric_preferences,
                 protocol_metric_descriptions,
+                protocol_artifact_views,
             ) = _evaluation_projection_context(
                 resolver=resolver,
                 plan_trial=plan_trial,
@@ -434,7 +467,9 @@ def _study_summary_projection(
                 "evaluation_description": evaluation_description,
                 "disposition": evaluation["disposition"],
                 "result": result_id,
+                "execution_id": execution_id,
                 "metrics": metrics,
+                "artifacts": artifacts,
             }
             rows.append(row)
 
@@ -448,6 +483,7 @@ def _study_summary_projection(
                     "metrics": list(protocol_metric_names),
                     "metric_preferences": dict(protocol_metric_preferences),
                     "metric_descriptions": dict(protocol_metric_descriptions),
+                    "artifacts": copy.deepcopy(protocol_artifact_views),
                     "rows": [],
                 },
             )
@@ -467,11 +503,13 @@ def _study_summary_projection(
                     "architecture": architecture_id,
                     "model": evaluation_model,
                     "disposition": evaluation["disposition"],
+                    "execution_id": execution_id,
                     "metrics": copy.deepcopy(metrics),
+                    "artifacts": copy.deepcopy(artifacts),
                 }
             )
     return {
-        "schema": "mjtensu.mldb-v2/study-summary-projection/v3",
+        "schema": "mjtensu.mldb-v2/study-summary-projection/v4",
         "study_result": result["id"],
         "study": result["study"],
         "status": result["status"],

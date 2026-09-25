@@ -54,6 +54,8 @@ The comparison projection SHOULD also carry the referenced Evaluation Protocol i
 
 Pipeline trial/step labels SHOULD use human-readable Model/Architecture lineage when available while retaining the immutable MLDB trial/coordinate identity in metadata. The native ClearML Pipeline DAG is the execution-flow view; the adapter SHOULD NOT publish a redundant custom execution-flow chart on the controller. Task and Pipeline names are presentation only and MUST NOT be parsed as identity.
 
+Evaluation Protocol artifact `study_view` controls optional Study/controller mirroring. `hidden` or omission leaves the artifact on its child Evaluation Task only. `select` SHOULD produce one controller-level artifact view with trial/model selection when the format is renderable. `all` SHOULD mirror each available trial/model artifact directly. ClearML may implement `select` with native Plotly controls or an equivalent selector, but the selected trial/model is UI state only and MUST NOT be interpreted as a formal winner. Study-level mirroring reads already-accepted artifact references and remains observational; failure to render or retrieve the UI copy MUST NOT change canonical Evaluation success.
+
 ## Required metadata
 
 The controller Task and every child Task must expose enough searchable metadata to recover the full MLDB namespace, Study ID, Plan ID, Study Result ID, source commit, and backend ownership identity. Child Tasks additionally expose trial, stage kind/name/coordinate, and canonical Architecture/Model/Protocol/Corpus references as applicable.

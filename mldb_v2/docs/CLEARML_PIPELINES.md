@@ -85,6 +85,8 @@ For multi-Model Evaluation, MLDB builds a Study-level comparison projection from
 
 Evaluation explanations come from the reusable Evaluation Protocol definition itself. MLDB projects the Protocol identity, `name`, and `description` into the controller Task description/comment instead of consuming another fixed-height Plot card. Immutable `trial-XXXX` / evaluation-coordinate identities remain in metadata and canonical records even when the UI label is human-readable.
 
+Formal Evaluation artifacts remain visible on their child Tasks. A Protocol may additionally set `artifacts.<name>.study_view` to control Study-level presentation: omitted/`hidden` keeps it child-only; `select` renders one controller surface with a Model/trial selector; `all` mirrors every Model/trial copy. This is intended for diagnostics such as confusion matrices, robustness plots, contact sheets, and layer-separation plots that are meaningful to inspect per Model but should not be silently discarded from the Study view. The policy is backend-neutral presentation metadata and never changes canonical acceptance.
+
 The native ClearML Pipeline DAG is the execution-flow view. MLDB does not publish a second custom Sankey/"Execution Flow" plot on the controller; for Existing-Model Studies such a duplicate plot degenerates into disconnected circles and adds no execution information.
 
 ## 6. Retry, cache, and rerun policy

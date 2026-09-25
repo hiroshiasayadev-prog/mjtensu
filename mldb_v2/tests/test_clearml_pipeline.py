@@ -310,6 +310,17 @@ class FakeSDKTask:
     def report_plotly(self, **kwargs) -> None:
         self.plotly_reports.append(deepcopy(kwargs))
 
+    def get_reported_plots(self):
+        return [
+            {
+                "metric": report.get("title"),
+                "variant": report.get("series"),
+                "iter": report.get("iteration", 0),
+                "plot_str": json.dumps(report.get("figure", {})),
+            }
+            for report in self.plotly_reports
+        ]
+
     def report_table(self, **kwargs) -> None:
         self.table_reports.append(deepcopy(kwargs))
 
@@ -496,7 +507,7 @@ def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion()
     adapter = ClearMLSDKAdapter(ClearMLSDKSettings(), task_class=FakeSDKTask)
     pipeline_id = cast(str, adapter.create_pipeline_run(_pipeline_request(plan, result)))
     summary = {
-        "schema": "mjtensu.mldb-v2/study-summary-projection/v3",
+        "schema": "mjtensu.mldb-v2/study-summary-projection/v4",
         "study_result": result["id"],
         "study": result["study"],
         "status": "completed",
@@ -599,7 +610,7 @@ def test_pipeline_summary_defers_comparison_events_until_terminal_status() -> No
     adapter = ClearMLSDKAdapter(ClearMLSDKSettings(), task_class=FakeSDKTask)
     pipeline_id = cast(str, adapter.create_pipeline_run(_pipeline_request(plan, result)))
     summary = {
-        "schema": "mjtensu.mldb-v2/study-summary-projection/v3",
+        "schema": "mjtensu.mldb-v2/study-summary-projection/v4",
         "study_result": result["id"],
         "study": result["study"],
         "status": "submitted",
@@ -631,6 +642,71 @@ def test_pipeline_summary_defers_comparison_events_until_terminal_status() -> No
     assert controller.plotly_reports == []
     assert controller.flush_calls == []
     assert controller.status == "in_progress"
+
+
+def test_sdk_adapter_projects_selectable_study_artifact_from_child_plots() -> None:
+    FakeSDKTask.reset()
+    plan = _plan()
+    result = _result(plan)
+    adapter = ClearMLSDKAdapter(ClearMLSDKSettings(), task_class=FakeSDKTask)
+    pipeline_id = cast(str, adapter.create_pipeline_run(_pipeline_request(plan, result)))
+    child_a = FakeSDKTask(project="mldb/demo", task_id="child-a")
+    child_b = FakeSDKTask(project="mldb/demo", task_id="child-b")
+    FakeSDKTask.tasks.extend([child_a, child_b])
+    child_a.report_plotly(
+        title="evaluation plots", series="confusion_plot", iteration=0,
+        figure={"data": [{"type": "heatmap", "z": [[1, 0], [0, 2]]}], "layout": {"height": 320}},
+    )
+    child_b.report_plotly(
+        title="evaluation plots", series="confusion_plot", iteration=0,
+        figure={"data": [{"type": "heatmap", "z": [[2, 1], [0, 1]]}], "layout": {"height": 320}},
+    )
+    summary = {
+        "schema": "mjtensu.mldb-v2/study-summary-projection/v4",
+        "study_result": result["id"],
+        "study": result["study"],
+        "status": "completed",
+        "rows": [],
+        "comparisons": [{
+            "stage": "manzu-diagnostic-v4",
+            "evaluation_protocol": "demo/eval-v4",
+            "evaluation_name": "5m/6m/7m diagnostic",
+            "evaluation_description": "Diagnostic plots.",
+            "metrics": [], "metric_preferences": {}, "metric_descriptions": {},
+            "artifacts": {
+                "confusion_plot": {
+                    "format": "plotly-json", "description": "Confusion matrix.", "study_view": "select",
+                }
+            },
+            "rows": [
+                {
+                    "trial": "trial-0001", "trial_label": "model-a", "architecture": "demo/a",
+                    "model": "demo/model-a", "disposition": "completed", "execution_id": "child-a",
+                    "metrics": {}, "artifacts": {"confusion_plot": {"format": "plotly-json"}},
+                },
+                {
+                    "trial": "trial-0002", "trial_label": "model-b", "architecture": "demo/b",
+                    "model": "demo/model-b", "disposition": "completed", "execution_id": "child-b",
+                    "metrics": {}, "artifacts": {"confusion_plot": {"format": "plotly-json"}},
+                },
+            ],
+        }],
+    }
+
+    adapter.project_pipeline_summary(execution_id=pipeline_id, summary=summary)
+
+    controller = FakeSDKTask.get_task(task_id=pipeline_id)
+    assert controller is not None
+    report = next(
+        item for item in controller.plotly_reports
+        if item["title"] == "Study Artifact - manzu-diagnostic-v4"
+        and item["series"] == "confusion_plot"
+    )
+    figure = report["figure"]
+    assert [trace["visible"] for trace in figure["data"]] == [True, False]
+    buttons = figure["layout"]["updatemenus"][0]["buttons"]
+    assert [button["label"] for button in buttons] == ["model-a", "model-b"]
+    assert buttons[1]["args"][0]["visible"] == [False, True]
 
 
 def test_pipeline_summary_table_failure_is_observational() -> None:

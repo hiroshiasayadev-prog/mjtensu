@@ -37,6 +37,7 @@ class EvaluationArtifactDeclaration(TypedDict):
     schema: str
     required: bool
     description: NotRequired[str]
+    study_view: NotRequired[Literal["hidden", "select", "all"]]
 
 
 EvaluationMetricDeclarations: TypeAlias = Mapping[str, EvaluationMetricDeclaration]
@@ -103,7 +104,7 @@ def _validate_artifact_declarations(value: object) -> dict[str, EvaluationArtifa
         mapping = _require_exact_keys(
             declaration,
             required={"format", "schema", "required"},
-            optional={"description"},
+            optional={"description", "study_view"},
             label=f"artifact {key}",
         )
         artifact_format = _require_string(mapping["format"], label="artifact format", nonempty=True)
@@ -120,6 +121,11 @@ def _validate_artifact_declarations(value: object) -> dict[str, EvaluationArtifa
             parsed["description"] = _require_string(
                 mapping["description"], label="artifact description"
             )
+        if "study_view" in mapping:
+            study_view = mapping["study_view"]
+            if type(study_view) is not str or study_view not in {"hidden", "select", "all"}:
+                raise ValueError("artifact study_view must be exactly hidden, select, or all")
+            parsed["study_view"] = study_view  # type: ignore[typeddict-item]
         result[key] = parsed
     return result
 

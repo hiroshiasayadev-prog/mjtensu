@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import csv
 import hashlib
 import json
 import math
@@ -898,6 +900,166 @@ def _comparison_bar_figure(
     return {"data": [trace], "layout": layout}
 
 
+def _study_artifact_local_path(task: object, name: str) -> Path | None:
+    artifacts = getattr(task, "artifacts", None)
+    if not isinstance(artifacts, Mapping):
+        return None
+    artifact = artifacts.get(f"evaluation/{name}") or artifacts.get(name)
+    if artifact is None:
+        return None
+    getter = getattr(artifact, "get_local_copy", None)
+    if not callable(getter):
+        return None
+    try:
+        local = getter()
+    except Exception:
+        return None
+    if type(local) is not str or not local:
+        return None
+    path = Path(local)
+    return path if path.is_file() else None
+
+
+def _study_artifact_plotly_figure(task: object, name: str) -> dict[str, object] | None:
+    getter = getattr(task, "get_reported_plots", None)
+    if callable(getter):
+        try:
+            plots = getter() or []
+        except Exception:
+            plots = []
+        for plot in plots:
+            if not isinstance(plot, Mapping):
+                continue
+            if plot.get("metric") != "evaluation plots" or plot.get("variant") != name:
+                continue
+            raw = plot.get("plot_str")
+            if type(raw) is not str:
+                continue
+            try:
+                figure = json.loads(raw)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+            if isinstance(figure, dict):
+                return cast(dict[str, object], figure)
+    path = _study_artifact_local_path(task, name)
+    if path is None:
+        return None
+    try:
+        figure = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError, json.JSONDecodeError):
+        return None
+    return cast(dict[str, object], figure) if isinstance(figure, dict) else None
+
+
+def _trial_annotation(label: str) -> dict[str, object]:
+    return {
+        "xref": "paper", "yref": "paper", "x": 1.0, "y": 1.12,
+        "xanchor": "right", "yanchor": "bottom", "showarrow": False,
+        "text": f"Model: {label}",
+    }
+
+
+def _selectable_plotly_figure(
+    items: Sequence[tuple[str, Mapping[str, object]]],
+) -> dict[str, object] | None:
+    if not items:
+        return None
+    data: list[dict[str, object]] = []
+    ranges: list[tuple[int, int]] = []
+    for index, (_label, figure) in enumerate(items):
+        raw_data = figure.get("data")
+        if type(raw_data) is not list:
+            continue
+        start = len(data)
+        for raw_trace in raw_data:
+            if not isinstance(raw_trace, Mapping):
+                continue
+            trace = dict(raw_trace)
+            trace["visible"] = index == 0
+            data.append(trace)
+        ranges.append((start, len(data)))
+    if not ranges or not data:
+        return None
+    first_layout = items[0][1].get("layout")
+    layout = dict(first_layout) if isinstance(first_layout, Mapping) else {}
+    buttons: list[dict[str, object]] = []
+    for item_index, (label, _figure) in enumerate(items):
+        visible = [False] * len(data)
+        if item_index < len(ranges):
+            start, end = ranges[item_index]
+            for trace_index in range(start, end):
+                visible[trace_index] = True
+        buttons.append({
+            "label": label,
+            "method": "update",
+            "args": [
+                {"visible": visible},
+                {"annotations": [_trial_annotation(label)]},
+            ],
+        })
+    layout["updatemenus"] = [{
+        "type": "dropdown", "direction": "down", "showactive": True,
+        "x": 0.0, "y": 1.16, "xanchor": "left", "yanchor": "bottom",
+        "buttons": buttons,
+    }]
+    layout["annotations"] = [_trial_annotation(items[0][0])]
+    layout.setdefault("margin", {"l": 70, "r": 30, "t": 100, "b": 60})
+    return {"data": data, "layout": layout}
+
+
+def _selectable_image_figure(items: Sequence[tuple[str, bytes]]) -> dict[str, object] | None:
+    if not items:
+        return None
+    def image_layout(data: bytes) -> list[dict[str, object]]:
+        source = "data:image/png;base64," + base64.b64encode(data).decode("ascii")
+        return [{
+            "source": source, "xref": "paper", "yref": "paper",
+            "x": 0.0, "y": 1.0, "sizex": 1.0, "sizey": 1.0,
+            "xanchor": "left", "yanchor": "top", "sizing": "contain", "layer": "above",
+        }]
+    buttons = [{
+        "label": label,
+        "method": "relayout",
+        "args": [{"images": image_layout(data), "annotations": [_trial_annotation(label)]}],
+    } for label, data in items]
+    return {
+        "data": [{
+            "type": "scatter", "x": [0, 1], "y": [0, 1], "mode": "markers",
+            "marker": {"opacity": 0}, "hoverinfo": "skip", "showlegend": False,
+        }],
+        "layout": {
+            "height": 620,
+            "xaxis": {"visible": False, "range": [0, 1]},
+            "yaxis": {"visible": False, "range": [0, 1], "scaleanchor": "x"},
+            "images": image_layout(items[0][1]),
+            "annotations": [_trial_annotation(items[0][0])],
+            "updatemenus": [{
+                "type": "dropdown", "direction": "down", "showactive": True,
+                "x": 0.0, "y": 1.08, "xanchor": "left", "yanchor": "bottom",
+                "buttons": buttons,
+            }],
+            "margin": {"l": 20, "r": 20, "t": 90, "b": 20},
+        },
+    }
+
+
+def _csv_table_figure(path: Path) -> dict[str, object] | None:
+    try:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            rows = list(csv.reader(handle))
+    except (OSError, UnicodeError, csv.Error):
+        return None
+    if not rows:
+        return None
+    header = rows[0]
+    body = rows[1:]
+    columns = [[row[index] if index < len(row) else "" for row in body] for index in range(len(header))]
+    return {
+        "data": [{"type": "table", "header": {"values": header}, "cells": {"values": columns}}],
+        "layout": {"height": min(700, 120 + 28 * max(len(body), 1))},
+    }
+
+
 def _pipeline_evaluation_comment(comparisons: Sequence[object]) -> str | None:
     sections: list[str] = []
     for comparison in comparisons:
@@ -1520,6 +1682,135 @@ class ClearMLSDKAdapter:
                     except Exception:
                         pass
 
+    def _project_study_artifacts(
+        self,
+        *,
+        task: object,
+        summary: Mapping[str, object],
+    ) -> None:
+        comparisons = summary.get("comparisons")
+        if type(comparisons) is not list:
+            return
+        try:
+            logger = _clearml_logger(task)
+        except Exception:
+            return
+        report_plotly = getattr(logger, "report_plotly", None)
+        report_image = getattr(logger, "report_image", None)
+        report_table = getattr(logger, "report_table", None)
+        if not callable(report_plotly):
+            return
+
+        for comparison in comparisons:
+            if not isinstance(comparison, Mapping):
+                continue
+            stage = comparison.get("stage")
+            declarations = comparison.get("artifacts")
+            rows = comparison.get("rows")
+            if type(stage) is not str or not isinstance(declarations, Mapping) or type(rows) is not list:
+                continue
+            for artifact_name, raw_declaration in declarations.items():
+                if type(artifact_name) is not str or not isinstance(raw_declaration, Mapping):
+                    continue
+                study_view = raw_declaration.get("study_view", "hidden")
+                artifact_format = raw_declaration.get("format")
+                if study_view not in {"select", "all"} or type(artifact_format) is not str:
+                    continue
+                loaded: list[tuple[str, object, object]] = []
+                for row in rows:
+                    if not isinstance(row, Mapping) or row.get("disposition") != "completed":
+                        continue
+                    execution_id = row.get("execution_id")
+                    trial_label = row.get("trial_label") or row.get("trial")
+                    accepted_artifacts = row.get("artifacts")
+                    if (type(execution_id) is not str or type(trial_label) is not str
+                            or not isinstance(accepted_artifacts, Mapping)
+                            or artifact_name not in accepted_artifacts):
+                        continue
+                    try:
+                        child = self._get_task(execution_id)
+                    except Exception:
+                        continue
+                    loaded.append((trial_label, child, accepted_artifacts[artifact_name]))
+                if not loaded:
+                    continue
+
+                title = f"Study Artifact - {stage}"
+                if study_view == "select":
+                    figure: dict[str, object] | None = None
+                    if artifact_format == "plotly-json":
+                        figures = [
+                            (label, item)
+                            for label, child, _ref in loaded
+                            if (item := _study_artifact_plotly_figure(child, artifact_name)) is not None
+                        ]
+                        figure = _selectable_plotly_figure(figures)
+                    elif artifact_format == "png":
+                        images: list[tuple[str, bytes]] = []
+                        for label, child, _ref in loaded:
+                            path = _study_artifact_local_path(child, artifact_name)
+                            if path is None:
+                                continue
+                            try:
+                                images.append((label, path.read_bytes()))
+                            except OSError:
+                                continue
+                        figure = _selectable_image_figure(images)
+                    elif artifact_format == "csv":
+                        figures = []
+                        for label, child, _ref in loaded:
+                            path = _study_artifact_local_path(child, artifact_name)
+                            if path is None:
+                                continue
+                            table_figure = _csv_table_figure(path)
+                            if table_figure is not None:
+                                figures.append((label, table_figure))
+                        figure = _selectable_plotly_figure(figures)
+                    if figure is not None:
+                        try:
+                            report_plotly(
+                                title=title,
+                                series=artifact_name,
+                                iteration=0,
+                                figure=figure,
+                            )
+                        except Exception:
+                            pass
+                    continue
+
+                # `all` mirrors every trial artifact directly onto the Study controller.
+                for label, child, _ref in loaded:
+                    try:
+                        if artifact_format == "plotly-json":
+                            figure = _study_artifact_plotly_figure(child, artifact_name)
+                            if figure is not None:
+                                report_plotly(
+                                    title=f"{title} - {artifact_name}",
+                                    series=label,
+                                    iteration=0,
+                                    figure=figure,
+                                )
+                        elif artifact_format == "png" and callable(report_image):
+                            path = _study_artifact_local_path(child, artifact_name)
+                            if path is not None:
+                                report_image(
+                                    title=f"{title} - {artifact_name}",
+                                    series=label,
+                                    iteration=0,
+                                    local_path=str(path),
+                                )
+                        elif artifact_format == "csv" and callable(report_table):
+                            path = _study_artifact_local_path(child, artifact_name)
+                            if path is not None:
+                                report_table(
+                                    title=f"{title} - {artifact_name}",
+                                    series=label,
+                                    iteration=0,
+                                    csv=str(path),
+                                )
+                    except Exception:
+                        pass
+
     def project_pipeline_summary(
         self,
         *,
@@ -1553,6 +1844,7 @@ class ClearMLSDKAdapter:
         # but emit controller comparison tables/plots only for a terminal Study.
         if study_status in {"completed", "completed_with_failures", "failed", "cancelled"}:
             self._project_pipeline_summary_tables(task=task, summary=payload)
+            self._project_study_artifacts(task=task, summary=payload)
             # ClearML report_table/report_plotly enqueue events asynchronously,
             # while mark_completed/mark_failed/mark_stopped only send a status
             # transition and do not flush pending reports. Wait for the terminal

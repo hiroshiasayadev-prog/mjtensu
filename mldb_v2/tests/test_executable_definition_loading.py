@@ -344,6 +344,8 @@ def test_evaluation_metric_preference_contract() -> None:
     {"format": "json", "schema": "demo/artifact/v01", "required": True},
     {"format": "json", "schema": "demo/artifact/v1", "required": 1},
     {"format": "json", "schema": "demo/artifact/v1", "required": False, "extra": 1},
+    {"format": "json", "schema": "demo/artifact/v1", "required": False, "study_view": "dropdown"},
+    {"format": "json", "schema": "demo/artifact/v1", "required": False, "study_view": 1},
 ])
 def test_evaluation_artifact_exact_contract(declaration: object) -> None:
     value = _evaluation(); value["metrics"] = {}; value["artifacts"] = {"artifact": declaration}
@@ -356,10 +358,20 @@ def test_evaluation_artifact_and_parameter_valid_cases() -> None:
     value["parameters"] = {"threshold": {"default": 0.5, "type": "number", "minimum": 0.0}}
     value["artifacts"] = {"details": {
         "format": "jsonl", "schema": "mjtensu.mldb-v2/demo-artifact/v2",
-        "required": False, "description": "details",
+        "required": False, "description": "details", "study_view": "select",
     }}
     parsed = _parse_evaluation_protocol_document(value, expected_id="demo/eval-v1")
     assert parsed["artifacts"]["details"]["format"] == "jsonl"
+    assert parsed["artifacts"]["details"]["study_view"] == "select"
+
+    for study_view in ("hidden", "select", "all"):
+        value = _evaluation()
+        value["artifacts"] = {"details": {
+            "format": "jsonl", "schema": "mjtensu.mldb-v2/demo-artifact/v2",
+            "required": False, "study_view": study_view,
+        }}
+        parsed = _parse_evaluation_protocol_document(value, expected_id="demo/eval-v1")
+        assert parsed["artifacts"]["details"]["study_view"] == study_view
 
 
 def test_evaluation_entrypoint_and_sealed_sha() -> None:
@@ -511,7 +523,7 @@ def test_public_typed_dict_shapes_match_frozen_contract() -> None:
     assert EvaluationMetricDeclaration.__required_keys__ == frozenset({"type", "required"})
     assert EvaluationMetricDeclaration.__optional_keys__ == frozenset({"description", "preference"})
     assert EvaluationArtifactDeclaration.__required_keys__ == frozenset({"format", "schema", "required"})
-    assert EvaluationArtifactDeclaration.__optional_keys__ == frozenset({"description"})
+    assert EvaluationArtifactDeclaration.__optional_keys__ == frozenset({"description", "study_view"})
 
 
 def test_executable_integrity_public_shapes_match_frozen_contract() -> None:
