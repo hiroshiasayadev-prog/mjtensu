@@ -635,14 +635,28 @@ def _project_name(task: object) -> str | None:
     return value if type(value) is str else None
 
 
-def _native_pipeline_projects(*, logical_project: str, study: str) -> tuple[str, str]:
+def _pipeline_task_from_plan(plan: Mapping[str, object]) -> str:
+    pins = plan.get("pins")
+    if type(pins) is not list:
+        raise ClearMLSDKError("ClearML Pipeline plan pins are missing")
+    task_ids = [
+        pin.get("id")
+        for pin in pins
+        if isinstance(pin, Mapping) and pin.get("kind") == "task"
+    ]
+    if len(task_ids) != 1 or type(task_ids[0]) is not str or "/" not in task_ids[0]:
+        raise ClearMLSDKError("ClearML Pipeline plan must pin exactly one MLDB Task")
+    return cast(str, task_ids[0])
+
+
+def _native_pipeline_projects(*, logical_project: str, task: str) -> tuple[str, str]:
     if type(logical_project) is not str or not logical_project:
         raise ValueError("logical_project must be a non-empty string")
-    if type(study) is not str or "/" not in study:
-        raise ValueError("study must be one typed reference")
-    study_name = study.split("/", 1)[1]
+    if type(task) is not str or "/" not in task:
+        raise ValueError("task must be one typed reference")
+    task_name = task.split("/", 1)[1]
     parent = f"{logical_project}/.pipelines"
-    return parent, f"{parent}/{study_name}"
+    return parent, f"{parent}/{task_name}"
 
 
 def _is_pipeline_project(*, project: str | None, logical_project: str) -> bool:
@@ -1004,11 +1018,11 @@ class ClearMLSDKAdapter:
         *,
         task: object,
         logical_project: str,
-        study: str,
+        mldb_task: str,
     ) -> None:
         parent_project, pipeline_project = _native_pipeline_projects(
             logical_project=logical_project,
-            study=study,
+            task=mldb_task,
         )
         Task = self._Task()
         get_session = getattr(Task, "_get_default_session", None)
@@ -1093,9 +1107,13 @@ class ClearMLSDKAdapter:
         study = request.metadata.get("mldb.study")
         if type(study) is not str or not study:
             raise ClearMLSDKError("ClearML Pipeline request study identity is missing")
+        plan_config = request.configuration.get("mldb.plan")
+        if not isinstance(plan_config, Mapping):
+            raise ClearMLSDKError("ClearML Pipeline request plan is missing")
+        mldb_task = _pipeline_task_from_plan(plan_config)
         _parent_project, pipeline_project = _native_pipeline_projects(
             logical_project=request.project,
-            study=study,
+            task=mldb_task,
         )
         Task = self._Task()
         kwargs: dict[str, object] = {
@@ -1115,7 +1133,7 @@ class ClearMLSDKAdapter:
         self._ensure_pipeline_project_layout(
             task=task,
             logical_project=request.project,
-            study=study,
+            mldb_task=mldb_task,
         )
         task_id = _task_id(task)
         properties = [
@@ -1140,12 +1158,7 @@ class ClearMLSDKAdapter:
             name=_PIPELINE_CONFIG,
             config_dict=dict(request.configuration),
         )
-        plan_config = request.configuration.get("mldb.plan")
-        trial_labels = (
-            _pipeline_trial_labels(self._settings, plan_config)
-            if isinstance(plan_config, Mapping)
-            else {}
-        )
+        trial_labels = _pipeline_trial_labels(self._settings, plan_config)
         native_dag = _native_pipeline_dag(
             topology,
             queue=self._settings.step_queue,

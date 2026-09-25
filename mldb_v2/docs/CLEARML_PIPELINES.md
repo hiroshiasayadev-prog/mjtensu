@@ -17,9 +17,9 @@ MLDB telemetry           ->   child Task metrics/plots
 selected Study summary   ->   Pipeline/controller metrics/artifacts
 ```
 
-One Namespace remains the logical ClearML Project root. On ClearML servers that expose Pipelines through native hidden subprojects, the adapter additionally places controller Tasks under `mldb/<namespace>/.pipelines/<study-local-id>` and marks that subproject `pipeline` + `hidden`; this is a ClearML UI implementation detail, not a new MLDB semantic Project.
+One Namespace remains the logical ClearML Project root. On ClearML servers that expose Pipelines through native hidden subprojects, the adapter additionally places controller Tasks under `mldb/<namespace>/.pipelines/<task-local-id>` and marks that subproject `pipeline` + `hidden`; this is a ClearML UI implementation detail, not a new MLDB semantic Project. Different Studies that target the same MLDB Task therefore appear as separate Runs inside one Task-level Pipeline card instead of creating one card per Study.
 
-One fresh MLDB Study Result gets one fresh, recoverable Pipeline Run inside the Study's native Pipeline subproject.
+One fresh MLDB Study Result still gets one fresh, recoverable Pipeline Run. The Run name carries the Study identity; Task-level UI grouping does not merge Study Results or change canonical ownership.
 
 ## 2. What ClearML owns
 

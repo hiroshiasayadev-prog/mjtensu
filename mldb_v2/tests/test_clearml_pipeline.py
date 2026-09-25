@@ -40,12 +40,12 @@ def _pin(kind: str, entity_id: str, *, companion: str | None = None,
     }
 
 
-def _plan() -> StudyPlan:
+def _plan(*, study: str = "demo/study-v1") -> StudyPlan:
     record: dict[str, object] = {
         "schema": "mjtensu.mldb-v2/study-plan/v1",
         "id": "demo/placeholder",
         "content_sha256": "0" * 64,
-        "study": "demo/study-v1",
+        "study": study,
         "source_commit": "1" * 40,
         "pins": [
             _pin("namespace", "demo"),
@@ -55,7 +55,7 @@ def _plan() -> StudyPlan:
             _pin("architecture", "demo/arch-v1", companion="d" * 64),
             _pin("train_protocol", "demo/train-v1", companion="e" * 64),
             _pin("evaluation_protocol", "demo/eval-v1", companion="f" * 64),
-            _pin("study", "demo/study-v1"),
+            _pin("study", study),
         ],
         "trials": [{
             "trial": "trial-0001",
@@ -343,7 +343,7 @@ def _pipeline_request(plan: StudyPlan, result: StudyResult) -> ClearMLPipelineCr
     ownership = _pipeline_ownership_key(plan, result)
     return ClearMLPipelineCreateRequest(
         project="mldb/demo",
-        task_name="study-v1 | run",
+        task_name=f"{str(plan['study']).split('/', 1)[1]} | {result['id'].split('/', 1)[1]}",
         metadata=_metadata(plan, result, ownership_key=ownership),
         configuration=_configuration(plan, result, ownership_key=ownership),
         source_commit=plan["source_commit"],
@@ -365,7 +365,7 @@ def test_sdk_adapter_creates_native_controller_task_without_enqueuing_children()
     assert task_id == "sdk-pipeline-1"
     task = FakeSDKTask.tasks[0]
     assert FakeSDKTask.create_calls[0]["task_type"] == "controller"
-    assert FakeSDKTask.create_calls[0]["project_name"] == "mldb/demo/.pipelines/study-v1"
+    assert FakeSDKTask.create_calls[0]["project_name"] == "mldb/demo/.pipelines/task-v1"
     assert FakeSDKTask.create_calls[0]["script"].endswith("_clearml_pipeline_controller.py")
     assert "pipeline" in task.system_tags
     assert "Pipeline" in task.configs
@@ -396,11 +396,35 @@ def test_sdk_adapter_creates_native_controller_task_without_enqueuing_children()
     assert [record.task_id for record in found] == ["sdk-pipeline-1"]
     assert found[0].configuration == _pipeline_request(plan, result).configuration
 
-    # Recovery remains compatible with W011 controllers created before native
-    # ClearML Pipeline sub-project placement was implemented.
+    # Recovery remains compatible with both pre-subproject controllers and
+    # the former Study-local Pipeline Project layout.
+    task.project = "mldb/demo/.pipelines/study-v1"
+    legacy_study_found = adapter.search_pipeline_runs(project="mldb/demo", ownership_key=ownership)
+    assert [record.task_id for record in legacy_study_found] == ["sdk-pipeline-1"]
     task.project = "mldb/demo"
-    legacy_found = adapter.search_pipeline_runs(project="mldb/demo", ownership_key=ownership)
-    assert [record.task_id for record in legacy_found] == ["sdk-pipeline-1"]
+    legacy_flat_found = adapter.search_pipeline_runs(project="mldb/demo", ownership_key=ownership)
+    assert [record.task_id for record in legacy_flat_found] == ["sdk-pipeline-1"]
+
+
+def test_sdk_adapter_groups_different_studies_of_one_mldb_task_in_one_pipeline_project() -> None:
+    FakeSDKTask.reset()
+    adapter = ClearMLSDKAdapter(ClearMLSDKSettings(), task_class=FakeSDKTask)
+    first_plan = _plan(study="demo/study-a-v1")
+    second_plan = _plan(study="demo/study-b-v1")
+    first_result = _result(first_plan)
+    second_result = _result(second_plan)
+
+    adapter.create_pipeline_run(_pipeline_request(first_plan, first_result))
+    adapter.create_pipeline_run(_pipeline_request(second_plan, second_result))
+
+    assert [call["project_name"] for call in FakeSDKTask.create_calls] == [
+        "mldb/demo/.pipelines/task-v1",
+        "mldb/demo/.pipelines/task-v1",
+    ]
+    assert [call["task_name"] for call in FakeSDKTask.create_calls] == [
+        "study-a-v1 | run-123e4567e89b42d3a456426614174000",
+        "study-b-v1 | run-123e4567e89b42d3a456426614174000",
+    ]
 
 
 def test_comparison_bar_colors_follow_metric_preference_without_reordering() -> None:
