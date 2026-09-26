@@ -680,12 +680,12 @@ def test_sdk_adapter_projects_selectable_study_artifact_from_child_plots() -> No
             },
             "rows": [
                 {
-                    "trial": "trial-0001", "trial_label": "model-a", "architecture": "demo/a",
+                    "trial": "trial-0001", "trial_label": "Tile ShuffleNetV2 0.5x stem-s2 pool", "architecture": "demo/a",
                     "model": "demo/model-a", "disposition": "completed", "execution_id": "child-a",
                     "metrics": {}, "artifacts": {"confusion_plot": {"format": "plotly-json"}},
                 },
                 {
-                    "trial": "trial-0002", "trial_label": "model-b", "architecture": "demo/b",
+                    "trial": "trial-0002", "trial_label": "Tile ShuffleNetV2 0.5x stem-s1 no-pool", "architecture": "demo/b",
                     "model": "demo/model-b", "disposition": "completed", "execution_id": "child-b",
                     "metrics": {}, "artifacts": {"confusion_plot": {"format": "plotly-json"}},
                 },
@@ -705,8 +705,9 @@ def test_sdk_adapter_projects_selectable_study_artifact_from_child_plots() -> No
     figure = report["figure"]
     assert [trace["visible"] for trace in figure["data"]] == [True, False]
     buttons = figure["layout"]["updatemenus"][0]["buttons"]
-    assert [button["label"] for button in buttons] == ["model-a", "model-b"]
+    assert [button["label"] for button in buttons] == ["stem-s2 pool", "stem-s1 no-pool"]
     assert buttons[1]["args"][0]["visible"] == [False, True]
+    assert "annotations" not in figure["layout"]
 
 
 def test_pipeline_summary_table_failure_is_observational() -> None:
