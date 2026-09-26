@@ -707,6 +707,9 @@ def test_sdk_adapter_projects_selectable_study_artifact_from_child_plots() -> No
     buttons = figure["layout"]["updatemenus"][0]["buttons"]
     assert [button["label"] for button in buttons] == ["stem-s2 pool", "stem-s1 no-pool"]
     assert buttons[1]["args"][0]["visible"] == [False, True]
+    assert figure["layout"]["updatemenus"][0]["y"] == 1.0
+    assert figure["layout"]["margin"]["t"] >= 120
+    assert "title" not in figure["layout"]
     assert "annotations" not in figure["layout"]
 
 

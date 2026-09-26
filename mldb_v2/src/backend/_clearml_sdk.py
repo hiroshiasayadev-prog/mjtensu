@@ -996,6 +996,9 @@ def _selectable_plotly_figure(
     display_labels = _selector_labels(accepted_labels)
     first_layout = items[0][1].get("layout")
     layout = dict(first_layout) if isinstance(first_layout, Mapping) else {}
+    # The ClearML metric-group header already carries the artifact name. A
+    # second Plotly title competes with ClearML's trace chips and selector.
+    layout.pop("title", None)
     buttons: list[dict[str, object]] = []
     for item_index, label in enumerate(display_labels):
         visible = [False] * len(data)
@@ -1009,13 +1012,13 @@ def _selectable_plotly_figure(
         })
     layout["updatemenus"] = [{
         "type": "dropdown", "direction": "down", "showactive": True,
-        "x": 0.0, "y": 1.16, "xanchor": "left", "yanchor": "bottom",
+        "x": 0.0, "y": 1.0, "xanchor": "left", "yanchor": "bottom",
         "buttons": buttons,
     }]
     margin = dict(layout.get("margin")) if isinstance(layout.get("margin"), Mapping) else {}
     margin.setdefault("l", 70)
     margin.setdefault("r", 30)
-    margin["t"] = max(int(margin.get("t", 0) or 0), 100)
+    margin["t"] = max(int(margin.get("t", 0) or 0), 120)
     margin.setdefault("b", 60)
     layout["margin"] = margin
     return {"data": data, "layout": layout}
@@ -1049,10 +1052,10 @@ def _selectable_image_figure(items: Sequence[tuple[str, bytes]]) -> dict[str, ob
             "images": image_layout(items[0][1]),
             "updatemenus": [{
                 "type": "dropdown", "direction": "down", "showactive": True,
-                "x": 0.0, "y": 1.08, "xanchor": "left", "yanchor": "bottom",
+                "x": 0.0, "y": 1.0, "xanchor": "left", "yanchor": "bottom",
                 "buttons": buttons,
             }],
-            "margin": {"l": 20, "r": 20, "t": 90, "b": 20},
+            "margin": {"l": 20, "r": 20, "t": 120, "b": 20},
         },
     }
 
