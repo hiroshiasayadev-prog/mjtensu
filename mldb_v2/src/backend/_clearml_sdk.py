@@ -951,12 +951,20 @@ def _study_artifact_plotly_figure(task: object, name: str) -> dict[str, object] 
     return cast(dict[str, object], figure) if isinstance(figure, dict) else None
 
 
-def _trial_annotation(label: str) -> dict[str, object]:
-    return {
-        "xref": "paper", "yref": "paper", "x": 1.0, "y": 1.12,
-        "xanchor": "right", "yanchor": "bottom", "showarrow": False,
-        "text": f"Model: {label}",
-    }
+def _selector_labels(labels: Sequence[str]) -> list[str]:
+    if len(labels) < 2:
+        return list(labels)
+    tokens = [label.split() for label in labels]
+    common = 0
+    while all(common < len(parts) for parts in tokens):
+        token = tokens[0][common]
+        if any(parts[common] != token for parts in tokens[1:]):
+            break
+        common += 1
+    if common == 0 or any(common >= len(parts) for parts in tokens):
+        return list(labels)
+    shortened = [" ".join(parts[common:]) for parts in tokens]
+    return shortened if all(shortened) and len(set(shortened)) == len(shortened) else list(labels)
 
 
 def _selectable_plotly_figure(
@@ -966,7 +974,8 @@ def _selectable_plotly_figure(
         return None
     data: list[dict[str, object]] = []
     ranges: list[tuple[int, int]] = []
-    for index, (_label, figure) in enumerate(items):
+    accepted_labels: list[str] = []
+    for index, (label, figure) in enumerate(items):
         raw_data = figure.get("data")
         if type(raw_data) is not list:
             continue
@@ -977,39 +986,44 @@ def _selectable_plotly_figure(
             trace = dict(raw_trace)
             trace["visible"] = index == 0
             data.append(trace)
+        if len(data) == start:
+            continue
         ranges.append((start, len(data)))
+        accepted_labels.append(label)
     if not ranges or not data:
         return None
+    display_labels = _selector_labels(accepted_labels)
     first_layout = items[0][1].get("layout")
     layout = dict(first_layout) if isinstance(first_layout, Mapping) else {}
     buttons: list[dict[str, object]] = []
-    for item_index, (label, _figure) in enumerate(items):
+    for item_index, label in enumerate(display_labels):
         visible = [False] * len(data)
-        if item_index < len(ranges):
-            start, end = ranges[item_index]
-            for trace_index in range(start, end):
-                visible[trace_index] = True
+        start, end = ranges[item_index]
+        for trace_index in range(start, end):
+            visible[trace_index] = True
         buttons.append({
             "label": label,
             "method": "update",
-            "args": [
-                {"visible": visible},
-                {"annotations": [_trial_annotation(label)]},
-            ],
+            "args": [{"visible": visible}, {}],
         })
     layout["updatemenus"] = [{
         "type": "dropdown", "direction": "down", "showactive": True,
         "x": 0.0, "y": 1.16, "xanchor": "left", "yanchor": "bottom",
         "buttons": buttons,
     }]
-    layout["annotations"] = [_trial_annotation(items[0][0])]
-    layout.setdefault("margin", {"l": 70, "r": 30, "t": 100, "b": 60})
+    margin = dict(layout.get("margin")) if isinstance(layout.get("margin"), Mapping) else {}
+    margin.setdefault("l", 70)
+    margin.setdefault("r", 30)
+    margin["t"] = max(int(margin.get("t", 0) or 0), 100)
+    margin.setdefault("b", 60)
+    layout["margin"] = margin
     return {"data": data, "layout": layout}
 
 
 def _selectable_image_figure(items: Sequence[tuple[str, bytes]]) -> dict[str, object] | None:
     if not items:
         return None
+    display_labels = _selector_labels([label for label, _data in items])
     def image_layout(data: bytes) -> list[dict[str, object]]:
         source = "data:image/png;base64," + base64.b64encode(data).decode("ascii")
         return [{
@@ -1018,10 +1032,10 @@ def _selectable_image_figure(items: Sequence[tuple[str, bytes]]) -> dict[str, ob
             "xanchor": "left", "yanchor": "top", "sizing": "contain", "layer": "above",
         }]
     buttons = [{
-        "label": label,
+        "label": display_labels[index],
         "method": "relayout",
-        "args": [{"images": image_layout(data), "annotations": [_trial_annotation(label)]}],
-    } for label, data in items]
+        "args": [{"images": image_layout(data)}],
+    } for index, (_label, data) in enumerate(items)]
     return {
         "data": [{
             "type": "scatter", "x": [0, 1], "y": [0, 1], "mode": "markers",
@@ -1032,7 +1046,6 @@ def _selectable_image_figure(items: Sequence[tuple[str, bytes]]) -> dict[str, ob
             "xaxis": {"visible": False, "range": [0, 1]},
             "yaxis": {"visible": False, "range": [0, 1], "scaleanchor": "x"},
             "images": image_layout(items[0][1]),
-            "annotations": [_trial_annotation(items[0][0])],
             "updatemenus": [{
                 "type": "dropdown", "direction": "down", "showactive": True,
                 "x": 0.0, "y": 1.08, "xanchor": "left", "yanchor": "bottom",
@@ -1041,7 +1054,6 @@ def _selectable_image_figure(items: Sequence[tuple[str, bytes]]) -> dict[str, ob
             "margin": {"l": 20, "r": 20, "t": 90, "b": 20},
         },
     }
-
 
 def _csv_table_figure(path: Path) -> dict[str, object] | None:
     try:
