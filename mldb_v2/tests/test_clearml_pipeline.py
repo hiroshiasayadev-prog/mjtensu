@@ -22,6 +22,7 @@ from mldb_v2.src.backend._clearml_sdk import (
     ClearMLSDKAdapter,
     ClearMLSDKSettings,
     _comparison_bar_figure,
+    _selectable_plotly_figure,
 )
 from mldb_v2.src.backend._config import BackendConfig
 from mldb_v2.src.backend.clearml_backend import clearml_backend_factory
@@ -715,6 +716,37 @@ def test_sdk_adapter_projects_selectable_study_artifact_from_child_plots() -> No
     assert figure["layout"]["margin"]["t"] >= 120
     assert "annotations" not in figure["layout"]
 
+
+
+
+def test_selectable_robustness_plot_reserves_card_edges() -> None:
+    figure = _selectable_plotly_figure(
+        [(
+            "Tile ShuffleNetV2 0.5x stem-s2 pool",
+            {
+                "data": [{
+                    "type": "scatter",
+                    "x": ["front-facing", "affine-x-compress-0.82", "perspective-yaw-left-0.97"],
+                    "y": [1.0, 0.9, 0.8],
+                }],
+                "layout": {
+                    "xaxis": {"title": "condition"},
+                    "yaxis": {"title": "accuracy / confusion rate"},
+                    "yaxis2": {"title": "mean true margin", "overlaying": "y", "side": "right"},
+                },
+            },
+        )],
+        artifact_name="robustness_plot",
+    )
+    assert figure is not None
+    layout = figure["layout"]
+    assert layout["height"] >= 560
+    assert layout["margin"]["r"] >= 110
+    assert layout["margin"]["b"] >= 150
+    assert layout["xaxis"]["automargin"] is True
+    assert layout["xaxis"]["tickangle"] == -30
+    assert layout["yaxis"]["automargin"] is True
+    assert layout["yaxis2"]["automargin"] is True
 
 def test_pipeline_summary_table_failure_is_observational() -> None:
     FakeSDKTask.reset()
