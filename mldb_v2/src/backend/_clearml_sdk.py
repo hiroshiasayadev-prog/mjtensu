@@ -863,10 +863,10 @@ def _comparison_bar_figure(
 
     title_prefix = evaluation_name or stage
     layout: dict[str, object] = {
-        "title": {"text": f"{metric_name} ? {preference_label}"},
+        "title": {"text": f"{metric_name} / {preference_label}"},
         "showlegend": False,
         "height": 320,
-        "margin": {"l": 80, "r": 30, "t": 70, "b": 50},
+        "margin": {"l": 80, "r": 30, "t": 100, "b": 75},
         "hovermode": "closest",
         "hoverlabel": {
             "bgcolor": "#1F2937",
@@ -891,11 +891,11 @@ def _comparison_bar_figure(
             "xref": "paper",
             "yref": "paper",
             "x": 1,
-            "y": 1.08,
+            "y": -0.18,
             "xanchor": "right",
-            "yanchor": "bottom",
+            "yanchor": "top",
             "showarrow": False,
-            "text": "Blue = better ? Red = worse",
+            "text": "Blue = better / Red = worse",
         }]
     return {"data": [trace], "layout": layout}
 
@@ -995,9 +995,6 @@ def _selectable_plotly_figure(
     display_labels = _selector_labels(accepted_labels)
     first_layout = items[0][1].get("layout")
     layout = dict(first_layout) if isinstance(first_layout, Mapping) else {}
-    # The ClearML metric-group header already carries the artifact name. A
-    # second Plotly title competes with ClearML's trace chips and selector.
-    layout.pop("title", None)
     buttons: list[dict[str, object]] = []
     for item_index, label in enumerate(display_labels):
         visible = [False] * len(data)
@@ -1012,6 +1009,8 @@ def _selectable_plotly_figure(
     layout["updatemenus"] = [{
         "type": "dropdown", "direction": "down", "showactive": True,
         "x": 0.0, "y": 1.0, "xanchor": "left", "yanchor": "bottom",
+        "bgcolor": "#262A31", "bordercolor": "#8D9199",
+        "font": {"color": "#E3E2E6"},
         "buttons": buttons,
     }]
     margin = dict(layout.get("margin")) if isinstance(layout.get("margin"), Mapping) else {}
@@ -1052,6 +1051,8 @@ def _selectable_image_figure(items: Sequence[tuple[str, bytes]]) -> dict[str, ob
             "updatemenus": [{
                 "type": "dropdown", "direction": "down", "showactive": True,
                 "x": 0.0, "y": 1.0, "xanchor": "left", "yanchor": "bottom",
+                "bgcolor": "#262A31", "bordercolor": "#8D9199",
+                "font": {"color": "#E3E2E6"},
                 "buttons": buttons,
             }],
             "margin": {"l": 20, "r": 20, "t": 120, "b": 20},

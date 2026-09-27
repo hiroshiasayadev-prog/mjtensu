@@ -472,9 +472,11 @@ def test_comparison_bar_colors_follow_metric_preference_without_reordering() -> 
     assert accuracy["data"][0]["marker"]["color"] == ["#2F6FED", "#F6B0B0", "#9CC7FF", "#D9534F"]
     assert latency["data"][0]["marker"]["color"] == ["#D9534F", "#2F6FED", "#9CC7FF", "#F6B0B0"]
     assert "marker" not in diagnostic["data"][0]
-    assert accuracy["layout"]["title"]["text"] == "accuracy ? higher is better"
-    assert latency["layout"]["title"]["text"] == "latency_ms ? lower is better"
-    assert diagnostic["layout"]["title"]["text"] == "diagnostic ? neutral"
+    assert accuracy["layout"]["title"]["text"] == "accuracy / higher is better"
+    assert latency["layout"]["title"]["text"] == "latency_ms / lower is better"
+    assert diagnostic["layout"]["title"]["text"] == "diagnostic / neutral"
+    assert accuracy["layout"]["annotations"][0]["text"] == "Blue = better / Red = worse"
+    assert accuracy["layout"]["annotations"][0]["y"] == -0.18
     assert "updatemenus" not in accuracy["layout"]
     assert accuracy["layout"]["hovermode"] == "closest"
     assert accuracy["layout"]["hoverlabel"]["font"]["color"] == "#FFFFFF"
@@ -708,8 +710,9 @@ def test_sdk_adapter_projects_selectable_study_artifact_from_child_plots() -> No
     assert [button["label"] for button in buttons] == ["stem-s2 pool", "stem-s1 no-pool"]
     assert buttons[1]["args"][0]["visible"] == [False, True]
     assert figure["layout"]["updatemenus"][0]["y"] == 1.0
+    assert figure["layout"]["updatemenus"][0]["bgcolor"] == "#262A31"
+    assert figure["layout"]["updatemenus"][0]["font"]["color"] == "#E3E2E6"
     assert figure["layout"]["margin"]["t"] >= 120
-    assert "title" not in figure["layout"]
     assert "annotations" not in figure["layout"]
 
 
