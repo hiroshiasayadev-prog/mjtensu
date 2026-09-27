@@ -969,6 +969,8 @@ def _selector_labels(labels: Sequence[str]) -> list[str]:
 
 def _selectable_plotly_figure(
     items: Sequence[tuple[str, Mapping[str, object]]],
+    *,
+    artifact_name: str | None = None,
 ) -> dict[str, object] | None:
     if not items:
         return None
@@ -1018,6 +1020,27 @@ def _selectable_plotly_figure(
     margin.setdefault("r", 30)
     margin["t"] = max(int(margin.get("t", 0) or 0), 120)
     margin.setdefault("b", 60)
+
+    # ClearML clips Plotly overflow at the card boundary. Dual-right-axis Study
+    # artifacts therefore need explicit right room instead of relying on SVG
+    # overflow, and the robustness chart needs extra height/bottom room for its
+    # long categorical condition labels.
+    if isinstance(layout.get("yaxis2"), Mapping):
+        margin["r"] = max(int(margin.get("r", 0) or 0), 110)
+        yaxis2 = dict(layout["yaxis2"])
+        yaxis2["automargin"] = True
+        layout["yaxis2"] = yaxis2
+    if artifact_name == "robustness_plot":
+        margin["b"] = max(int(margin.get("b", 0) or 0), 150)
+        layout["height"] = max(int(layout.get("height", 0) or 0), 560)
+        for axis_name in ("xaxis", "yaxis"):
+            axis = layout.get(axis_name)
+            if isinstance(axis, Mapping):
+                axis_copy = dict(axis)
+                axis_copy["automargin"] = True
+                if axis_name == "xaxis":
+                    axis_copy.setdefault("tickangle", -30)
+                layout[axis_name] = axis_copy
     layout["margin"] = margin
     return {"data": data, "layout": layout}
 
@@ -1760,7 +1783,7 @@ class ClearMLSDKAdapter:
                             for label, child, _ref in loaded
                             if (item := _study_artifact_plotly_figure(child, artifact_name)) is not None
                         ]
-                        figure = _selectable_plotly_figure(figures)
+                        figure = _selectable_plotly_figure(figures, artifact_name=artifact_name)
                     elif artifact_format == "png":
                         images: list[tuple[str, bytes]] = []
                         for label, child, _ref in loaded:
