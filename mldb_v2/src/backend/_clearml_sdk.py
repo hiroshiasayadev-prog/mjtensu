@@ -1031,9 +1031,35 @@ def _selectable_plotly_figure(
         yaxis2 = dict(layout["yaxis2"])
         yaxis2["automargin"] = True
         layout["yaxis2"] = yaxis2
-    if artifact_name == "robustness_plot":
+    if artifact_name is not None and "robustness" in artifact_name:
         margin["b"] = max(int(margin.get("b", 0) or 0), 150)
         layout["height"] = max(int(layout.get("height", 0) or 0), 560)
+        named_visible_traces = [
+            trace
+            for trace in data
+            if trace.get("visible") is True
+            and isinstance(trace.get("name"), str)
+            and str(trace["name"]).strip()
+        ]
+        if len(named_visible_traces) >= 2:
+            layout["showlegend"] = True
+            legend = (
+                dict(layout.get("legend"))
+                if isinstance(layout.get("legend"), Mapping)
+                else {}
+            )
+            legend.update({
+                "orientation": "v",
+                "x": 1.0,
+                "y": 1.0,
+                "xanchor": "right",
+                "yanchor": "top",
+                "bgcolor": "rgba(38,42,49,0.85)",
+                "bordercolor": "#8D9199",
+                "borderwidth": 1,
+                "font": {"color": "#E3E2E6"},
+            })
+            layout["legend"] = legend
         for axis_name in ("xaxis", "yaxis"):
             axis = layout.get(axis_name)
             if isinstance(axis, Mapping):
