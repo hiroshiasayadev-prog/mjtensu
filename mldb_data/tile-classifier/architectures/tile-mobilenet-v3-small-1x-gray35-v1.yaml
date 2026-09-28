@@ -1,0 +1,43 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/tile-mobilenet-v3-small-1x-gray35-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "MobileNetV3-Small 1.0x gray35 classifier",
+  "family": "mobilenet-v3-small",
+  "description": "MLDB-owned reconstruction of the INV-011 selected MobileNetV3-Small 1.0x tile classifier: grayscale 1x64x64 input, standard MobileNetV3-Small inverted residual/depthwise/SE structure, BatchNorm eps 0.001 and momentum 0.01, width multiplier 1.0, dropout 0.2, and 35 output logits. No pretrained weights are used.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sources": [
+      {
+        "path": "mldb_data/tile-classifier/lib/mobilenet_v3_small_tile_classifier_v1.py",
+        "sha256": "7acbae71fe9bee2b114cd2f24603efb90b47fba4c823d9c7396248da7fccc4aa"
+      }
+    ],
+    "sha256": "79f106bc4c50831986e721e63696a37a1f519cd89dfce9666bc013131351de58"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        1,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "MobileNetV3-Small 1.0x, grayscale input, 11 inverted residual blocks, SE/HardSwish, global average pool, 35 logits",
+    "traits": [
+      "grayscale",
+      "mobilenet-v3-small",
+      "depthwise-separable",
+      "squeeze-excitation",
+      "production-traceability"
+    ]
+  }
+}
