@@ -1,0 +1,181 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/production-mobilenet-v3-small-1x-reproduction-v1",
+  "status": "sealed",
+  "name": "Production MobileNetV3-Small 1.0x INV-011 reproduction",
+  "description": "Traceability Study for the INV-011 selected MobileNetV3-Small 1.0x 35-class base classifier. Historical artifact: vendor/recognition-models/tile-mobilenet-v3-small-1.0x-random360-e150.onnx, grayscale dynamic [N,1,64,64] -> [N,35]. Historical training used implementation inv011-mobile-v1, 150 epochs, physical/effective batch 512, AdamW lr 0.001 weight decay 0.0001, deterministic random360 augmentation, seed 42, AMP/TF32, checkpoint angles 0/15/30/45 every 5 epochs plus epoch 1/final, and selected epoch 150 with checkpoint angle-mean 0.95. Recorded normalization mean 0.6815832403977466 / std 0.2725553681973969. This MLDB Study retrains from the frozen v3_jp189 corpus under those conditions; it is not expected to reproduce identical serialized bytes. The four canonical evaluations are full-class diagnostic, validity/rejection, angle robustness, and ONNX Runtime CPU latency. The latency stage name onnx-cpu-latency routes it to the dedicated latency-cpu queue.",
+  "model": {
+    "train": {
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-train-mobilenet-v3-small-1x-random360-e150-v1",
+      "architectures": [
+        "tile-classifier/tile-mobilenet-v3-small-1x-gray35-v1"
+      ],
+      "parameters": {
+        "epochs": {
+          "values": [
+            150
+          ]
+        },
+        "batch_size": {
+          "values": [
+            512
+          ]
+        },
+        "eval_batch_size": {
+          "values": [
+            256
+          ]
+        },
+        "learning_rate": {
+          "values": [
+            0.001
+          ]
+        },
+        "weight_decay": {
+          "values": [
+            0.0001
+          ]
+        },
+        "eval_angles": {
+          "values": [
+            [
+              0,
+              15,
+              30,
+              45
+            ]
+          ]
+        },
+        "angle_eval_every": {
+          "values": [
+            5
+          ]
+        },
+        "amp": {
+          "values": [
+            true
+          ]
+        },
+        "tf32": {
+          "values": [
+            true
+          ]
+        },
+        "cache_device": {
+          "values": [
+            "auto"
+          ]
+        },
+        "cache_vram_fraction": {
+          "values": [
+            0.25
+          ]
+        }
+      },
+      "seeds": [
+        42
+      ]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "full-class-diagnostic",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-full-class-diagnostic-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            256
+          ]
+        }
+      }
+    },
+    {
+      "stage": "validity-rejection",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-validity-rejection-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            256
+          ]
+        }
+      }
+    },
+    {
+      "stage": "angle-robustness",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-angle-robustness-v4",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            4096
+          ]
+        },
+        "eval_angles": {
+          "values": [
+            [
+              0,
+              15,
+              30,
+              45
+            ]
+          ]
+        },
+        "amp": {
+          "values": [
+            true
+          ]
+        },
+        "tf32": {
+          "values": [
+            true
+          ]
+        },
+        "cache_device": {
+          "values": [
+            "auto"
+          ]
+        },
+        "cache_vram_fraction": {
+          "values": [
+            0.5
+          ]
+        }
+      }
+    },
+    {
+      "stage": "onnx-cpu-latency",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-onnx-cpu-latency-v2",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "measure_runs": {
+          "values": [
+            200
+          ]
+        },
+        "intra_op_threads": {
+          "values": [
+            1
+          ]
+        },
+        "inter_op_threads": {
+          "values": [
+            1
+          ]
+        }
+      }
+    }
+  ]
+}

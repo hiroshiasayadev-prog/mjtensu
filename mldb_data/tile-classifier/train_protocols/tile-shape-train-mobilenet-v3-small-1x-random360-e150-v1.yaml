@@ -1,0 +1,82 @@
+{
+  "schema": "mjtensu.mldb-v2/train-protocol/v1",
+  "id": "tile-classifier/tile-shape-train-mobilenet-v3-small-1x-random360-e150-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "INV-011 MobileNetV3-Small 1.0x random360 e150 recipe",
+  "description": "Reconstruct the selected INV-011 MobileNetV3-Small 1.0x training procedure without importing historical tools code: seed before model construction, deterministic per-(seed, epoch, sample_id) random360 rotation, physical/effective batch 512, AdamW, cosine annealing to 5% of the initial learning rate, manual_val evaluation at 0 degrees every epoch, full 0/15/30/45 degree checkpoint sweep at epoch 1/every 5 epochs/final epoch, and strict-greater selection of the highest manual_val angle-mean checkpoint.",
+  "implementation": {
+    "entrypoint": "train",
+    "sources": [
+      {
+        "path": "mldb_data/tile-classifier/lib/mobilenet_v3_small_tile_classifier_v1.py",
+        "sha256": "7acbae71fe9bee2b114cd2f24603efb90b47fba4c823d9c7396248da7fccc4aa"
+      }
+    ],
+    "sha256": "767d16366b119f4bae5f951580feccca65175bc426cbb8afdcc42eb7440affe7"
+  },
+  "parameters": {
+    "epochs": {
+      "default": 150,
+      "type": "integer",
+      "minimum": 1
+    },
+    "batch_size": {
+      "default": 512,
+      "type": "integer",
+      "minimum": 2
+    },
+    "eval_batch_size": {
+      "default": 256,
+      "type": "integer",
+      "minimum": 1
+    },
+    "learning_rate": {
+      "default": 0.001,
+      "type": "number",
+      "minimum": 1e-07
+    },
+    "weight_decay": {
+      "default": 0.0001,
+      "type": "number",
+      "minimum": 0
+    },
+    "eval_angles": {
+      "default": [
+        0,
+        15,
+        30,
+        45
+      ],
+      "type": "array"
+    },
+    "angle_eval_every": {
+      "default": 5,
+      "type": "integer",
+      "minimum": 1
+    },
+    "amp": {
+      "default": true,
+      "type": "boolean"
+    },
+    "tf32": {
+      "default": true,
+      "type": "boolean"
+    },
+    "cache_device": {
+      "default": "auto",
+      "type": "string",
+      "enum": [
+        "auto",
+        "cpu",
+        "cuda"
+      ]
+    },
+    "cache_vram_fraction": {
+      "default": 0.25,
+      "type": "number",
+      "minimum": 0.01,
+      "maximum": 0.79
+    }
+  }
+}
