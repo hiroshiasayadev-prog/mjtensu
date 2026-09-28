@@ -1,0 +1,258 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/plain-random360-e150-reproduction-v1",
+  "status": "sealed",
+  "name": "Plain random360 e150 historical-condition reproduction",
+  "description": "Traceability Study for the INV-008 Plain random360 35-class classifier that was promoted in dev as recognition-v3 on 2026-08-31. Historical source run .local/recognition/plain_random360_epoch_sweep/e150/plain-random360, selected best.pt epoch 125, checkpoint SHA-256 dfcf8bb4c8b5aa2b275530f273f66fa138711b6040946ca6a19281f04f29e7ba, exported tile-plain-gray35-random360-e150.onnx SHA-256 553d1a65b6f3a12be7de53e5c83a889df5a0e296d8957b14bf18e8d601442018, 1,495,802 bytes, normalization mean 0.6815832403977466 / std 0.2725553681973969. Historical training used the Plain 32/64/128/192 dense-CNN topology, frozen v3_jp189 corpus, 150 epochs, batch 512, AdamW lr 0.001 weight decay 0.0001, deterministic Uniform(-180,+180) random360 keyed by seed/epoch/sample_id, seed 42, AMP/TF32, and best-checkpoint selection by manual_val mean at 0/15/30/45 degrees every 5 epochs plus epoch 1/final. This MLDB run retrains from initialization through the sealed tile-shape-train-gpu-v5 random360-only-v1 path, whose random-angle and affine-grid semantics match INV-007/008; identical checkpoint or ONNX bytes are not expected. Evaluation adds current canonical full-class diagnostic, validity rejection, dense 64-angle robustness at 5.625-degree spacing for direct comparison with INV-008, focused 5m/6m/7m diagnostic, and ONNX Runtime CPU latency on the dedicated latency-cpu route.",
+  "model": {
+    "train": {
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-train-gpu-v5",
+      "architectures": [
+        "tile-classifier/tile-plain-gray35-v2"
+      ],
+      "parameters": {
+        "epochs": {
+          "values": [
+            150
+          ]
+        },
+        "batch_size": {
+          "values": [
+            512
+          ]
+        },
+        "learning_rate": {
+          "values": [
+            0.001
+          ]
+        },
+        "weight_decay": {
+          "values": [
+            0.0001
+          ]
+        },
+        "rotation_augment_deg": {
+          "values": [
+            180.0
+          ]
+        },
+        "augmentation_recipe": {
+          "values": [
+            "random360-only-v1"
+          ]
+        },
+        "checkpoint_eval_every": {
+          "values": [
+            5
+          ]
+        },
+        "amp": {
+          "values": [
+            true
+          ]
+        },
+        "tf32": {
+          "values": [
+            true
+          ]
+        },
+        "cache_device": {
+          "values": [
+            "cuda"
+          ]
+        },
+        "cache_vram_fraction": {
+          "values": [
+            0.5
+          ]
+        }
+      },
+      "seeds": [
+        42
+      ]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "full-class-diagnostic",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-full-class-diagnostic-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            256
+          ]
+        }
+      }
+    },
+    {
+      "stage": "validity-rejection",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-validity-rejection-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            256
+          ]
+        }
+      }
+    },
+    {
+      "stage": "angle-robustness-dense64",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-angle-robustness-v4",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1024
+          ]
+        },
+        "eval_angles": {
+          "values": [
+            [
+              0.0,
+              5.625,
+              11.25,
+              16.875,
+              22.5,
+              28.125,
+              33.75,
+              39.375,
+              45.0,
+              50.625,
+              56.25,
+              61.875,
+              67.5,
+              73.125,
+              78.75,
+              84.375,
+              90.0,
+              95.625,
+              101.25,
+              106.875,
+              112.5,
+              118.125,
+              123.75,
+              129.375,
+              135.0,
+              140.625,
+              146.25,
+              151.875,
+              157.5,
+              163.125,
+              168.75,
+              174.375,
+              180.0,
+              185.625,
+              191.25,
+              196.875,
+              202.5,
+              208.125,
+              213.75,
+              219.375,
+              225.0,
+              230.625,
+              236.25,
+              241.875,
+              247.5,
+              253.125,
+              258.75,
+              264.375,
+              270.0,
+              275.625,
+              281.25,
+              286.875,
+              292.5,
+              298.125,
+              303.75,
+              309.375,
+              315.0,
+              320.625,
+              326.25,
+              331.875,
+              337.5,
+              343.125,
+              348.75,
+              354.375
+            ]
+          ]
+        },
+        "amp": {
+          "values": [
+            true
+          ]
+        },
+        "tf32": {
+          "values": [
+            true
+          ]
+        },
+        "cache_device": {
+          "values": [
+            "cuda"
+          ]
+        },
+        "cache_vram_fraction": {
+          "values": [
+            0.5
+          ]
+        }
+      }
+    },
+    {
+      "stage": "manzu-diagnostic-v4",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-manzu-diagnostic-v4",
+      "parameters": {
+        "split": {
+          "values": [
+            "manual_val"
+          ]
+        },
+        "batch_size": {
+          "values": [
+            64
+          ]
+        },
+        "occlusion_patch": {
+          "values": [
+            8
+          ]
+        }
+      }
+    },
+    {
+      "stage": "onnx-cpu-latency",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-onnx-cpu-latency-v2",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "measure_runs": {
+          "values": [
+            200
+          ]
+        },
+        "intra_op_threads": {
+          "values": [
+            1
+          ]
+        },
+        "inter_op_threads": {
+          "values": [
+            1
+          ]
+        }
+      }
+    }
+  ]
+}
