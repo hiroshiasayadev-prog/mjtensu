@@ -722,31 +722,53 @@ def test_sdk_adapter_projects_selectable_study_artifact_from_child_plots() -> No
 def test_selectable_robustness_plot_reserves_card_edges() -> None:
     figure = _selectable_plotly_figure(
         [(
-            "Tile ShuffleNetV2 0.5x stem-s2 pool",
+            "Tile MobileNetV3-Small 1.0x",
             {
-                "data": [{
-                    "type": "scatter",
-                    "x": ["front-facing", "affine-x-compress-0.82", "perspective-yaw-left-0.97"],
-                    "y": [1.0, 0.9, 0.8],
-                }],
+                "data": [
+                    {
+                        "type": "scatter",
+                        "name": "overall accuracy",
+                        "x": ["front-facing", "affine-x-compress-0.82"],
+                        "y": [1.0, 0.9],
+                    },
+                    {
+                        "type": "scatter",
+                        "name": "macro recall (35 classes)",
+                        "x": ["front-facing", "affine-x-compress-0.82"],
+                        "y": [0.99, 0.88],
+                    },
+                    {
+                        "type": "scatter",
+                        "name": "worst-class recall",
+                        "x": ["front-facing", "affine-x-compress-0.82"],
+                        "y": [0.95, 0.70],
+                    },
+                ],
                 "layout": {
                     "xaxis": {"title": "condition"},
-                    "yaxis": {"title": "accuracy / confusion rate"},
-                    "yaxis2": {"title": "mean true margin", "overlaying": "y", "side": "right"},
+                    "yaxis": {"title": "accuracy / recall"},
                 },
             },
         )],
-        artifact_name="robustness_plot",
+        artifact_name="robustness_accuracy_recall_plot",
     )
     assert figure is not None
     layout = figure["layout"]
     assert layout["height"] >= 560
-    assert layout["margin"]["r"] >= 110
     assert layout["margin"]["b"] >= 150
     assert layout["xaxis"]["automargin"] is True
     assert layout["xaxis"]["tickangle"] == -30
     assert layout["yaxis"]["automargin"] is True
-    assert layout["yaxis2"]["automargin"] is True
+    assert layout["showlegend"] is True
+    assert layout["legend"]["orientation"] == "v"
+    assert layout["legend"]["xanchor"] == "right"
+    assert layout["legend"]["yanchor"] == "top"
+    assert [trace["name"] for trace in figure["data"]] == [
+        "overall accuracy",
+        "macro recall (35 classes)",
+        "worst-class recall",
+    ]
+
 
 def test_pipeline_summary_table_failure_is_observational() -> None:
     FakeSDKTask.reset()
