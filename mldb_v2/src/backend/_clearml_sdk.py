@@ -58,6 +58,7 @@ _REMOTE_PACKAGES = (
     "onnxruntime==1.28.0",
     "torch==2.5.1",
     "torchvision==0.20.1",
+    "escnn==1.0.11",
 )
 
 

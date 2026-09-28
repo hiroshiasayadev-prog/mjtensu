@@ -1,0 +1,88 @@
+{
+  "schema": "mjtensu.mldb-v2/train-protocol/v1",
+  "id": "tile-classifier/tile-shape-train-c8-production-recipe-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Historical production C8 training recipe",
+  "description": "Reconstruct the accepted C8 production training procedure without importing historical tools code: seed before rebuilding the exact C8 Architecture, train with AdamW and cosine annealing, residual random rotation before normalization, evaluate manual_val and jp_val at 0 degrees every epoch, run the full configured angle sweep at epoch 1, every checkpoint interval, and the final epoch, and return the state with the highest mean manual_val full-sweep accuracy. Strict greater-than selection preserves the earlier state on ties. No perspective, shear, stretch, or projective augmentation is performed.",
+  "implementation": {
+    "entrypoint": "train",
+    "sources": [
+      {
+        "path": "mldb_data/tile-classifier/lib/c8_tile_shape_classifier_v1.py",
+        "sha256": "3063e58010e700bed4e9da957382fcd2fa805ae269d68c201f9684379dd49dbe"
+      }
+    ],
+    "sha256": "df57d79dd3fdef5f3a7179aef55e64b17c8061351e498375fbd12ebc09ee4e4e"
+  },
+  "parameters": {
+    "epochs": {
+      "default": 50,
+      "type": "integer",
+      "minimum": 1
+    },
+    "batch_size": {
+      "default": 512,
+      "type": "integer",
+      "minimum": 2
+    },
+    "eval_batch_size": {
+      "default": 4096,
+      "type": "integer",
+      "minimum": 2
+    },
+    "learning_rate": {
+      "default": 0.001,
+      "type": "number",
+      "minimum": 1e-07
+    },
+    "weight_decay": {
+      "default": 0.0001,
+      "type": "number",
+      "minimum": 0
+    },
+    "rotation_augment_deg": {
+      "default": 22.5,
+      "type": "number",
+      "minimum": 0,
+      "maximum": 45
+    },
+    "eval_angles": {
+      "default": [
+        0,
+        15,
+        30,
+        45
+      ],
+      "type": "array"
+    },
+    "angle_eval_every": {
+      "default": 5,
+      "type": "integer",
+      "minimum": 1
+    },
+    "amp": {
+      "default": true,
+      "type": "boolean"
+    },
+    "tf32": {
+      "default": true,
+      "type": "boolean"
+    },
+    "cache_device": {
+      "default": "auto",
+      "type": "string",
+      "enum": [
+        "auto",
+        "cpu",
+        "cuda"
+      ]
+    },
+    "cache_vram_fraction": {
+      "default": 0.25,
+      "type": "number",
+      "minimum": 0.01,
+      "maximum": 0.79
+    }
+  }
+}

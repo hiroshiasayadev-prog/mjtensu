@@ -1,0 +1,112 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-validity-rejection-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Tile classifier validity rejection",
+  "description": "Evaluate only the 35-class classifier's second-gate valid/invalid rejection responsibility on the authored manual_val crops. The 34 tile labels collapse to true valid and invalid stays true invalid; any non-invalid prediction accepts, while invalid rejects. The primary balanced_accuracy gives true-valid and true-invalid groups equal 50/50 weight regardless of raw population imbalance. No geometry or shift perturbation sweep is added. The optional rejection score is invalid_logit - max(valid_class_logits), with the runtime decision boundary at score >= 0; its magnitude is not treated as a calibrated cross-architecture probability.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "bc84485cd47c63db4a76e0c3174b305e82af04c7f9288f09e3618f24ca9ac705"
+  },
+  "parameters": {
+    "batch_size": {
+      "default": 256,
+      "type": "integer",
+      "minimum": 1,
+      "description": "Inference batch size; does not change the authored manual_val population or rejection semantics."
+    }
+  },
+  "metrics": {
+    "balanced_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Primary group-balanced validity score: mean(valid_accept_recall, invalid_reject_recall), so true valid and true invalid each contribute 50% regardless of raw counts."
+    },
+    "valid_accept_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Fraction of true valid tile crops accepted as non-invalid. Wrong tile identity still counts as accepted for this Evaluation."
+    },
+    "valid_false_reject_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Fraction of true valid tile crops rejected as invalid; exactly 1 - valid_accept_recall."
+    },
+    "invalid_reject_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Fraction of true invalid crops rejected as invalid."
+    },
+    "invalid_false_accept_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Fraction of true invalid crops accepted as one of the 34 tile classes; exactly 1 - invalid_reject_recall."
+    },
+    "roc_auc": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Threshold-free invalid-vs-valid separation using rejection_score = invalid_logit - max(valid_class_logits), with true invalid as the positive class. AUC uses ranking only; raw score magnitudes are not calibrated probabilities."
+    }
+  },
+  "artifacts": {
+    "rejection_summary_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/tile-validity-rejection-summary/v1",
+      "required": true,
+      "description": "Single-row rejection summary containing raw valid/invalid counts, accept/reject outcome counts, all formal metrics, and the explicit 0.5/0.5 group weights."
+    },
+    "binary_confusion_matrix": {
+      "format": "plotly-json",
+      "schema": "mjtensu.recognition/tile-validity-rejection-confusion-plot/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "2x2 true-valid/true-invalid versus accept/reject heatmap. Cell color is true-group row-normalized rate so imbalance cannot dominate; hover preserves raw counts."
+    },
+    "per_valid_class_false_reject_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/tile-validity-per-class-false-reject/v1",
+      "required": true,
+      "description": "All 34 real tile classes with authored sample count, false-reject count, and false-reject rate."
+    },
+    "per_valid_class_false_reject_plot": {
+      "format": "plotly-json",
+      "schema": "mjtensu.recognition/tile-validity-per-class-false-reject-plot/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "Per-tile-class false-reject-rate bar plot with sample and false-reject counts in hover, exposing classes disproportionately rejected as invalid."
+    },
+    "error_inspection_contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.recognition/tile-validity-rejection-error-contact-sheet/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "Deterministic inspection sheet for false accepts and false rejects, ordered by rejection-score severity with sample identifiers and score components."
+    },
+    "per_sample_details": {
+      "format": "jsonl",
+      "schema": "mjtensu.recognition/tile-validity-rejection-samples/v1",
+      "required": true,
+      "description": "Per-sample true group, accept/reject decision, binary outcome, 35-class argmax label, best-valid label/logit, invalid logit, rejection score, and source/provenance fields."
+    },
+    "rejection_roc_curve": {
+      "format": "plotly-json",
+      "schema": "mjtensu.recognition/tile-validity-rejection-roc-plot/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "ROC curve for invalid-vs-valid rejection-score ranking with the operational score >= 0 point marked; x-axis is valid false-reject rate and y-axis is invalid reject recall."
+    },
+    "rejection_report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/tile-validity-rejection-report/v1",
+      "required": true,
+      "description": "Structured audit report for exact sample population, provenance, metric formulas, score semantics, deterministic error selection, and terminal telemetry semantics."
+    }
+  }
+}

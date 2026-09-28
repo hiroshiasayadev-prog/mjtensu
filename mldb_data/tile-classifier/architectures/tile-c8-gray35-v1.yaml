@@ -1,0 +1,42 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/tile-c8-gray35-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "C8 gray35 production-shape classifier",
+  "family": "c8-equivariant-cnn",
+  "description": "Exact MLDB-owned reconstruction of the deployed historical C8 tile-shape topology: escnn C8 regular fields 8/16/32/64, equivariant convolutions with 5/3/3/3 kernels, inter-stage pointwise max pooling, GroupPooling after the final equivariant block, global spatial average pooling, and a 35-logit head. This definition contains no learned production weights.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sources": [
+      {
+        "path": "mldb_data/tile-classifier/lib/c8_tile_shape_classifier_v1.py",
+        "sha256": "3063e58010e700bed4e9da957382fcd2fa805ae269d68c201f9684379dd49dbe"
+      }
+    ],
+    "sha256": "72d65030f62adbe59288b341a58ad2b42d633134ea98bd1c6c2a05037e056db6"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        1,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "escnn C8 regular fields 8/16/32/64 -> GroupPooling -> AdaptiveAvgPool2d(1) -> Linear128/SiLU -> 35 logits",
+    "traits": [
+      "grayscale",
+      "c8-rotation-equivariant",
+      "group-pooled",
+      "production-traceability"
+    ]
+  }
+}

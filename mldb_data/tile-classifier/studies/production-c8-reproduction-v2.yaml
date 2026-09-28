@@ -1,0 +1,186 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/production-c8-reproduction-v2",
+  "status": "sealed",
+  "name": "Production C8 historical-condition reproduction with CPU latency",
+  "description": "Traceability Study for the historically deployed 35-class C8 base classifier. Historical identity only: source run .local/recognition/tile_classifier_runs/gray64_c8_rot22p5_bs512_gray35_v3_jp189_seed42/, selected best.pt epoch 45 with recorded checkpoint SHA-256 86662c9342a805d3498b09fc868b651fc375f773f47f0ce6bbcb9262286a09c2, deployed tile-c8-gray35-v3-jp189.onnx SHA-256 b8a8fa3ff6c6d1e944a7593fa0afc947e0cd2513fb79ca46e5f8fcd6e19c97d0, and exported normalization mean 0.6815832403977466 / std 0.2725553681973969. This Study does not import or mutate those production assets. A future MLDB run would retrain one C8 model from the frozen v3_jp189 corpus under reconstructed historical conditions for provenance comparison; seeded GPU training is not promised to select epoch 45 or reproduce identical checkpoint/ONNX bytes. Revision v2 adds canonical ONNX Runtime CPU latency using the C8-aware tile-shape-onnx-cpu-latency-v2 protocol. The latency stage is named onnx-cpu-latency so backend routing sends it to the dedicated latency-cpu queue.",
+  "model": {
+    "train": {
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-train-c8-production-recipe-v1",
+      "architectures": [
+        "tile-classifier/tile-c8-gray35-v1"
+      ],
+      "parameters": {
+        "epochs": {
+          "values": [
+            50
+          ]
+        },
+        "batch_size": {
+          "values": [
+            512
+          ]
+        },
+        "eval_batch_size": {
+          "values": [
+            4096
+          ]
+        },
+        "learning_rate": {
+          "values": [
+            0.001
+          ]
+        },
+        "weight_decay": {
+          "values": [
+            0.0001
+          ]
+        },
+        "rotation_augment_deg": {
+          "values": [
+            22.5
+          ]
+        },
+        "eval_angles": {
+          "values": [
+            [
+              0,
+              15,
+              30,
+              45
+            ]
+          ]
+        },
+        "angle_eval_every": {
+          "values": [
+            5
+          ]
+        },
+        "amp": {
+          "values": [
+            true
+          ]
+        },
+        "tf32": {
+          "values": [
+            true
+          ]
+        },
+        "cache_device": {
+          "values": [
+            "auto"
+          ]
+        },
+        "cache_vram_fraction": {
+          "values": [
+            0.25
+          ]
+        }
+      },
+      "seeds": [
+        42
+      ]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "full-class-diagnostic",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-full-class-diagnostic-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            256
+          ]
+        }
+      }
+    },
+    {
+      "stage": "validity-rejection",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-validity-rejection-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            256
+          ]
+        }
+      }
+    },
+    {
+      "stage": "angle-robustness",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-angle-robustness-v4",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            4096
+          ]
+        },
+        "eval_angles": {
+          "values": [
+            [
+              0,
+              15,
+              30,
+              45
+            ]
+          ]
+        },
+        "amp": {
+          "values": [
+            true
+          ]
+        },
+        "tf32": {
+          "values": [
+            true
+          ]
+        },
+        "cache_device": {
+          "values": [
+            "auto"
+          ]
+        },
+        "cache_vram_fraction": {
+          "values": [
+            0.5
+          ]
+        }
+      }
+    },
+    {
+      "stage": "onnx-cpu-latency",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-onnx-cpu-latency-v2",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "measure_runs": {
+          "values": [
+            200
+          ]
+        },
+        "intra_op_threads": {
+          "values": [
+            1
+          ]
+        },
+        "inter_op_threads": {
+          "values": [
+            1
+          ]
+        }
+      }
+    }
+  ]
+}
