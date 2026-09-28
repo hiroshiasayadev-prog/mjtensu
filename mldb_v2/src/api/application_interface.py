@@ -15,6 +15,8 @@ from mldb_v2.src.common.ids import (
     StudyPlanId,
     StudyResultId,
     TrainingResultId,
+    TrialId,
+    EvaluationCoordinateId,
 )
 from mldb_v2.src.results.study_result import StudyResult, StudyResultStatus
 from mldb_v2.src.study.plan import StudyPlan
@@ -129,6 +131,14 @@ class ApplicationInterface(QueryInterface, Protocol):
         *,
         source: StudyResultId,
         backend: str | None = None,
+    ) -> StudyResult: ...
+
+    def retry_stage(
+        self,
+        *,
+        study_result: StudyResultId,
+        trial: TrialId,
+        coordinate: EvaluationCoordinateId,
     ) -> StudyResult: ...
 
     def cancel_study(

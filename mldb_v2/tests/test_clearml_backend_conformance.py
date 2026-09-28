@@ -8,6 +8,7 @@ from typing import cast
 import pytest
 
 from mldb_v2.src.backend._clearml_admission import (
+    ClearMLAdmissionService,
     ClearMLCreateRequest,
     ClearMLRemoteLaunch,
     ClearMLTaskRecord,
@@ -22,11 +23,13 @@ from mldb_v2.src.backend._clearml_observation import (
     ClearMLRuntimeProjection,
     _stage_key_from_input,
 )
+from mldb_v2.src.backend._clearml_retry import ClearMLRetryService
 from mldb_v2.src.backend._clearml_sdk import (
     ClearMLSDKAdapter,
     ClearMLSDKSettings,
     _ClearMLScalarSink,
     _configuration,
+    _physical_attempt_token,
 )
 from mldb_v2.src.backend._config import BackendConfig
 from mldb_v2.src.backend._registry import BackendRegistry
@@ -660,6 +663,43 @@ def test_sdk_prebuilt_runtime_cpu_route_uses_system_python_without_gpu_flag() ->
     assert FakeSDKTask.package_calls and "onnxruntime==1.28.0" in FakeSDKTask.package_calls[0]
 
 
+def test_sdk_retry_task_is_not_owner_and_owner_projection_aggregates_attempts() -> None:
+    FakeSDKTask.reset()
+    adapter = ClearMLSDKAdapter(task_class=FakeSDKTask)
+    stage_input = _evaluation_stage_input()
+    owner = ClearMLAdmissionService(client=adapter).admit(stage_input=stage_input)
+    owner_task = FakeSDKTask.get_task(task_id=owner.task_id)
+    assert owner_task is not None
+    owner_task.status = "failed"
+
+    observed = ClearMLRetryService(client=adapter).retry(
+        stage_input=stage_input,
+        prior_execution_ids=[owner.task_id],
+    )
+    assert observed["state"] == "active"
+    assert len(observed["execution_ids"]) == 2
+    retry_id = observed["execution_ids"][1]
+
+    ownership = _ownership_key(stage_input)
+    assert [item.task_id for item in adapter.search_tasks(
+        project="mldb/demo", ownership_key=ownership
+    )] == [owner.task_id]
+    retry_task = FakeSDKTask.get_task(task_id=retry_id)
+    assert retry_task is not None
+    assert "mldb.ownership_key" not in retry_task.properties
+    assert retry_task.configs["mldb"]["mldb.ownership_key"] == ownership
+
+    retry_task.configs["mldb.runtime_projection"] = {
+        "state": "terminal",
+        "execution_ids": [retry_id],
+        "terminal_candidates": [_candidate(stage_input, retry_id, "completed")],
+    }
+    retry_task.status = "completed"
+    projection = adapter.read_runtime_projection(task_id=owner.task_id)
+    assert list(projection.execution_ids) == [owner.task_id, retry_id]
+    assert len(projection.terminal_candidates) == 2
+
+
 def test_sdk_terminal_failure_without_harness_payload_is_safe_failure_not_success() -> None:
     FakeSDKTask.reset()
     adapter = ClearMLSDKAdapter(task_class=FakeSDKTask)
@@ -685,6 +725,16 @@ def test_sdk_success_without_common_harness_projection_is_rejected() -> None:
     with pytest.raises(RuntimeError, match="without harness projection"):
         adapter.read_runtime_projection(task_id=task_id)
 
+
+
+
+def test_retry_attempt_uses_distinct_remote_workspace_and_artifact_token() -> None:
+    ownership = "mldb-v2-stage:" + "a" * 64
+    assert _physical_attempt_token(ownership, None) == "a" * 64
+    assert _physical_attempt_token(ownership, "2") == ("a" * 64) + "/retry-0002"
+    assert _physical_attempt_token(ownership, "3") == ("a" * 64) + "/retry-0003"
+    with pytest.raises(RuntimeError, match="retry index"):
+        _physical_attempt_token(ownership, "1")
 
 def test_genericity_and_secret_boundaries() -> None:
     root = Path(__file__).parents[1]

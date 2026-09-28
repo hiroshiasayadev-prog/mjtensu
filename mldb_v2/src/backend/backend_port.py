@@ -1,5 +1,6 @@
 """Generic MLDB v2 execution-backend port."""
 
+from collections.abc import Sequence
 from typing import Protocol
 
 from mldb_v2.src.backend.candidate_outcome import (
@@ -28,4 +29,17 @@ class BackendPort(Protocol):
 
     def cancel_study(self, *, study_result: StudyResultId) -> None:
         """Request cancellation of admitted work for one Study execution."""
+        ...
+
+
+class StageRetryPort(Protocol):
+    """Optional backend-neutral capability for one new physical stage attempt."""
+
+    def retry_stage(
+        self,
+        *,
+        stage_input: StageInput,
+        prior_execution_ids: Sequence[str],
+    ) -> BackendObservation:
+        """Create or recover exactly one retry attempt after the supplied history."""
         ...

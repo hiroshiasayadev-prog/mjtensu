@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal, TypeAlias, TypedDict, cast
 
-from mldb_v2.src.backend.stage_input import RuntimeModel, StageInput
+from mldb_v2.src.backend.stage_input import EvaluationStageInput, RuntimeModel, StageInput
 from mldb_v2.src.common.ids import (
     EvaluationCoordinateId,
     TrialId,
@@ -446,6 +446,73 @@ def _materialize_stage_input(
         },
     )
 
+
+
+def _materialize_evaluation_retry_stage_input(
+    *,
+    plan: Mapping[str, object] | StudyPlan,
+    result: StudyResult,
+    trial: object,
+    coordinate: object,
+    mldb_data_root: str | Path,
+) -> EvaluationStageInput:
+    """Materialize the exact input for one failed evaluation without reopening its slot."""
+    validated_plan, validated_result = _validated_inputs(plan, result)
+    trial_id = _validate_trial_id(trial)
+    coordinate_id = _validate_evaluation_coordinate_id(coordinate)
+    plan_trial = _find_plan_trial(validated_plan, str(trial_id))
+    result_trial = _find_result_trial(validated_result, str(trial_id))
+
+    result_slots = [
+        slot for slot in result_trial["evaluations"]
+        if slot["coordinate"] == coordinate_id
+    ]
+    if len(result_slots) != 1:
+        raise ValueError("retry evaluation coordinate does not exist in StudyResult trial")
+    result_slot = result_slots[0]
+    expected_result_id = f"{validated_result['id']}-{trial_id}-{coordinate_id}"
+    if result_slot["disposition"] != "failed" or result_slot["result"] != expected_result_id:
+        raise ValueError("lifecycle conflict: retry-stage requires a failed evaluation slot")
+
+    matches = [
+        item for item in plan_trial["evaluations"]
+        if item["coordinate"] == coordinate_id
+    ]
+    if len(matches) != 1:
+        raise ValueError("retry evaluation coordinate does not exist in StudyPlan trial")
+    planned = matches[0]
+    runtime_model = _runtime_model_for_trial(
+        plan=validated_plan,
+        result=validated_result,
+        plan_trial=plan_trial,
+        result_trial=result_trial,
+        mldb_data_root=mldb_data_root,
+    )
+    if runtime_model["task"] != planned["task"]:
+        raise ValueError("runtime Model Task does not match planned Evaluation Task")
+
+    return cast(
+        EvaluationStageInput,
+        {
+            "schema": "mjtensu.mldb-v2/stage-input/v1",
+            "study_result": validated_result["id"],
+            "plan": validated_plan["id"],
+            "plan_sha256": validated_plan["content_sha256"],
+            "trial": plan_trial["trial"],
+            "kind": "evaluation",
+            "coordinate": planned["coordinate"],
+            "source_commit": validated_plan["source_commit"],
+            "pins": copy.deepcopy(validated_plan["pins"]),
+            "stage": {
+                "name": planned["stage"],
+                "task": planned["task"],
+                "corpus": planned["corpus"],
+                "evaluation_protocol": planned["evaluation_protocol"],
+                "parameters": copy.deepcopy(planned["parameters"]),
+            },
+            "runtime_model": runtime_model,
+        },
+    )
 
 def _build_stage_input(
     *,

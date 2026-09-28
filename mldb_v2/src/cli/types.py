@@ -21,6 +21,7 @@ class CliCommandName(str, Enum):
     RUN = "run"
     RESUME = "resume"
     RERUN = "rerun"
+    RETRY_STAGE = "retry-stage"
     CANCEL = "cancel"
     ADVANCE = "advance"
     WATCH = "watch"

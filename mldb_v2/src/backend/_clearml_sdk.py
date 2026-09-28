@@ -1886,6 +1886,19 @@ class ClearMLSDKAdapter:
     ) -> None:
         task = self._get_task(execution_id)
         payload = dict(summary)
+        study_status = payload.get("status")
+        task_status = _status(task)
+        if study_status == "completed" and task_status == "failed":
+            # Same-run stage retry may recover a canonical Study after this
+            # controller was already closed as failed. ClearML only allows
+            # configuration/report edits while a Task is editable, so reopen the
+            # same controller with a forced StartedRequest. This is not Reset:
+            # the Task identity, historical logs, artifacts and failed child
+            # attempt remain intact. The controller is closed completed again
+            # after the final canonical projection is written.
+            task.mark_started(force=True)
+            task_status = _status(task)
+
         previous = _configuration(task, _PIPELINE_SUMMARY_CONFIG)
         if previous != payload:
             task.set_configuration_object(
@@ -1902,7 +1915,6 @@ class ClearMLSDKAdapter:
                 except Exception:
                     pass
 
-        study_status = payload.get("status")
         # ClearML Plot events with the same metric/variant/iteration are append-like
         # rather than a reliable overwrite surface. Emitting comparison plots for
         # every in-progress projection can therefore leave a stale partial plot
@@ -1929,7 +1941,12 @@ class ClearMLSDKAdapter:
         if study_status in {"submitted", "cancelling"} and task_status == "created":
             task.mark_started(force=True)
         elif study_status == "completed" and task_status not in _TERMINAL_STATUSES:
-            task.mark_completed(force=True, status_message="MLDB Study completed")
+            status_message = (
+                "MLDB Study completed after stage retry"
+                if task_status == "in_progress"
+                else "MLDB Study completed"
+            )
+            task.mark_completed(force=True, status_message=status_message)
         elif study_status in {"completed_with_failures", "failed"} and task_status not in _TERMINAL_STATUSES:
             task.mark_failed(force=True, status_message=f"MLDB Study {study_status}")
         elif study_status == "cancelled" and task_status not in _TERMINAL_STATUSES:
@@ -2019,6 +2036,70 @@ class ClearMLSDKAdapter:
         node["job_id"] = task_id
         _set_native_pipeline_configuration(pipeline, native)
 
+    def bind_retry_task_to_pipeline(
+        self,
+        *,
+        task_id: str,
+        owner_task_id: str,
+        pipeline_execution_id: str,
+        pipeline_step: str,
+    ) -> None:
+        """Associate a retry Task with the same Pipeline step without changing ownership."""
+        child = self._get_task(task_id)
+        owner = self._get_task(owner_task_id)
+        pipeline = self._get_task(pipeline_execution_id)
+        child_meta = _metadata(child)
+        owner_meta = _metadata(owner)
+        pipeline_meta = _metadata(pipeline)
+        if child_meta.get("mldb.retry_owner") != owner_task_id:
+            raise ClearMLSDKError("ClearML retry Task owner identity does not match")
+        study_result = owner_meta.get("mldb.study_result")
+        if (
+            type(study_result) is not str
+            or child_meta.get("mldb.study_result") != study_result
+            or pipeline_meta.get("mldb.study_result") != study_result
+        ):
+            raise ClearMLSDKError("ClearML retry Task and Pipeline StudyResult do not match")
+        if child_meta.get("mldb.pipeline_execution") != pipeline_execution_id:
+            raise ClearMLSDKError("ClearML retry Pipeline execution identity does not match")
+        if child_meta.get("mldb.pipeline_step") != pipeline_step:
+            raise ClearMLSDKError("ClearML retry Pipeline step identity does not match")
+
+        native = _configuration(pipeline, _NATIVE_PIPELINE_CONFIG)
+        if native is None:
+            raise ClearMLSDKError("ClearML Pipeline native DAG configuration is missing")
+        node = _native_pipeline_node(native, pipeline_step)
+        if node is None:
+            raise ClearMLSDKError("ClearML retry Pipeline step does not exist")
+        existing = node.get("executed")
+        if existing != owner_task_id:
+            raise ClearMLSDKError(
+                "ClearML retry Pipeline step is not bound to the logical owner Task"
+            )
+
+        child_data = getattr(child, "data", None)
+        parent = getattr(child_data, "parent", None)
+        if parent is None:
+            parent = getattr(child, "parent", None)
+        if parent not in {None, "", pipeline_execution_id}:
+            raise ClearMLSDKError("ClearML retry Task is already bound to another parent")
+        if parent != pipeline_execution_id:
+            set_parent = getattr(child, "set_parent", None)
+            if not callable(set_parent):
+                raise ClearMLSDKError("ClearML retry Task does not expose set_parent()")
+            set_parent(pipeline_execution_id)
+        get_tags = getattr(child, "get_tags", None)
+        set_tags = getattr(child, "set_tags", None)
+        if callable(get_tags) and callable(set_tags):
+            tags = list(get_tags() or [])
+            pipeline_tag = f"pipe:{pipeline_execution_id}"
+            if pipeline_tag not in tags:
+                tags.append(pipeline_tag)
+                set_tags(tags)
+        # Keep the native Pipeline step bound to the original logical owner.
+        # A retry is a second physical execution under the same controller, not
+        # a replacement owner. This preserves ordinary admit() idempotence.
+
     def create_task(self, request: ClearMLCreateRequest) -> str | None:
         stage_input = _restore_stage_input(request.launch.stage_input_json)
         runtime_snapshots = _build_runtime_snapshots(self._settings, stage_input)
@@ -2079,7 +2160,12 @@ class ClearMLSDKAdapter:
         tags = ["mldb-v2"] + [
             _search_tag(key, value)
             for key, value in request.metadata.items()
-            if key in {"mldb.ownership_key", "mldb.study_result"}
+            if key in {
+                "mldb.ownership_key",
+                "mldb.study_result",
+                "mldb.retry_key",
+                "mldb.retry_owner",
+            }
         ]
         task.set_tags(tags)
         task.set_configuration_object(
@@ -2113,10 +2199,49 @@ class ClearMLSDKAdapter:
                 pipeline_execution_id=request.launch.pipeline_execution_id,
                 pipeline_step=request.launch.pipeline_step,
             )
+        retry_owner = request.configuration.get("mldb.retry_owner")
+        retry_pipeline = request.configuration.get("mldb.pipeline_execution")
+        retry_step = request.configuration.get("mldb.pipeline_step")
+        if retry_owner is not None:
+            if not all(type(value) is str and value for value in (retry_owner, retry_pipeline, retry_step)):
+                if retry_pipeline is not None or retry_step is not None:
+                    raise ClearMLSDKError("ClearML retry Pipeline identity is malformed")
+            elif request.launch.pipeline_execution_id is not None:
+                raise ClearMLSDKError("ClearML retry must not use ordinary Pipeline node binding")
+            else:
+                self.bind_retry_task_to_pipeline(
+                    task_id=task_id,
+                    owner_task_id=cast(str, retry_owner),
+                    pipeline_execution_id=cast(str, retry_pipeline),
+                    pipeline_step=cast(str, retry_step),
+                )
         Task.enqueue(task=task, queue_name=request.launch.queue)
         return task_id
 
-    def read_runtime_projection(
+    def create_retry_task(self, request: ClearMLCreateRequest) -> str | None:
+        """Create a physical retry Task that never claims logical ownership."""
+        if "mldb.ownership_key" in request.metadata:
+            raise ClearMLSDKError("ClearML retry Task must not claim logical ownership metadata")
+        if type(request.metadata.get("mldb.retry_key")) is not str:
+            raise ClearMLSDKError("ClearML retry Task is missing retry identity")
+        return self.create_task(request)
+
+    def search_retry_tasks(
+        self, *, project: str, retry_key: str
+    ) -> Sequence[ClearMLTaskRecord]:
+        tasks = self._search(project=project, key="mldb.retry_key", value=retry_key)
+        records: list[ClearMLTaskRecord] = []
+        for task in tasks:
+            records.append(
+                ClearMLTaskRecord(
+                    task_id=_task_id(task),
+                    metadata=_metadata(task),
+                    configuration=_configuration(task, _MLDB_CONFIG) or {},
+                )
+            )
+        return records
+
+    def _read_single_runtime_projection(
         self, *, task_id: str
     ) -> ClearMLRuntimeProjection:
         task = self._get_task(task_id)
@@ -2175,6 +2300,91 @@ class ClearMLSDKAdapter:
             state="terminal",
             execution_ids=[task_id],
             terminal_candidates=[candidate],
+        )
+
+    def read_runtime_projection(
+        self, *, task_id: str
+    ) -> ClearMLRuntimeProjection:
+        """Aggregate one ownership Task and its ordered physical retry Tasks."""
+        owner = self._get_task(task_id)
+        base = self._read_single_runtime_projection(task_id=task_id)
+        retries = list(
+            self._search(
+                project=_project_name(owner),
+                key="mldb.retry_owner",
+                value=task_id,
+            )
+        )
+        if not retries:
+            return base
+
+        owner_config = _configuration(owner, _MLDB_CONFIG) or {}
+        owner_stage_input = owner_config.get("mldb.stage_input")
+        owner_key = owner_config.get("mldb.ownership_key")
+        ordered: list[tuple[int, object]] = []
+        seen_indexes: set[int] = set()
+        for retry in retries:
+            metadata = _metadata(retry)
+            config = _configuration(retry, _MLDB_CONFIG) or {}
+            if "mldb.ownership_key" in metadata:
+                raise ClearMLSDKError("ClearML retry Task must not claim logical ownership")
+            try:
+                index = int(metadata["mldb.retry_index"])
+            except (KeyError, ValueError) as error:
+                raise ClearMLSDKError("ClearML retry index is malformed") from error
+            if index < 2 or index in seen_indexes:
+                raise ClearMLSDKError("ClearML retry indexes are ambiguous")
+            seen_indexes.add(index)
+            retry_id = _task_id(retry)
+            expected_retry_key = metadata.get("mldb.retry_key")
+            if (
+                metadata.get("mldb.retry_owner") != task_id
+                or config.get("mldb.retry_owner") != task_id
+                or config.get("mldb.retry_index") != str(index)
+                or config.get("mldb.retry_key") != expected_retry_key
+                or config.get("mldb.ownership_key") != owner_key
+                or config.get("mldb.stage_input") != owner_stage_input
+                or config.get("mldb.harness") != owner_config.get("mldb.harness")
+                or config.get("mldb.source_commit") != owner_config.get("mldb.source_commit")
+                or type(expected_retry_key) is not str
+                or not expected_retry_key
+                or not retry_id
+            ):
+                raise ClearMLSDKError("ClearML retry Task lineage is inconsistent")
+            ordered.append((index, retry))
+        ordered.sort(key=lambda item: item[0])
+        expected_indexes = list(range(2, 2 + len(ordered)))
+        if [index for index, _ in ordered] != expected_indexes:
+            raise ClearMLSDKError("ClearML retry attempt indexes are not contiguous")
+        if list(base.execution_ids) != [task_id]:
+            raise ClearMLSDKError(
+                "ClearML ownership Task already contains non-native retry projection"
+            )
+
+        execution_ids = [task_id]
+        terminal_candidates = list(base.terminal_candidates)
+        previous = base
+        for index, retry in ordered:
+            del index
+            retry_id = _task_id(retry)
+            if previous.state != "terminal" or len(previous.terminal_candidates) != 1:
+                raise ClearMLSDKError("ClearML retry follows non-terminal prior attempt")
+            prior_candidate = previous.terminal_candidates[0]
+            if not isinstance(prior_candidate, Mapping) or prior_candidate.get("status") == "completed":
+                raise ClearMLSDKError("ClearML completed attempt cannot be retried")
+            projected = self._read_single_runtime_projection(task_id=retry_id)
+            if list(projected.execution_ids) != [retry_id]:
+                raise ClearMLSDKError("ClearML retry Task projection is not single-attempt")
+            if len(projected.terminal_candidates) > 1:
+                raise ClearMLSDKError("ClearML retry Task has ambiguous terminal projection")
+            execution_ids.append(retry_id)
+            terminal_candidates.extend(projected.terminal_candidates)
+            previous = projected
+
+        return ClearMLRuntimeProjection(
+            state=previous.state,
+            execution_ids=execution_ids,
+            terminal_candidates=terminal_candidates,
         )
 
     def search_tasks_by_metadata(
@@ -2280,6 +2490,19 @@ def _remote_object_bytes(runtime: Mapping[str, object]):
     return _ObjectByteAccess(_create_s3_transport(config))
 
 
+def _physical_attempt_token(ownership: object, retry_index: object) -> str:
+    if type(ownership) is not str or not ownership.startswith("mldb-v2-stage:"):
+        raise ClearMLSDKError("remote harness ownership projection is missing")
+    ownership_token = ownership.split(":", 1)[1]
+    if not ownership_token:
+        raise ClearMLSDKError("remote harness ownership projection is missing")
+    if retry_index is None:
+        return ownership_token
+    if type(retry_index) is not str or not retry_index.isdigit() or int(retry_index) < 2:
+        raise ClearMLSDKError("remote harness retry index is malformed")
+    return f"{ownership_token}/retry-{int(retry_index):04d}"
+
+
 def _evaluation_artifact_uris(
     *, stage_input: Mapping[str, object], pinned_data_root: Path, prefix: str
 ) -> dict[str, str]:
@@ -2332,11 +2555,13 @@ def _run_remote_harness() -> None:
         repository_root,
         cast(str, runtime.get("work_root") or ".mldb-v2-clearml"),
     )
-    ownership = cast(str, mldb_config.get("mldb.ownership_key"))
-    if type(ownership) is not str or not ownership.startswith("mldb-v2-stage:"):
-        raise ClearMLSDKError("remote harness ownership projection is missing")
-    attempt_root = work_root / ownership.split(":", 1)[1]
-    prefix = f"{_remote_artifact_prefix(runtime)}/{ownership.split(':', 1)[1]}"
+    ownership = mldb_config.get("mldb.ownership_key")
+    physical_attempt_token = _physical_attempt_token(
+        ownership,
+        mldb_config.get("mldb.retry_index"),
+    )
+    attempt_root = work_root / physical_attempt_token
+    prefix = f"{_remote_artifact_prefix(runtime)}/{physical_attempt_token}"
     artifact_uris: dict[str, str] = {}
     weights_uri: str | None = None
     if stage_input["kind"] == "training":

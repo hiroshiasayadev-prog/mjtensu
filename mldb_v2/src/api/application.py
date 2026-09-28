@@ -20,6 +20,8 @@ from mldb_v2.src.common.ids import (
     StudyId,
     StudyPlanId,
     StudyResultId,
+    TrialId,
+    EvaluationCoordinateId,
     _validate_typed_reference,
 )
 from mldb_v2.src.repository.canonical_writes import CanonicalRepositoryWriter
@@ -44,6 +46,11 @@ from ._errors import (
     _raise_application_error,
 )
 from ._execution import _ExecutionCompositionShell, _StudyResultOnlyValidator
+from ._stage_retry import (
+    _StageRetryBackendFailure,
+    _StageRetryUnsupported,
+    retry_failed_evaluation_stage,
+)
 from ._query import (
     ReadOnlyQueryService,
     _InvalidQueryRequest,
@@ -260,6 +267,7 @@ class Application:
             configs=backend_configs,
         )
         self._object_bytes = object_bytes
+        self._wait = wait
         tests_root = (
             Path(mldb_tests_root)
             if mldb_tests_root is not None
@@ -316,11 +324,11 @@ class Application:
             raise _ApplicationBoundaryError(
                 _application_error("invalid_request", "application request is invalid")
             ) from error
-        except _UnsupportedQueryCapability as error:
+        except (_UnsupportedQueryCapability, _StageRetryUnsupported) as error:
             raise _ApplicationBoundaryError(
                 _application_error("unsupported_capability", "requested capability is unsupported")
             ) from error
-        except (_QueryBackendFailure, _BackendUnavailable) as error:
+        except (_QueryBackendFailure, _BackendUnavailable, _StageRetryBackendFailure) as error:
             raise _ApplicationBoundaryError(
                 _application_error("backend_unavailable", "required backend operation is unavailable")
             ) from error
@@ -398,6 +406,28 @@ class Application:
         return self._public(
             lambda: self._execution.rerun_study(source=source, backend=backend)
         )
+
+    def retry_stage(
+        self,
+        *,
+        study_result: StudyResultId,
+        trial: TrialId,
+        coordinate: EvaluationCoordinateId,
+    ) -> StudyResult:
+        def operation() -> StudyResult:
+            current = _validated_result(self._resolver, study_result)
+            backend = self._backends.resolve(current["backend"])
+            return retry_failed_evaluation_stage(
+                repository_root=self._repository_root,
+                study_result_id=current["id"],
+                trial=trial,
+                coordinate=coordinate,
+                backend=backend,
+                object_bytes=self._object_bytes,
+                wait=self._wait,
+            )
+
+        return self._public(operation)
 
     def cancel_study(
         self,

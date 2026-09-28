@@ -58,6 +58,9 @@ class FakeApplication:
     def rerun_study(self, **kwargs: object) -> object:
         return self._call("rerun_study", **kwargs)
 
+    def retry_stage(self, **kwargs: object) -> object:
+        return self._call("retry_stage", **kwargs)
+
     def cancel_study(self, **kwargs: object) -> object:
         return self._call("cancel_study", **kwargs)
 
@@ -259,6 +262,16 @@ def test_execution_commands_delegate_to_application_owned_methods() -> None:
          "resume_study", {"study_result": "demo/run-v1"}),
         ({"command": CliCommandName.RERUN, "study_result": "demo/run-v1"},
          "rerun_study", {"source": "demo/run-v1", "backend": None}),
+        ({
+            "command": CliCommandName.RETRY_STAGE,
+            "study_result": "demo/run-v1",
+            "trial": "trial-0001",
+            "coordinate": "eval-0003",
+         }, "retry_stage", {
+             "study_result": "demo/run-v1",
+             "trial": "trial-0001",
+             "coordinate": "eval-0003",
+         }),
         ({"command": CliCommandName.CANCEL, "study_result": "demo/run-v1"},
          "cancel_study", {"study_result": "demo/run-v1"}),
     ]

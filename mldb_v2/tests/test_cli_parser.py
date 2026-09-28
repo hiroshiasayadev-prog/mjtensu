@@ -20,7 +20,7 @@ REPO = Path(__file__).resolve().parents[2]
 def test_public_command_resource_kind_and_output_spellings_are_exact() -> None:
     assert [item.value for item in CliCommandName] == [
         "ps", "get", "describe", "status", "validate", "verify", "seal", "plan",
-        "run", "resume", "rerun", "cancel", "advance", "watch", "logs", "doctor",
+        "run", "resume", "rerun", "retry-stage", "cancel", "advance", "watch", "logs", "doctor",
     ]
     assert [item.value for item in CliResource] == [
         "namespaces", "definitions", "tasks", "corpora", "architectures",
@@ -171,6 +171,16 @@ def test_execution_commands_normalize_typed_ids_and_backend() -> None:
     }
     assert parse_cli_request(["rerun", "demo/run-v1", "--backend", "local"]) == {
         "command": CliCommandName.RERUN, "study_result": "demo/run-v1", "backend": "local",
+    }
+    assert parse_cli_request([
+        "retry-stage", "demo/run-v1",
+        "--trial", "trial-0001",
+        "--coordinate", "eval-0003",
+    ]) == {
+        "command": CliCommandName.RETRY_STAGE,
+        "study_result": "demo/run-v1",
+        "trial": "trial-0001",
+        "coordinate": "eval-0003",
     }
     assert parse_cli_request(["cancel", "demo/run-v1"]) == {
         "command": CliCommandName.CANCEL, "study_result": "demo/run-v1",

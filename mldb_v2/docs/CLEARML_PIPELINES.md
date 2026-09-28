@@ -93,7 +93,11 @@ The native ClearML Pipeline DAG is the execution-flow view. MLDB does not publis
 
 ## 6. Retry, cache, and rerun policy
 
-Operational retry belongs to ClearML. Multiple retry Tasks remain attempts of the same MLDB logical stage and must be collected as such.
+Operational retry belongs to ClearML. `mldb retry-stage <study-result> --trial <trial> --coordinate <evaluation-coordinate>` is the bounded MLDB entrypoint for requesting one new physical attempt of a failed Evaluation while retaining the same logical Study Result and Evaluation Result.
+
+The original child Task remains the unique logical ownership Task identified by `study_result + trial + kind + coordinate`. Retry Tasks do **not** claim a second logical ownership record; they carry explicit retry-owner/index identity and preserve the same immutable StageInput. Observation reconstructs an ordered attempt sequence from the owner followed by its retry Tasks and fails closed on gaps, duplicates, ownership disagreement, or ambiguous creation recovery. The native Pipeline node remains bound to the original owner Task so ordinary `admit` remains idempotent. A retry Task is associated with the same Pipeline controller as a child, preserving its own physical Task/log history without resetting or erasing the failed Task.
+
+Canonical state is not changed back to `pending` while the retry is running. After terminal collection and normal MLDB result acceptance, the same Evaluation Result ID receives exactly one appended attempt and may remain `failed` or become `completed`. This first implementation is synchronous and supports failed Evaluations only; Training-stage retry is intentionally outside the v1 scope.
 
 ClearML step caching/reuse is disabled by default for formal execution. `mldb rerun` creates a fresh Study Result/Pipeline Run from the exact immutable source Plan; it does not silently reuse an old green Task.
 

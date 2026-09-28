@@ -108,6 +108,13 @@ class RerunRequest(TypedDict):
     backend: NotRequired[str]
 
 
+class RetryStageRequest(TypedDict):
+    command: Literal[CliCommandName.RETRY_STAGE]
+    study_result: StudyResultId
+    trial: TrialId
+    coordinate: EvaluationCoordinateId
+
+
 class CancelRequest(TypedDict):
     command: Literal[CliCommandName.CANCEL]
     study_result: StudyResultId
@@ -142,7 +149,9 @@ class DoctorRequest(TypedDict):
 
 DiscoverInspectRequest: TypeAlias = PsRequest | GetRequest | DescribeRequest | StatusRequest
 AuthoringRequest: TypeAlias = ValidateRequest | VerifyRequest | SealRequest | PlanRequest
-ExecutionRequest: TypeAlias = RunRequest | ResumeRequest | RerunRequest | CancelRequest | AdvanceRequest
+ExecutionRequest: TypeAlias = (
+    RunRequest | ResumeRequest | RerunRequest | RetryStageRequest | CancelRequest | AdvanceRequest
+)
 MonitorRequest: TypeAlias = WatchRequest | LogsRequest | DoctorRequest
 CliCommandRequest: TypeAlias = (
     DiscoverInspectRequest | AuthoringRequest | ExecutionRequest | MonitorRequest

@@ -257,6 +257,11 @@ def _build_parser() -> _ArgumentParser:
     rerun.add_argument("study_result")
     rerun.add_argument("--backend")
 
+    retry_stage = subparsers.add_parser(CliCommandName.RETRY_STAGE.value)
+    retry_stage.add_argument("study_result")
+    retry_stage.add_argument("--trial", required=True, type=_trial_id)
+    retry_stage.add_argument("--coordinate", required=True, type=_coordinate_id)
+
     cancel = subparsers.add_parser(CliCommandName.CANCEL.value)
     cancel.add_argument("study_result")
 
@@ -380,6 +385,17 @@ def parse_cli_request(argv: Sequence[str]) -> CliCommandRequest:
         if args.backend is not None:
             request["backend"] = args.backend
         return cast(CliCommandRequest, request)
+    if command is CliCommandName.RETRY_STAGE:
+        return cast(
+            CliCommandRequest,
+            {
+                "command": command,
+                "study_result": _study_result_id(args.study_result),
+                "trial": args.trial,
+                "coordinate": args.coordinate,
+            },
+        )
+
     if command is CliCommandName.CANCEL:
         return cast(
             CliCommandRequest,

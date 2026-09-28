@@ -264,6 +264,13 @@ class CliApplicationAdapter:
                 backend=request.get("backend"),
             )
 
+        if command is CliCommandName.RETRY_STAGE:
+            return application.retry_stage(
+                study_result=request["study_result"],
+                trial=request["trial"],
+                coordinate=request["coordinate"],
+            )
+
         if command is CliCommandName.CANCEL:
             return application.cancel_study(study_result=request["study_result"])
 

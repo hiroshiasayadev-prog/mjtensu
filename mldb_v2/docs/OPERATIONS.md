@@ -172,9 +172,14 @@ Useful read/control commands:
     .\mldb.cmd logs <study-result-id> --failed
     .\mldb.cmd resume <study-result-id>
     .\mldb.cmd advance <study-result-id>
+    .\mldb.cmd retry-stage <study-result-id> --trial <trial-id> --coordinate <evaluation-coordinate>
     .\mldb.cmd cancel <study-result-id>
 
 `watch` is read-only. `advance` performs one explicit canonical reconciliation pass and is mainly for recovery/debugging. `rerun` creates a fresh Study Result from the immutable Plan of an earlier execution rather than recompiling the current mutable Study definition.
+
+`retry-stage` is different from `rerun`. It synchronously retries exactly one **failed Evaluation** inside an existing `completed_with_failures` Study Result. The Study Result ID, execution key, Plan/source commit, logical evaluation coordinate, Evaluation Result ID, training result, and completed sibling evaluations are retained. The backend creates one new physical attempt; the failed physical attempt and its logs remain preserved. Canonical Evaluation Result `attempts` is extended by exactly one ordered attempt. If the retry succeeds, that same stage slot changes `failed -> completed` and the Study Result becomes `completed` only when every planned stage is completed. If the retry fails again, the Study Result remains `completed_with_failures`.
+
+Version 1 deliberately does not reopen terminal canonical state to a generic pending state and does not support Training-stage retry. In-progress retry visibility is therefore backend/ClearML visibility only; the CLI returns the updated canonical Study Result after the physical retry reaches a terminal outcome. A completed or otherwise non-failed Evaluation cannot be retried.
 
 After W011 implementation, the primary ClearML UI entrypoint for a running/completed Study is its Pipeline Run. Use child Pipeline Tasks for detailed logs/Charts and the controller summary for selected Study-level projections. Until W011 closes, existing executions still appear as flat Tasks.
 

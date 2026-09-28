@@ -286,9 +286,17 @@ class FakeSDKTask:
         self.system_tags = list(tags)
 
     def set_configuration_object(self, *, name, config_dict) -> None:
+        if self.status not in {"created", "in_progress"}:
+            raise ValueError(
+                "Task object can only be updated if created or in_progress"
+            )
         self.configs[name] = deepcopy(config_dict)
 
     def _set_configuration(self, *, name, config_type, config_text) -> None:
+        if self.status not in {"created", "in_progress"}:
+            raise ValueError(
+                "Task object can only be updated if created or in_progress"
+            )
         self.raw_configs[name] = {"type": config_type, "value": config_text}
         self.configs[name] = json.loads(config_text)
 
@@ -841,6 +849,93 @@ def test_concrete_backend_exposes_pipeline_capability_without_replacing_stage_po
     observed = backend.ensure_study_execution(plan=plan, study_result=result)
     assert observed["execution_id"] == "pipeline-1"
     assert backend.observe_study_execution(plan=plan, study_result=result) == observed
+
+
+def test_retry_recovery_can_promote_same_failed_controller_to_completed() -> None:
+    FakeSDKTask.reset()
+    adapter = ClearMLSDKAdapter(ClearMLSDKSettings(), task_class=FakeSDKTask)
+    controller = FakeSDKTask(project="mldb/demo", task_id="pipeline-retry-recovery")
+    controller.status = "failed"
+    controller.configs["Pipeline"] = {}
+    FakeSDKTask.tasks.append(controller)
+
+    adapter.project_pipeline_summary(
+        execution_id=controller.id,
+        summary={
+            "schema": "mjtensu.mldb-v2/study-summary-projection/v4",
+            "study_result": "demo/run-recovered",
+            "study": "demo/study-v1",
+            "status": "completed",
+            "rows": [],
+            "comparisons": [],
+        },
+    )
+
+    assert controller.status == "completed"
+    assert controller.configs["mldb.study_summary"]["status"] == "completed"
+
+
+def test_retry_child_keeps_native_pipeline_owner_and_normal_bind_replay() -> None:
+    FakeSDKTask.reset()
+    result = _result(_plan())
+    adapter = ClearMLSDKAdapter(
+        ClearMLSDKSettings(step_queue="gpu-a"),
+        task_class=FakeSDKTask,
+    )
+    pipeline_id = "pipeline-owner"
+    owner_id = "logical-owner"
+    step = "trial-0001-train"
+
+    controller = FakeSDKTask(project="mldb/demo", task_id=pipeline_id)
+    controller.properties["mldb.study_result"] = str(result["id"])
+    controller.configs["Pipeline"] = {
+        "arch-v1 | training": {
+            "mldb.logical_step": step,
+            "executed": owner_id,
+            "job_id": owner_id,
+        }
+    }
+    owner = FakeSDKTask(project="mldb/demo", task_id=owner_id)
+    owner.parent = pipeline_id
+    owner.properties.update(
+        {
+            "mldb.study_result": str(result["id"]),
+            "mldb.pipeline_execution": pipeline_id,
+            "mldb.pipeline_step": step,
+        }
+    )
+    retry = FakeSDKTask(project="mldb/demo", task_id="retry-physical-2")
+    retry.properties.update(
+        {
+            "mldb.study_result": str(result["id"]),
+            "mldb.retry_owner": owner_id,
+            "mldb.pipeline_execution": pipeline_id,
+            "mldb.pipeline_step": step,
+        }
+    )
+    FakeSDKTask.tasks.extend([controller, owner, retry])
+
+    adapter.bind_retry_task_to_pipeline(
+        task_id=retry.id,
+        owner_task_id=owner_id,
+        pipeline_execution_id=pipeline_id,
+        pipeline_step=step,
+    )
+
+    node = controller.configs["Pipeline"]["arch-v1 | training"]
+    assert retry.parent == pipeline_id
+    assert f"pipe:{pipeline_id}" in retry.tags
+    assert node["executed"] == owner_id
+    assert node["job_id"] == owner_id
+
+    # Ordinary admission replay calls this normal binder on the recovered owner.
+    adapter.bind_task_to_pipeline(
+        task_id=owner_id,
+        pipeline_execution_id=pipeline_id,
+        pipeline_step=step,
+    )
+    assert node["executed"] == owner_id
+    assert node["job_id"] == owner_id
 
 
 def test_generic_study_execution_seam_has_no_clearml_dependency() -> None:

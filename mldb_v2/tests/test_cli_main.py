@@ -60,6 +60,9 @@ class FakeApplication:
     def rerun_study(self, **kwargs: object) -> object:
         return self._call("rerun_study", **kwargs)
 
+    def retry_stage(self, **kwargs: object) -> object:
+        return self._call("retry_stage", **kwargs)
+
     def cancel_study(self, **kwargs: object) -> object:
         return self._call("cancel_study", **kwargs)
 
@@ -169,6 +172,34 @@ def test_run_without_backend_does_not_invent_default() -> None:
     assert stderr.startswith("invalid_request:")
     assert "no default backend is configured" in stderr
     assert application.calls == []
+
+
+def test_retry_stage_dispatches_exact_target_once() -> None:
+    application = FakeApplication()
+    status, stdout, stderr = _run(
+        [
+            "retry-stage",
+            "demo/run-v1",
+            "--trial",
+            "trial-0001",
+            "--coordinate",
+            "eval-0003",
+        ],
+        application,
+    )
+    assert status == 0
+    assert stderr == ""
+    assert stdout
+    assert application.calls == [
+        (
+            "retry_stage",
+            {
+                "study_result": "demo/run-v1",
+                "trial": "trial-0001",
+                "coordinate": "eval-0003",
+            },
+        )
+    ]
 
 
 def test_advance_dispatches_exactly_once() -> None:

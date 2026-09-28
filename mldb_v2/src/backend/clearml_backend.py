@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import cast
 
 from mldb_v2.src.backend._clearml_admission import ClearMLAdmissionService
@@ -16,6 +16,7 @@ from mldb_v2.src.backend._clearml_observation import (
     _stage_key_from_input,
 )
 from mldb_v2.src.backend._clearml_pipeline import ClearMLPipelineService
+from mldb_v2.src.backend._clearml_retry import ClearMLRetryService
 from mldb_v2.src.backend._clearml_sdk import ClearMLSDKAdapter
 from mldb_v2.src.backend._config import BackendConfig
 from mldb_v2.src.backend._registry import BackendRegistry
@@ -44,12 +45,14 @@ class ClearMLBackend:
         admission: ClearMLAdmissionService,
         observation: ClearMLObservationService,
         cancellation: ClearMLCancellationService,
+        retry: ClearMLRetryService,
         pipeline: ClearMLPipelineService | None = None,
         logs: ClearMLLogService | None = None,
     ) -> None:
         self._admission = admission
         self._observation = observation
         self._cancellation = cancellation
+        self._retry = retry
         self._pipeline = pipeline
         self._logs = logs
         self._pipeline_execution_ids: dict[str, str] = {}
@@ -69,6 +72,27 @@ class ClearMLBackend:
                 "ClearML admission succeeded but exact owned work was not observable"
             )
         return observed
+
+    def retry_stage(
+        self,
+        *,
+        stage_input: StageInput,
+        prior_execution_ids: Sequence[str],
+    ) -> BackendObservation:
+        """Create/recover one physical retry for the same logical evaluation stage."""
+        study_result_id = str(stage_input["study_result"])
+        pipeline_execution_id = self._pipeline_execution_ids.get(study_result_id)
+        if pipeline_execution_id is None:
+            pipeline_execution_id = self._retry.recover_pipeline_execution_id(
+                stage_input=stage_input
+            )
+            if pipeline_execution_id is not None:
+                self._pipeline_execution_ids[study_result_id] = pipeline_execution_id
+        return self._retry.retry(
+            stage_input=stage_input,
+            prior_execution_ids=prior_execution_ids,
+            pipeline_execution_id=pipeline_execution_id,
+        )
 
     def observe(self, *, stage_key: StageKey) -> BackendObservation | None:
         return self._observation.observe(stage_key=stage_key)
@@ -173,6 +197,12 @@ def clearml_backend_factory(config: BackendConfig) -> ClearMLBackend:
         recovery_search_attempts=recovery_raw,
     )
     observation = ClearMLObservationService(client=cast(object, client))
+    retry = ClearMLRetryService(
+        client=cast(object, client),
+        queue=queue,
+        stage_routes=stage_routes,
+        recovery_search_attempts=recovery_raw,
+    )
     cancellation = ClearMLCancellationService(client=cast(object, client))
     pipeline = ClearMLPipelineService(
         client=cast(object, client),
@@ -183,6 +213,7 @@ def clearml_backend_factory(config: BackendConfig) -> ClearMLBackend:
         admission=admission,
         observation=observation,
         cancellation=cancellation,
+        retry=retry,
         pipeline=pipeline,
         logs=logs,
     )

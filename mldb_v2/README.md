@@ -21,7 +21,7 @@ Formal contracts remain under `records/spec/`. These docs explain how to use tho
 
 From the repository root, use `mldb.cmd` on Windows. It selects `.venv\Scripts\python.exe` when present and invokes `python -m mldb_v2.src.cli`.
 
-Common commands include `mldb.cmd doctor`, `validate`, `verify`, `seal`, `plan`, `run`, `resume`, `status`, `watch`, and `logs`.
+Common commands include `mldb.cmd doctor`, `validate`, `verify`, `seal`, `plan`, `run`, `resume`, `retry-stage`, `rerun`, `status`, `watch`, and `logs`.
 
 Do not execute internal implementation files directly as the normal experiment workflow.
 

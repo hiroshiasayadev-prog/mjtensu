@@ -449,6 +449,126 @@ def _validate_study_result_transition(
                 raise ValueError("terminal stage disposition is immutable")
 
 
+_EVALUATION_RETRY_MUTABLE_FIELDS = {"attempts", "status", "diagnostic", "result"}
+
+
+def _validate_evaluation_retry_transition(
+    current: Mapping[str, object],
+    replacement: Mapping[str, object],
+) -> None:
+    if current.get("status") != "failed":
+        raise ValueError("lifecycle conflict: only failed EvaluationResult may be retried")
+    if replacement.get("status") not in {"failed", "completed"}:
+        raise ValueError("lifecycle conflict: retry result must remain failed or become completed")
+
+    if set(current) != set(replacement):
+        raise ValueError("EvaluationResult retry replacement fields do not match current record")
+    for field in current:
+        if field in _EVALUATION_RETRY_MUTABLE_FIELDS:
+            continue
+        if not _documents_equal({field: current[field]}, {field: replacement[field]}):
+            raise ValueError(f"EvaluationResult immutable field changed during retry: {field}")
+
+    current_attempts = current.get("attempts")
+    replacement_attempts = replacement.get("attempts")
+    if type(current_attempts) is not list or type(replacement_attempts) is not list:
+        raise ValueError("EvaluationResult retry attempts must be lists")
+    if len(replacement_attempts) != len(current_attempts) + 1:
+        raise ValueError("lifecycle conflict: retry must append exactly one attempt")
+    if not _documents_equal(
+        {"attempts": current_attempts},
+        {"attempts": replacement_attempts[: len(current_attempts)]},
+    ):
+        raise ValueError("lifecycle conflict: existing attempt history must be an exact prefix")
+
+    execution_ids = [
+        attempt.get("execution_id")
+        for attempt in replacement_attempts
+        if isinstance(attempt, Mapping)
+    ]
+    if len(execution_ids) != len(replacement_attempts) or len(set(execution_ids)) != len(execution_ids):
+        raise ValueError("lifecycle conflict: retry attempts require unique execution ids")
+
+
+def _validate_study_result_retry_transition(
+    current: Mapping[str, object],
+    replacement: Mapping[str, object],
+    *,
+    trial_id: str,
+    coordinate_id: str,
+) -> None:
+    if current["status"] != "completed_with_failures":
+        raise ValueError(
+            "lifecycle conflict: retry-stage requires completed_with_failures StudyResult"
+        )
+
+    immutable_top = (
+        "schema", "id", "execution_key", "plan", "study",
+        "source_commit", "backend", "created_at", "diagnostic",
+    )
+    for field in immutable_top:
+        if not _documents_equal({field: current[field]}, {field: replacement[field]}):
+            raise ValueError(f"StudyResult immutable field changed during retry: {field}")
+
+    if len(current["trials"]) != len(replacement["trials"]):  # type: ignore[arg-type]
+        raise ValueError("StudyResult trial topology is immutable")
+    changed_target = False
+    for current_trial, replacement_trial in zip(
+        current["trials"], replacement["trials"]  # type: ignore[arg-type]
+    ):
+        if current_trial["trial"] != replacement_trial["trial"]:
+            raise ValueError("StudyResult trial identity is immutable")
+        if not _documents_equal(
+            {"training": current_trial["training"]},
+            {"training": replacement_trial["training"]},
+        ):
+            raise ValueError("StudyResult training slots are immutable during evaluation retry")
+        current_evals = current_trial["evaluations"]
+        replacement_evals = replacement_trial["evaluations"]
+        if len(current_evals) != len(replacement_evals):
+            raise ValueError("StudyResult evaluation topology is immutable")
+        for current_slot, replacement_slot in zip(current_evals, replacement_evals):
+            is_target = (
+                current_trial["trial"] == trial_id
+                and current_slot["coordinate"] == coordinate_id
+            )
+            if not is_target:
+                if not _documents_equal(current_slot, replacement_slot):
+                    raise ValueError("non-target StudyResult slot changed during retry")
+                continue
+            changed_target = True
+            if current_slot["stage"] != replacement_slot["stage"]:
+                raise ValueError("StudyResult retry stage identity is immutable")
+            if current_slot["result"] != replacement_slot["result"]:
+                raise ValueError("StudyResult retry result identity is immutable")
+            if current_slot["disposition"] != "failed":
+                raise ValueError("lifecycle conflict: retry target is not failed")
+            if replacement_slot["disposition"] not in {"failed", "completed"}:
+                raise ValueError("lifecycle conflict: retry target must remain failed or complete")
+            if replacement_slot["reason"] is not None:
+                raise ValueError("retried StudyResult slot reason must remain null")
+
+    if not changed_target:
+        raise ValueError("retry target evaluation coordinate does not exist")
+
+    dispositions = [
+        slot["disposition"]
+        for trial in replacement["trials"]  # type: ignore[index]
+        for slot in (
+            ([] if trial["training"] is None else [trial["training"]])
+            + list(trial["evaluations"])
+        )
+    ]
+    expected_status = (
+        "completed"
+        if dispositions and all(item == "completed" for item in dispositions)
+        else "completed_with_failures"
+    )
+    if replacement["status"] != expected_status:
+        raise ValueError("StudyResult retry closure status does not match stage dispositions")
+
+
+
 class CanonicalRepositoryWriter:
     """Validated atomic canonical writes with frozen idempotence/lifecycle semantics."""
 
@@ -544,6 +664,77 @@ class CanonicalRepositoryWriter:
                 raise ValueError("lifecycle conflict: terminal StudyResult is immutable")
 
             _validate_study_result_transition(current, validated_replacement)
+            _atomic_replace_record(path, validated_replacement)
+            return validated_replacement
+
+    def replace_failed_evaluation_result(
+        self,
+        *,
+        entity_id: EvaluationResultId,
+        replacement: CanonicalDocument,
+    ) -> CanonicalDocument:
+        """Append exactly one retry attempt to one failed EvaluationResult."""
+        replacement_record = _as_record(replacement)
+        _validate_document_identity(replacement_record, entity_id)
+        path = _canonical_path(
+            data_root=self._data_root,
+            kind=EntityKind.EVALUATION_RESULT,
+            entity_id=entity_id,
+        )
+        key = str(path.relative_to(self._repository_root))
+        with _process_file_lock(lock_root=self._write_lock_root, key=key):
+            if not path.exists():
+                raise FileNotFoundError(path)
+            current = _read_record(path)
+            self._record_validator.validate(
+                kind=EntityKind.EVALUATION_RESULT,
+                entity_id=entity_id,
+                document=current,
+            )
+            self._record_validator.validate(
+                kind=EntityKind.EVALUATION_RESULT,
+                entity_id=entity_id,
+                document=replacement_record,
+            )
+            _validate_evaluation_retry_transition(current, replacement_record)
+            _atomic_replace_record(path, replacement_record)
+            return replacement_record
+
+    def replace_study_result_after_evaluation_retry(
+        self,
+        *,
+        entity_id: StudyResultId,
+        trial: object,
+        coordinate: object,
+        replacement: CanonicalDocument,
+    ) -> CanonicalDocument:
+        """Change only one failed evaluation slot after its retry is canonical."""
+        trial_id = str(_validate_trial_id(trial))
+        coordinate_id = str(_validate_evaluation_coordinate_id(coordinate))
+        replacement_record = _as_record(replacement)
+        validated_replacement = _validate_study_result_record(
+            replacement_record,
+            entity_id=entity_id,
+        )
+        path = _canonical_path(
+            data_root=self._data_root,
+            kind=EntityKind.STUDY_RESULT,
+            entity_id=entity_id,
+        )
+        key = str(path.relative_to(self._repository_root))
+        with _process_file_lock(lock_root=self._write_lock_root, key=key):
+            if not path.exists():
+                raise FileNotFoundError(path)
+            current = _read_record(path)
+            _validate_study_result_record(current, entity_id=entity_id)
+            if _documents_equal(current, validated_replacement):
+                return current
+            _validate_study_result_retry_transition(
+                current,
+                validated_replacement,
+                trial_id=trial_id,
+                coordinate_id=coordinate_id,
+            )
             _atomic_replace_record(path, validated_replacement)
             return validated_replacement
 
