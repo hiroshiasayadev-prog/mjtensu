@@ -1,5 +1,7 @@
 # mjtensu Agent Notes
 
+Session開始時に `AI_FAILURE_LOG.md` を読み、active safeguardを確認する。
+
 ML experiment / MLDB に関する作業を行う場合は、計画・実装・実行の前に `mldb/AGENTS.md` を全文読むこと。
 
 `mldb/AGENTS.md` の最上位目的は、MLDB 自体を発展させることではなく、MLDB を使って実際の ML 実験を最短で回すことである。
