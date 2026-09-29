@@ -1,0 +1,38 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/tile-plain-gray35-w500-late256-stage2-dw3-pw1-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Plain 0.5x late256 stage2 DW3x3+PW1x1 gray35 classifier",
+  "family": "plain-cnn",
+  "description": "Replace only the 32x32 stage2 full 3x3 convolution of the fast 0.5x Plain + late256 classifier with a depthwise 3x3 16->16 followed by pointwise 1x1 16->32. Preserve stage1, stage3, stage4, pooling locations, late 96->256 expansion, and classifier head.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sha256": "dbcad10681e8600a219430267fd6e45387a3f1603891bcdb1f8b9ff9c44813d5"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        1,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "Conv5x5 1->16; stage2 DW3x3 16->16 + PW1x1 16->32; Conv3x3 32->64; Conv3x3 64->96; late PW1x1 96->256; three max-pools; GAP; 256-unit head",
+    "traits": [
+      "grayscale",
+      "shallow",
+      "spatial-width-0.5x",
+      "maxpool",
+      "depthwise-separable-stage2",
+      "late-1x1-256"
+    ]
+  }
+}
