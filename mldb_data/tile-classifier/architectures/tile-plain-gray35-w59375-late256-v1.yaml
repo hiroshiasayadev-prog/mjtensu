@@ -1,0 +1,44 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/tile-plain-gray35-w59375-late256-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Plain 0.59375x spatial width late-256 gray35 classifier",
+  "family": "plain-cnn",
+  "description": "Fine sweep candidate between 0.5x and 0.625x spatial width. It preserves the three-MaxPool topology and fixes late 1x1 capacity at 256 so the expensive spatial-convolution width can be compared directly.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sources": [
+      {
+        "path": "mldb_data/tile-classifier/lib/plain_width_late_grid_v1.py",
+        "sha256": "c41276c8e498393c64e4f4707814cd13704decb1538d5d2e077afc25b7f8794b"
+      }
+    ],
+    "sha256": "cdd55913c52f14b429c24726ee141d6abc0996a9a9047625f27d733260e3fcde"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        1,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "Conv19-38-76-114 with three max-pools, late 1x1 114->256, and 256-unit head",
+    "traits": [
+      "grayscale",
+      "shallow",
+      "spatial-width-0.59375x",
+      "maxpool",
+      "late-1x1-256",
+      "fine-width-sweep"
+    ]
+  }
+}

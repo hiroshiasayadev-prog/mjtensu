@@ -1,0 +1,225 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/plain-spatial-width-fine-screen-v1",
+  "status": "sealed",
+  "name": "Plain spatial width fine screen with late capacity",
+  "description": "Fine screen between 0.5x and 0.625x spatial width after the coarse grid revealed a large CPU-latency gap. Late capacity is fixed at 256 for the width sweep, with 0.625x+192 retained as the balanced reference. All standard quality, robustness, validity, occlusion, and canonical CPU-latency evaluations are run so the latency cliff and the quality knee can be judged together.",
+  "model": {
+    "train": {
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-train-gpu-v5",
+      "architectures": [
+        "tile-classifier/tile-plain-gray35-w500-late256-v1",
+        "tile-classifier/tile-plain-gray35-w53125-late256-v1",
+        "tile-classifier/tile-plain-gray35-w5625-late256-v1",
+        "tile-classifier/tile-plain-gray35-w59375-late256-v1",
+        "tile-classifier/tile-plain-gray35-w625-late256-v1",
+        "tile-classifier/tile-plain-gray35-w625-late192-v1"
+      ],
+      "parameters": {
+        "epochs": {
+          "values": [
+            100
+          ]
+        },
+        "batch_size": {
+          "values": [
+            512
+          ]
+        },
+        "learning_rate": {
+          "values": [
+            0.001
+          ]
+        },
+        "weight_decay": {
+          "values": [
+            0.0001
+          ]
+        },
+        "rotation_augment_deg": {
+          "values": [
+            180.0
+          ]
+        },
+        "augmentation_recipe": {
+          "values": [
+            "random360-only-v1"
+          ]
+        },
+        "checkpoint_eval_every": {
+          "values": [
+            5
+          ]
+        },
+        "amp": {
+          "values": [
+            true
+          ]
+        },
+        "tf32": {
+          "values": [
+            true
+          ]
+        },
+        "cache_device": {
+          "values": [
+            "cuda"
+          ]
+        },
+        "cache_vram_fraction": {
+          "values": [
+            0.5
+          ]
+        }
+      },
+      "seeds": [
+        42
+      ]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "angle-robustness",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-angle-robustness-v4",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1024
+          ]
+        },
+        "eval_angles": {
+          "values": [
+            [
+              0.0,
+              15.0,
+              30.0,
+              45.0
+            ]
+          ]
+        },
+        "amp": {
+          "values": [
+            true
+          ]
+        },
+        "tf32": {
+          "values": [
+            true
+          ]
+        },
+        "cache_device": {
+          "values": [
+            "cuda"
+          ]
+        },
+        "cache_vram_fraction": {
+          "values": [
+            0.5
+          ]
+        }
+      }
+    },
+    {
+      "stage": "full-class-diagnostic",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-full-class-diagnostic-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            256
+          ]
+        }
+      }
+    },
+    {
+      "stage": "validity-rejection",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-validity-rejection-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            256
+          ]
+        }
+      }
+    },
+    {
+      "stage": "manzu-diagnostic-v4",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-manzu-diagnostic-v4",
+      "parameters": {
+        "split": {
+          "values": [
+            "manual_val"
+          ]
+        },
+        "batch_size": {
+          "values": [
+            64
+          ]
+        },
+        "occlusion_patch": {
+          "values": [
+            8
+          ]
+        }
+      }
+    },
+    {
+      "stage": "full-class-occlusion",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-full-class-occlusion-v1",
+      "parameters": {
+        "split": {
+          "values": [
+            "manual_val"
+          ]
+        },
+        "batch_size": {
+          "values": [
+            256
+          ]
+        },
+        "occlusion_patch": {
+          "values": [
+            8
+          ]
+        }
+      }
+    },
+    {
+      "stage": "onnx-cpu-latency",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-onnx-cpu-latency-v2",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "measure_runs": {
+          "values": [
+            200
+          ]
+        },
+        "intra_op_threads": {
+          "values": [
+            1
+          ]
+        },
+        "inter_op_threads": {
+          "values": [
+            1
+          ]
+        }
+      }
+    }
+  ]
+}
