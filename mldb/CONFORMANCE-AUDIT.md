@@ -1,4 +1,4 @@
-﻿# MLDB v1 Spec Conformance Audit
+# MLDB v1 Spec Conformance Audit
 
 Date: 2026-09-09
 Scope: `mldb/records/spec/**/*.md` (49 specs), `mldb/skeleton`, `mldb/src`, `mldb/tests`, and the current real SSH experiment workflow under `tools/mldb` / `mldb_data`.
@@ -144,7 +144,7 @@ The supported shape is:
 - not import a domain bootstrap module;
 - not create or mutate reusable definitions as a side effect of Study execution;
 - call the existing public `execute_study` boundary for the exact authored Study ID;
-- drive generic Queue/Worker execution until the Study Run becomes terminal;
+- submit the Study jobs to the shared Queue and optionally watch only that Study Run; a separate persistent Worker process owns execution;
 - let normal validation/preflight reject missing, draft, incompatible, or corrupt inputs;
 - use only Controller-selected immutable asset descriptors for Worker execution bytes;
 - preserve SHA-addressed Worker cache reuse for those descriptors.
@@ -167,7 +167,7 @@ The repair sequence is complete through implementation and classifier acceptance
 3. Runtime Corpus `data.schema` dispatch repaired with classification and rotated-detection fixtures.
 4. Self-contained classifier v2 and rotated-FCOS executable assets created.
 5. Canonical `mldb_tests/` created and all active executable assets sealed through the public Controller gate.
-6. Generic `run_study_ssh.py --study-id ...` established; tile-specific runner removed; Worker support-file injection removed.
+6. Generic Study submission established; `run_study_ssh.py` now submits/watches only, while one persistent `run_ssh_worker.py --loop` process consumes the shared Queue; tile-specific runner and Worker support-file injection are removed.
 7. Classifier acceptance completed as `sr-20260909-001` through the generic runner.
 8. Rotated-detector acceptance completed as `sr-20260909-002` through the same generic runner; `ev-20260909-002` was accepted and the Study reached `completed`.
 9. Full-feature classifier parity acceptance completed as `sr-20260909-003`; its immutable plan records nonzero rotation/perspective/shear/stretch/projective augmentation plus cache controls, and `ev-20260909-003` was accepted.
@@ -180,7 +180,7 @@ The repair sequence is complete through implementation and classifier acceptance
 Final local verification after the repair:
 
 ```text
-533 passed, 9 warnings, 174 subtests passed
+540 passed, 9 warnings, 174 subtests passed
 ```
 
 The suite includes generic Task regression coverage, rotated Task/Corpus resolution, all active executable-asset tests, and the v3 full classifier parameter surface.
@@ -194,3 +194,28 @@ All acceptance paths use the same generic `tools/mldb/run_study_ssh.py --study-i
 - `sr-20260909-003`: full-feature classifier v3 Study, `completed`; its immutable plan records nonzero rotation, perspective, shear, stretch, projective augmentation and cache controls, and `ev-20260909-003` was accepted.
 
 The classifier and detector paths therefore exercise materially different Task/Corpus/model families through the same Controller/Queue/Worker execution flow. No remaining spec row is partial or violated.
+
+## Multi-process CLI process-model repair (2026-09-09)
+
+A later operational review found two practical multi-terminal defects outside the earlier model-family acceptance:
+
+- `run_study_ssh.py` spawned a Worker subprocess per Study terminal, coupling Queue producer and consumer lifetimes;
+- canonical Run ID allocation used only process-local `threading.Lock`, so separate Python processes could race on the same next sequential Run ID.
+
+The repaired process model is:
+
+- any number of Study submit/watch processes may enqueue Studies concurrently;
+- one persistent `run_ssh_worker.py --loop` process consumes the shared Queue for the default SSH host Worker ID;
+- short Controller/canonical mutations use a repository-scoped OS process lock; GPU execution never holds that lock;
+- canonical Run persistence combines its existing thread lock with a cross-process repository lock.
+
+Regression coverage includes real `spawn`-based multi-process tests for simultaneous Study Run allocation and simultaneous admission of distinct Studies into one SQLite Queue. The existing classifier/detector GPU Runs remain valid model-family execution evidence, but they predate this submitter/Worker process split; a post-split GPU smoke should be recorded separately rather than retroactively claimed.
+
+### Post-split concurrency defects found by live use
+
+Live persistent-Worker execution exposed two additional defects that the initial process-split tests missed:
+
+- Assignment-to-Study reconciliation incorrectly read a nonexistent `assignment.job_id`; it now resolves `assignment.attempt_id` -> QueueAttempt.job_id -> QueueJob -> StudyRunId, with a functional regression test.
+- concurrent first construction of `SQLiteQueue` could race while both processes executed `PRAGMA journal_mode = WAL`; Queue initialization is now repository-process-locked and WAL mode is changed only during initialization, while normal connections only verify it.
+
+The spawn-based Queue admission, Run allocation, and Assignment reconciliation tests were then repeated for 10 rounds (30/30 passes), followed by the full 540-test suite.

@@ -8,6 +8,8 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
+import traceback
 import uuid
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -17,8 +19,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 from mldb.src.orchestration import acquire, heartbeat, outcome
+from mldb.src.orchestration._coordination import orchestration_exclusion
 from mldb.src.orchestration._sqlite_queue import SQLiteQueue
 from mldb.src.orchestration.candidates import CandidateStore
+from mldb.src.orchestration.lease_recovery import recover_expired_attempts
+from mldb.src.orchestration.reconciliation import reconcile_study_run
 from mldb.src.orchestration.retry_policy import RetryDecision
 from mldb.src.orchestration.worker_api import (
     AcquireRejection,
@@ -41,6 +46,9 @@ from mldb.src.orchestration.worker_api import (
 from mldb.src.orchestration.worker_data import handle_candidate_upload
 from mldb.src.repository._local_filesystem import LocalFilesystem
 from mldb.src.repository.layout import RepositoryLayout
+from mldb.src.repository._process_lock import repository_process_lock
+from mldb.src.runtime.run_persistence import list_study_runs
+from mldb.src.study.run import StudyRunStatus
 
 
 
@@ -200,13 +208,14 @@ def _heartbeat_loop(
     request = HeartbeatRequest(assignment.attempt_id, assignment.lease_token)
     while not stop.wait(interval_seconds):
         try:
-            response = heartbeat.handle_heartbeat(
-                request,
-                _now_queue(),
-                layout,
-                filesystem,
-                queue,
-            )
+            with repository_process_lock(layout.root, "controller"):
+                response = heartbeat.handle_heartbeat(
+                    request,
+                    _now_queue(),
+                    layout,
+                    filesystem,
+                    queue,
+                )
             if not isinstance(response, HeartbeatAccepted):
                 failures.append(RuntimeError(f"heartbeat rejected: {response}"))
                 return
@@ -346,7 +355,7 @@ def _report_success(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Pull one MLDB job locally and execute only its domain work over SSH."
+        description="Consume MLDB Queue jobs and execute domain work over SSH."
     )
     parser.add_argument("--host", required=True)
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[2])
@@ -354,44 +363,88 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--remote-python", default="/srv/bugrat/data-lv/mjtensu/nanodet/nanodet/.venv/bin/python")
     parser.add_argument("--worker-id")
     parser.add_argument("--heartbeat-seconds", type=float, default=60.0)
+    parser.add_argument("--loop", action="store_true")
+    parser.add_argument("--poll-seconds", type=float, default=2.0)
     return parser.parse_args()
 
 
-def main() -> None:
-    args = parse_args()
-    repo_root = args.repo_root.resolve()
-    worker_id = args.worker_id or f"ssh:{args.host}"
+def _reconcile_all_running(
+    layout, filesystem, queue, retry_policy
+) -> None:
+    recover_expired_attempts(
+        as_of=_now_queue(),
+        run_finished_at=_now_runtime(),
+        layout=layout,
+        filesystem=filesystem,
+        queue=queue,
+        retry_policy=retry_policy,
+    )
+    with orchestration_exclusion():
+        for run in list_study_runs(layout, filesystem):
+            if run.status is StudyRunStatus.RUNNING and run.plan is not None:
+                reconcile_study_run(
+                    run.id,
+                    _now_runtime(),
+                    _now_queue(),
+                    layout,
+                    filesystem,
+                    queue,
+                    retry_policy,
+                )
 
-    # Prove transport works before allocating a child Run / Queue attempt.
-    _run(["ssh", args.host, "true"])
 
-    layout = RepositoryLayout(repo_root)
-    filesystem = LocalFilesystem()
-    queue = SQLiteQueue(repo_root)
-    assets = _LocalAssetSource()
-    candidates = _FileCandidateStore(repo_root / ".local" / "mldb" / "candidates")
-    retry_policy = _NoRetryPolicy()
+def _reconcile_assignment(assignment, layout, filesystem, queue, retry_policy):
+    attempt = queue.attempt_by_id(assignment.attempt_id)
+    if attempt is None:
+        raise RuntimeError("completed assignment lost its Queue attempt")
+    if attempt.run_id != assignment.run_id:
+        raise RuntimeError("completed assignment disagrees with its Queue attempt Run ID")
+    job = queue.job_by_id(attempt.job_id)
+    if job is None:
+        raise RuntimeError("completed attempt lost its Queue job")
+    study_run_id = job.logical.coordinate.study_run
+    with orchestration_exclusion():
+        current = reconcile_study_run(
+            study_run_id, _now_runtime(), _now_queue(),
+            layout, filesystem, queue, retry_policy,
+        )
+    print(f"study_run={current.id} status={current.status.value}", flush=True)
 
-    response = acquire.handle_acquire_work(
-        AcquireWorkRequest(
-            worker_id=worker_id,
-            acquire_token=uuid.uuid4().hex,
-            accepts=frozenset({"training", "evaluation"}),
-        ),
-        date.today(),
-        _now_runtime(),
-        _now_queue(),
-        uuid.uuid4().hex,
-        layout,
-        filesystem,
-        queue,
-        assets,
-        retry_policy,
+
+def _acquire_one(
+    *, worker_id, layout, filesystem, queue, assets, retry_policy, repo_root
+):
+    with repository_process_lock(repo_root, "controller"):
+        _reconcile_all_running(layout, filesystem, queue, retry_policy)
+        return acquire.handle_acquire_work(
+            AcquireWorkRequest(
+                worker_id=worker_id,
+                acquire_token=uuid.uuid4().hex,
+                accepts=frozenset({"training", "evaluation"}),
+            ),
+            date.today(),
+            _now_runtime(),
+            _now_queue(),
+            uuid.uuid4().hex,
+            layout,
+            filesystem,
+            queue,
+            assets,
+            retry_policy,
+        )
+
+
+def _run_one(args, *, repo_root, worker_id, layout, filesystem, queue, assets, candidates, retry_policy):
+    response = _acquire_one(
+        worker_id=worker_id, layout=layout, filesystem=filesystem,
+        queue=queue, assets=assets, retry_policy=retry_policy, repo_root=repo_root,
     )
     if isinstance(response, NoWork):
-        print("no_work")
-        return
+        return False
     if isinstance(response, AcquireRejection):
+        if response.type == "worker_already_active":
+            print("worker already has an active attempt", flush=True)
+            return False
         raise RuntimeError(f"acquire rejected: {response.type}: {response.message}")
     if not isinstance(response, (TrainingAssignment, EvaluationAssignment)):
         raise TypeError(f"unexpected acquire response: {type(response)!r}")
@@ -402,13 +455,8 @@ def main() -> None:
     heartbeat_thread = threading.Thread(
         target=_heartbeat_loop,
         args=(
-            assignment,
-            float(args.heartbeat_seconds),
-            stop,
-            heartbeat_failures,
-            layout,
-            filesystem,
-            queue,
+            assignment, float(args.heartbeat_seconds), stop, heartbeat_failures,
+            layout, filesystem, queue,
         ),
         daemon=True,
         name=f"mldb-ssh-heartbeat-{assignment.attempt_id}",
@@ -417,48 +465,82 @@ def main() -> None:
     try:
         try:
             payload = _execute_remote(
-                assignment,
-                assets,
-                repo_root,
-                args.host,
-                args.remote_root,
-                args.remote_python,
+                assignment, assets, repo_root, args.host,
+                args.remote_root, args.remote_python,
             )
         except Exception as error:
-            acknowledgement = outcome.handle_attempt_outcome(
-                AttemptFailed(
-                    assignment.attempt_id,
-                    assignment.lease_token,
-                    type(error).__name__,
-                    str(error),
-                ),
-                _now_runtime(),
-                _now_queue(),
-                layout,
-                filesystem,
-                queue,
-                candidates,
-                retry_policy,
-            )
-            print(f"remote attempt failed: {acknowledgement}")
+            with repository_process_lock(repo_root, "controller"):
+                acknowledgement = outcome.handle_attempt_outcome(
+                    AttemptFailed(
+                        assignment.attempt_id, assignment.lease_token,
+                        type(error).__name__, str(error),
+                    ),
+                    _now_runtime(), _now_queue(), layout, filesystem,
+                    queue, candidates, retry_policy,
+                )
+                _reconcile_assignment(
+                    assignment, layout, filesystem, queue, retry_policy
+                )
+            print(f"remote attempt failed: {acknowledgement}", flush=True)
             raise
     finally:
         stop.set()
-        heartbeat_thread.join(timeout=max(5.0, float(args.heartbeat_seconds) + 1.0))
+        heartbeat_thread.join(
+            timeout=max(5.0, float(args.heartbeat_seconds) + 1.0)
+        )
 
     if heartbeat_failures:
-        raise RuntimeError(f"heartbeat failed: {heartbeat_failures[0]}") from heartbeat_failures[0]
+        raise RuntimeError(
+            f"heartbeat failed: {heartbeat_failures[0]}"
+        ) from heartbeat_failures[0]
 
-    acknowledgement = _report_success(
-        assignment,
-        payload,
-        layout,
-        filesystem,
-        queue,
-        candidates,
-        retry_policy,
+    with repository_process_lock(repo_root, "controller"):
+        acknowledgement = _report_success(
+            assignment, payload, layout, filesystem, queue, candidates, retry_policy
+        )
+        _reconcile_assignment(
+            assignment, layout, filesystem, queue, retry_policy
+        )
+    print(
+        f"completed attempt={assignment.attempt_id} run={assignment.run_id} "
+        f"ack={acknowledgement}",
+        flush=True,
     )
-    print(f"completed attempt={assignment.attempt_id} run={assignment.run_id} ack={acknowledgement}")
+    return True
+
+
+def main() -> None:
+    args = parse_args()
+    if args.heartbeat_seconds <= 0 or args.poll_seconds <= 0:
+        raise ValueError("heartbeat and poll intervals must be positive")
+    repo_root = args.repo_root.resolve()
+    worker_id = args.worker_id or f"ssh:{args.host}"
+
+    _run(["ssh", args.host, "true"])
+
+    layout = RepositoryLayout(repo_root)
+    filesystem = LocalFilesystem()
+    queue = SQLiteQueue(repo_root)
+    assets = _LocalAssetSource()
+    candidates = _FileCandidateStore(repo_root / ".local" / "mldb" / "candidates")
+    retry_policy = _NoRetryPolicy()
+
+    while True:
+        try:
+            did_work = _run_one(
+                args, repo_root=repo_root, worker_id=worker_id, layout=layout,
+                filesystem=filesystem, queue=queue, assets=assets,
+                candidates=candidates, retry_policy=retry_policy,
+            )
+        except Exception:
+            if not args.loop:
+                raise
+            traceback.print_exc()
+            did_work = False
+        if not args.loop:
+            return
+        if not did_work:
+            time.sleep(float(args.poll_seconds))
 
 
 if __name__ == "__main__":

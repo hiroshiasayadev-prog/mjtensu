@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 import threading
+from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
@@ -29,6 +30,7 @@ from ..training.run import (
     TrainingRunStudyLineage, validate_training_run, validate_training_run_transition,
 )
 from ..training.weights import CanonicalWeightsArtifact
+from ..repository._process_lock import repository_process_lock
 from ._run_serialization import decode_timestamp, dump_yaml_document, load_yaml_document
 
 if TYPE_CHECKING:
@@ -52,7 +54,7 @@ def allocate_training_run(
     *,
     study: TrainingRunStudyLineage | None = None,
 ) -> TrainingRun:
-    with _allocation_lock(layout):
+    with _allocation_guard(layout):
         run_id = TrainingRunId(_next_id(layout, filesystem, EntityKind.TRAINING_RUN, "tr", allocation_date, _TRAINING_ID))
         run = TrainingRun(
             schema="mjtensu.mldb/training-run/v1", id=run_id, status=TrainingRunStatus.RUNNING,
@@ -80,7 +82,7 @@ def allocate_evaluation_run(
     *,
     study: EvaluationRunStudyLineage | None = None,
 ) -> EvaluationRun:
-    with _allocation_lock(layout):
+    with _allocation_guard(layout):
         run_id = EvaluationRunId(_next_id(layout, filesystem, EntityKind.EVALUATION_RUN, "ev", allocation_date, _EVALUATION_ID))
         run = EvaluationRun(
             schema="mjtensu.mldb/evaluation-run/v1", id=run_id, status=EvaluationRunStatus.RUNNING,
@@ -106,7 +108,7 @@ def allocate_study_run(
     layout: RepositoryLayout,
     filesystem: FilesystemPort,
 ) -> StudyRun:
-    with _allocation_lock(layout):
+    with _allocation_guard(layout):
         run_id = StudyRunId(_next_id(layout, filesystem, EntityKind.STUDY_RUN, "sr", allocation_date, _STUDY_ID))
         run = StudyRun(
             schema="mjtensu.mldb/study-run/v1", id=run_id, status=StudyRunStatus.RUNNING,
@@ -128,7 +130,7 @@ def finalize_study_plan(
     filesystem: FilesystemPort,
 ) -> StudyRun:
     _require_valid(validate_study_plan(plan))
-    with _allocation_lock(layout):
+    with _allocation_guard(layout):
         current = read_study_run(study_run_id, layout, filesystem)
         if current.status is not StudyRunStatus.RUNNING or current.plan is not None:
             raise LifecycleConflictError("Study plan is immutable after finalization or terminalization")
@@ -153,7 +155,7 @@ def persist_training_run_transition(
     layout: RepositoryLayout,
     filesystem: FilesystemPort,
 ) -> None:
-    with _allocation_lock(layout):
+    with _allocation_guard(layout):
         current = read_training_run(next_run.id, layout, filesystem)
         _require_valid(validate_training_run(next_run))
         _require_valid(validate_training_run_transition(current.status, next_run.status))
@@ -167,7 +169,7 @@ def persist_evaluation_run_transition(
     layout: RepositoryLayout,
     filesystem: FilesystemPort,
 ) -> None:
-    with _allocation_lock(layout):
+    with _allocation_guard(layout):
         current = read_evaluation_run(next_run.id, layout, filesystem)
         _require_valid(validate_evaluation_run(next_run))
         _require_valid(validate_evaluation_run_transition(current.status, next_run.status))
@@ -181,7 +183,7 @@ def persist_study_run_transition(
     layout: RepositoryLayout,
     filesystem: FilesystemPort,
 ) -> None:
-    with _allocation_lock(layout):
+    with _allocation_guard(layout):
         current = read_study_run(next_run.id, layout, filesystem)
         _require_valid(validate_study_run(next_run))
         _require_valid(validate_study_run_transition(current.status, next_run.status))
@@ -283,6 +285,13 @@ def _allocation_lock(layout: RepositoryLayout) -> threading.Lock:
     key = str(layout.root.absolute())
     with _LOCK_GUARD:
         return _ROOT_LOCKS.setdefault(key, threading.Lock())
+
+
+@contextmanager
+def _allocation_guard(layout: RepositoryLayout):
+    with _allocation_lock(layout):
+        with repository_process_lock(layout.root, "run-persistence"):
+            yield
 
 
 def _next_id(layout: RepositoryLayout, filesystem: FilesystemPort, kind: EntityKind, prefix: str, day: date, pattern: re.Pattern[str]) -> str:

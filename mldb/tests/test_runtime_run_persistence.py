@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import multiprocessing
 import tempfile
 import unittest
 from datetime import date, datetime, timezone
@@ -36,6 +37,23 @@ from mldb.src.study.plan import StudyPlanEvaluation, StudyPlanRow, StudyPlanTrai
 from mldb.src.study.run import StudyRun, StudyRunExecution, StudyRunStatus
 from mldb.src.training.run import TrainingRunFailure, TrainingRunStatus
 from mldb.src.evaluation.run import EvaluationRunFailure, EvaluationRunStatus
+
+
+def _allocate_study_run_in_process(root: str, start_event, output_queue) -> None:
+    layout = RepositoryLayout(Path(root))
+    filesystem = LocalFilesystem()
+    prepared = SimpleNamespace(
+        study=SimpleNamespace(metadata=SimpleNamespace(id=StudyId("study-v1")))
+    )
+    start_event.wait(timeout=10.0)
+    run = allocate_study_run(
+        prepared,
+        date(2026, 9, 8),
+        datetime(2026, 9, 8, 1, 30, tzinfo=timezone.utc),
+        layout,
+        filesystem,
+    )
+    output_queue.put(str(run.id))
 
 
 class CanonicalRunPersistenceTests(unittest.TestCase):
@@ -134,6 +152,29 @@ class CanonicalRunPersistenceTests(unittest.TestCase):
         self.assertEqual("tr-20260908-002", second.id)
         self.assertEqual("ev-20260908-100", evaluation.id)
         self.assertEqual("sr-20260908-001", study.id)
+
+    def test_study_run_allocation_is_unique_across_processes(self) -> None:
+        context = multiprocessing.get_context("spawn")
+        start_event = context.Event()
+        output_queue = context.Queue()
+        processes = [
+            context.Process(
+                target=_allocate_study_run_in_process,
+                args=(self.temp.name, start_event, output_queue),
+            )
+            for _ in range(2)
+        ]
+        for process in processes:
+            process.start()
+        start_event.set()
+        for process in processes:
+            process.join(timeout=20.0)
+            self.assertEqual(0, process.exitcode)
+        ids = sorted(output_queue.get(timeout=5.0) for _ in processes)
+        self.assertEqual(
+            ["sr-20260908-001", "sr-20260908-002"],
+            ids,
+        )
 
     def test_partial_existing_training_identity_is_not_reused(self) -> None:
         path = self.layout.training_run_paths(TrainingRunId("tr-20260908-001"))

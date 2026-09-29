@@ -107,14 +107,29 @@ mldb_data/models/
 
 大きな Corpus や weights を `git add -f` しない。
 
+
+## Process model: Queue producer and Worker are separate processes
+
+- `run_study_ssh.py` only submits one Study and watches that Study Run.
+- It must never spawn or invoke `run_ssh_worker.py`.
+- One persistent `run_ssh_worker.py --loop` process consumes the shared SQLite Queue.
+- Multiple Study terminals may submit concurrently; they do not own Worker execution.
+- The default Worker ID is stable per SSH host, so one GPU host owns at most one open attempt.
+- Short Controller/canonical mutations use a repository process lock; GPU computation does not hold it.
+
 ## 4. 現在動作確認済みの Golden Path
 
 牌 shape classifier の compliant vertical slice は 2026-09-09 に実 GPU で完走済み。
 通常の実行入口は model family に依存しないこれだけ。
 
 ```powershell
-.\.venv\Scripts\python.exe tools\mldb\run_study_ssh.py `
+# Start exactly one persistent consumer for this GPU host.
+.\.venv\Scripts\python.exe tools\mldb\run_ssh_worker.py `
   --host 192.168.11.22 `
+  --loop
+
+# In any other terminal, submit/watch Studies. These processes never execute GPU jobs.
+.\.venv\Scripts\python.exe tools\mldb\run_study_ssh.py `
   --study-id tile-plain-full-feature-smoke-v3
 ```
 
@@ -380,7 +395,6 @@ Evaluation は既定で 0/15/30/45 degree を評価する。
 
 ```powershell
 .\.venv\Scripts\python.exe tools\mldb\run_study_ssh.py `
-  --host 192.168.11.22 `
   --study-id <new-study-id>
 ```
 

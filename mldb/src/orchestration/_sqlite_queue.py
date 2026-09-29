@@ -10,6 +10,7 @@ import re
 import sqlite3
 
 from ..common.ids import EvaluationRunId, StudyRunId, TrainingRunId
+from ..repository._process_lock import repository_process_lock
 from .jobs import (
     EvaluationJob,
     EvaluationJobCoordinate,
@@ -129,9 +130,11 @@ class SQLiteQueue:
     """Concrete QueuePort implementation backed by the repository-local v1 DB."""
 
     def __init__(self, repository_root: Path) -> None:
-        self._database_path = queue_database_path(repository_root)
+        self._repository_root = Path(repository_root)
+        self._database_path = queue_database_path(self._repository_root)
         self._database_path.parent.mkdir(parents=True, exist_ok=True)
-        self._initialize()
+        with repository_process_lock(self._repository_root, "queue-initialize"):
+            self._initialize()
 
     def admit_study_jobs(
         self,
@@ -594,7 +597,7 @@ class SQLiteQueue:
             return self._required_job(connection, job_id)
 
     def _initialize(self) -> None:
-        with self._connection() as connection:
+        with self._connection(enable_wal=True) as connection:
             connection.execute("BEGIN IMMEDIATE")
             try:
                 version = int(connection.execute("PRAGMA user_version").fetchone()[0])
@@ -621,7 +624,7 @@ class SQLiteQueue:
                 raise
 
     @contextmanager
-    def _connection(self) -> Iterator[sqlite3.Connection]:
+    def _connection(self, *, enable_wal: bool = False) -> Iterator[sqlite3.Connection]:
         connection = sqlite3.connect(
             self._database_path,
             timeout=5.0,
@@ -629,12 +632,13 @@ class SQLiteQueue:
         )
         connection.row_factory = sqlite3.Row
         try:
-            mode = str(connection.execute("PRAGMA journal_mode = WAL").fetchone()[0])
+            connection.execute("PRAGMA busy_timeout = 5000")
+            journal_pragma = "PRAGMA journal_mode = WAL" if enable_wal else "PRAGMA journal_mode"
+            mode = str(connection.execute(journal_pragma).fetchone()[0])
             if mode.lower() != "wal":
-                raise RuntimeError("Queue database could not enable WAL mode")
+                raise RuntimeError("Queue database is not in WAL mode")
             connection.execute("PRAGMA synchronous = FULL")
             connection.execute("PRAGMA foreign_keys = ON")
-            connection.execute("PRAGMA busy_timeout = 5000")
             if int(connection.execute("PRAGMA foreign_keys").fetchone()[0]) != 1:
                 raise RuntimeError("Queue database could not enable foreign keys")
             yield connection
