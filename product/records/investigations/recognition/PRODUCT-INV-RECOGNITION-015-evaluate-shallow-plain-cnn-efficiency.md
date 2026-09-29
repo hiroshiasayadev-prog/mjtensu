@@ -10,6 +10,8 @@
 - **follow_up_candidates**:
   - Narrow channel-width knee around 0.625x to 0.875x while retaining MaxPool.
   - Test late 1x1 expansion on the stronger MaxPool backbone.
+- **follow_up_results**:
+  - PRODUCT-INV-RECOGNITION-016
 
 ## Investigation scope
 
