@@ -1,0 +1,37 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/tile-plain-gray35-late-narrow-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Plain late-downsample narrow gray35 classifier",
+  "family": "plain-cnn",
+  "description": "Coarse shallow-CNN architecture sweep candidate for iPhone-oriented tile classification; keeps operator depth low while varying channel width and downsampling placement.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sha256": "a0f33406c31ab251c63a445d4c6c28743e6144a430cc2c9c55a43c8769c0e1aa"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        1,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "64x64 Conv16-24 before learned 2x downsampling through Conv48-80-96",
+    "traits": [
+      "grayscale",
+      "shallow",
+      "late-downsample",
+      "narrow-early",
+      "strided-conv"
+    ]
+  }
+}
