@@ -1,0 +1,69 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-ort-web-iphone-latency-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Tile shape ORT Web iPhone latency v1",
+  "description": "Export the loaded 1x64x64 grayscale classifier to ONNX opset 16 and benchmark the exact graph in Safari on the dedicated USB-connected iPhone through ONNX Runtime Web 1.27.0. The browser contract is wasm-simd, one WASM thread, proxy disabled, sequential execution, and graph optimization level all. C8 escnn classifiers are converted to a tensor-only PyTorch graph before ONNX export. Tensor-export parity and browser ORT Web parity are verified before accepting latency. Measurement includes only browser elapsed time around awaited InferenceSession.run; page/runtime/model loading, session creation, input creation, parity checks, warmup, and runner transport are excluded.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "ae394c41535c82c85e3cc72bb5dbc72de648c30c309688000160103c6fee6588"
+  },
+  "parameters": {
+    "batch_size": {
+      "default": 1,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64,
+      "description": "ORT Web inference batch size."
+    },
+    "warmup_runs": {
+      "default": 25,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000,
+      "description": "Untimed Safari ORT Web InferenceSession.run calls."
+    },
+    "measure_runs": {
+      "default": 200,
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 10000,
+      "description": "Timed Safari ORT Web InferenceSession.run calls used for latency metrics."
+    }
+  },
+  "metrics": {
+    "latency_p50_ms": {
+      "type": "number",
+      "required": true,
+      "description": "Median measured Safari ORT Web awaited InferenceSession.run latency in milliseconds.",
+      "preference": "lower"
+    },
+    "latency_p95_ms": {
+      "type": "number",
+      "required": true,
+      "description": "Nearest-rank p95 measured Safari ORT Web awaited InferenceSession.run latency in milliseconds.",
+      "preference": "lower"
+    },
+    "latency_mean_ms": {
+      "type": "number",
+      "required": true,
+      "description": "Arithmetic mean measured Safari ORT Web awaited InferenceSession.run latency in milliseconds.",
+      "preference": "lower"
+    }
+  },
+  "artifacts": {
+    "onnx_model": {
+      "format": "onnx",
+      "schema": "mjtensu.recognition/tile-shape-onnx-model/v1",
+      "required": true,
+      "description": "Exact ONNX graph executed by Safari ORT Web."
+    },
+    "latency_report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/tile-ort-web-iphone-latency/v1",
+      "required": true,
+      "description": "Raw Safari timing samples, browser/runtime environment, ONNX identity, export parity, browser parity, and summary metrics."
+    }
+  }
+}

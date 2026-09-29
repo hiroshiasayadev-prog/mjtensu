@@ -1,0 +1,44 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/tile-plain-gray35-w500-late256-stage34-1x1-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Plain 0.5x late256 stage3-stage4-1x1 gray35 classifier",
+  "family": "plain-cnn",
+  "description": "Spatial-mixing ablation on the fast 0.5x Plain backbone. Channels remain 16/32/64/96 with late 1x1 expansion to 256; only selected stage kernels are replaced by 1x1 convolutions.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sources": [
+      {
+        "path": "mldb_data/tile-classifier/lib/plain_stage_kernel_ablation_v1.py",
+        "sha256": "94903a68355f3485f43dcbb4afe0d6f09c63db886aee523e46f1e594f53efca7"
+      }
+    ],
+    "sha256": "caf6a178739226313bed7b237d401d39c32f3fec94a91012a7edb78ceec3bf19"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        1,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "Conv16/32/64/96 kernels (5, 3, 1, 1), three max-pools, late 1x1 96->256, 256-unit head",
+    "traits": [
+      "grayscale",
+      "shallow",
+      "spatial-width-0.5x",
+      "maxpool",
+      "late-1x1-256",
+      "stage3-stage4-1x1"
+    ]
+  }
+}
