@@ -1,0 +1,76 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-ort-web-iphone-latency-v2",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Tile shape ORT Web iPhone latency v2",
+  "description": "Export the loaded 1x64x64 grayscale classifier to ONNX opset 16 and benchmark the exact graph in Safari on the dedicated USB-connected iPhone through ONNX Runtime Web 1.27.0. To avoid Safari timer quantization for sub-millisecond and low-millisecond models, v2 times blocks of sequential awaited InferenceSession.run calls and divides each block elapsed time by runs_per_block; p50/p95/mean are computed across those per-run block averages. The browser contract remains wasm-simd, one WASM thread, proxy disabled, sequential execution, and graph optimization level all. Tensor-export parity and browser ORT Web parity remain required.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "9256a74a46cedf5784a6ac0fe6733674239faed51fafceff9bf6f4c4ef94c6e9"
+  },
+  "parameters": {
+    "batch_size": {
+      "default": 1,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64,
+      "description": "ORT Web inference batch size."
+    },
+    "warmup_runs": {
+      "default": 25,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000,
+      "description": "Untimed Safari ORT Web InferenceSession.run calls."
+    },
+    "runs_per_block": {
+      "default": 100,
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 1000,
+      "description": "Sequential awaited ORT Web InferenceSession.run calls timed together in each measurement block."
+    },
+    "measure_blocks": {
+      "default": 40,
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 1000,
+      "description": "Number of independently timed blocks used to compute p50/p95/mean per-run block-average latency."
+    }
+  },
+  "metrics": {
+    "latency_p50_ms": {
+      "type": "number",
+      "required": true,
+      "description": "Median per-run block-average Safari ORT Web InferenceSession.run latency in milliseconds.",
+      "preference": "lower"
+    },
+    "latency_p95_ms": {
+      "type": "number",
+      "required": true,
+      "description": "Nearest-rank p95 of per-run block-average Safari ORT Web InferenceSession.run latency in milliseconds.",
+      "preference": "lower"
+    },
+    "latency_mean_ms": {
+      "type": "number",
+      "required": true,
+      "description": "Arithmetic mean of per-run block-average Safari ORT Web InferenceSession.run latency in milliseconds.",
+      "preference": "lower"
+    }
+  },
+  "artifacts": {
+    "onnx_model": {
+      "format": "onnx",
+      "schema": "mjtensu.recognition/tile-shape-onnx-model/v1",
+      "required": true,
+      "description": "Exact ONNX graph executed by Safari ORT Web."
+    },
+    "latency_report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/tile-ort-web-iphone-latency/v2",
+      "required": true,
+      "description": "Raw block totals, per-run block-average Safari timing samples, browser/runtime environment, ONNX identity, export parity, browser parity, and summary metrics."
+    }
+  }
+}

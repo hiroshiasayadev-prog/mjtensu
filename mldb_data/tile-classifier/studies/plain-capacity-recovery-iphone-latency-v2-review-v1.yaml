@@ -1,0 +1,43 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/plain-capacity-recovery-iphone-latency-v2-review-v1",
+  "status": "sealed",
+  "name": "Plain capacity recovery iPhone latency v2 review",
+  "description": "Re-evaluate the three completed models from run-01fc07b6027d4f00a1c8dd15119779ce without retraining, using the block-averaged iPhone ORT Web latency v2 protocol to resolve the 1 ms Safari timer quantization seen in v1.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-01fc07b6027d4f00a1c8dd15119779ce-trial-0001-model",
+      "tile-classifier/run-01fc07b6027d4f00a1c8dd15119779ce-trial-0002-model",
+      "tile-classifier/run-01fc07b6027d4f00a1c8dd15119779ce-trial-0003-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "ort-web-iphone-latency",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-ort-web-iphone-latency-v2",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "runs_per_block": {
+          "values": [
+            100
+          ]
+        },
+        "measure_blocks": {
+          "values": [
+            40
+          ]
+        }
+      }
+    }
+  ]
+}
