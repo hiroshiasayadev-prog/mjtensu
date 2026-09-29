@@ -1,0 +1,95 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-full-class-occlusion-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Full-class true-margin occlusion diagnostic",
+  "description": "Measure which spatial regions support each classifier outcome by mean-value occlusion over every sample in the selected split. Each patch is masked independently and attribution is the decrease in true-class logit margin. Class-average heatmaps cover all 35 classifier outcomes and are exposed as a selectable Study artifact.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "c23132d8ca14edba1f8d667e1b6cd42d9f5bd952d0afd4505b48e67ed7da0625"
+  },
+  "parameters": {
+    "split": {
+      "default": "manual_val",
+      "type": "string"
+    },
+    "batch_size": {
+      "default": 256,
+      "type": "integer",
+      "minimum": 1
+    },
+    "occlusion_patch": {
+      "default": 8,
+      "type": "integer",
+      "minimum": 4,
+      "maximum": 16
+    }
+  },
+  "metrics": {
+    "baseline_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Classification accuracy before occlusion over every sample in the selected split."
+    },
+    "baseline_true_margin_mean": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Mean unoccluded true-class logit margin over every sample."
+    },
+    "occlusion_peak_drop_mean": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral",
+      "description": "Mean across samples of the largest positive true-margin drop from hiding one patch."
+    },
+    "occlusion_top_patch_share_mean": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral",
+      "description": "Mean fraction of total positive margin drop attributable to the single strongest patch."
+    },
+    "occlusion_effective_patch_count_mean": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral",
+      "description": "Mean effective number of positive-impact patches; larger values indicate more spatially distributed evidence."
+    },
+    "occlusion_positive_drop_mean": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral",
+      "description": "Mean non-negative true-margin drop across all masked patches and samples."
+    }
+  },
+  "artifacts": {
+    "class_summary_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/full-class-occlusion-summary/v1",
+      "required": true
+    },
+    "class_patch_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/full-class-occlusion-patches/v1",
+      "required": true
+    },
+    "class_occlusion_contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.recognition/full-class-occlusion-contact-sheet/v1",
+      "required": true,
+      "study_view": "select"
+    },
+    "per_sample_details": {
+      "format": "jsonl",
+      "schema": "mjtensu.recognition/full-class-occlusion-samples/v1",
+      "required": true
+    },
+    "report_json": {
+      "format": "json",
+      "schema": "mjtensu.recognition/full-class-occlusion-report/v1",
+      "required": true
+    }
+  }
+}

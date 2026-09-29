@@ -1,0 +1,37 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/tile-plain-gray35-threequarter-late-expand-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Plain three-quarter-channel late-expand gray35 classifier",
+  "family": "plain-cnn",
+  "description": "Follow-up shallow-CNN candidate. It preserves the proven MaxPool downsampling path, narrows the expensive spatial convolutions, then restores channel capacity with one cheap 1x1 convolution at 8x8 before global pooling.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sha256": "be692cea272e14ddffcfcbdee15f9ed1e528d4a0c74ed1a7c744c67f1881663b"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        1,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "Conv24-48-96-144 with three max-pools, late 1x1 144->192, and 256-unit head",
+    "traits": [
+      "grayscale",
+      "shallow",
+      "three-quarter-channel",
+      "maxpool",
+      "late-1x1-expansion"
+    ]
+  }
+}
