@@ -1,0 +1,36 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/tile-plain-gray35-threequarter-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Plain three-quarter-channel gray35 classifier",
+  "family": "plain-cnn",
+  "description": "Coarse shallow-CNN architecture sweep candidate for iPhone-oriented tile classification; keeps operator depth low while varying channel width and downsampling placement.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sha256": "3caffad566b0a230bb99cdc574d1fc3952317ff7235aaee2d6bb179ce8c66096"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        1,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "Conv24-48-96-144 with three max-pools and 256-unit head",
+    "traits": [
+      "grayscale",
+      "shallow",
+      "three-quarter-channel",
+      "maxpool"
+    ]
+  }
+}
