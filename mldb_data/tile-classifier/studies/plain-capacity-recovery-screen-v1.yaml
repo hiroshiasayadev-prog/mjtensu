@@ -1,0 +1,244 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/plain-capacity-recovery-screen-v1",
+  "status": "sealed",
+  "name": "Plain 0.5x capacity recovery screen",
+  "description": "Compare two ways to recover representation capacity while preserving the fast 0.5x Plain outer widths: (1) add cheap 8x8 depthwise spatial refinement before late 96->256 expansion, and (2) temporarily expand stage3 to 128 channels with DW3x3+PW1x1 then compress back to 64 before stage4. Compare both against the unchanged 0.5x + late256 baseline under identical 100-epoch seed42 training and the full seven-evaluation suite.",
+  "model": {
+    "train": {
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-train-gpu-v5",
+      "architectures": [
+        "tile-classifier/tile-plain-gray35-w500-late256-v1",
+        "tile-classifier/tile-plain-gray35-w500-late256-late-dw3-pw1-v1",
+        "tile-classifier/tile-plain-gray35-w500-late256-stage3-expand128-v1"
+      ],
+      "parameters": {
+        "epochs": {
+          "values": [
+            100
+          ]
+        },
+        "batch_size": {
+          "values": [
+            512
+          ]
+        },
+        "learning_rate": {
+          "values": [
+            0.001
+          ]
+        },
+        "weight_decay": {
+          "values": [
+            0.0001
+          ]
+        },
+        "rotation_augment_deg": {
+          "values": [
+            180.0
+          ]
+        },
+        "augmentation_recipe": {
+          "values": [
+            "random360-only-v1"
+          ]
+        },
+        "checkpoint_eval_every": {
+          "values": [
+            5
+          ]
+        },
+        "amp": {
+          "values": [
+            true
+          ]
+        },
+        "tf32": {
+          "values": [
+            true
+          ]
+        },
+        "cache_device": {
+          "values": [
+            "cuda"
+          ]
+        },
+        "cache_vram_fraction": {
+          "values": [
+            0.5
+          ]
+        }
+      },
+      "seeds": [
+        42
+      ]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "angle-robustness",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-angle-robustness-v4",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1024
+          ]
+        },
+        "eval_angles": {
+          "values": [
+            [
+              0.0,
+              15.0,
+              30.0,
+              45.0
+            ]
+          ]
+        },
+        "amp": {
+          "values": [
+            true
+          ]
+        },
+        "tf32": {
+          "values": [
+            true
+          ]
+        },
+        "cache_device": {
+          "values": [
+            "cuda"
+          ]
+        },
+        "cache_vram_fraction": {
+          "values": [
+            0.5
+          ]
+        }
+      }
+    },
+    {
+      "stage": "full-class-diagnostic",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-full-class-diagnostic-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            256
+          ]
+        }
+      }
+    },
+    {
+      "stage": "validity-rejection",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-validity-rejection-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            256
+          ]
+        }
+      }
+    },
+    {
+      "stage": "manzu-diagnostic-v4",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-manzu-diagnostic-v4",
+      "parameters": {
+        "split": {
+          "values": [
+            "manual_val"
+          ]
+        },
+        "batch_size": {
+          "values": [
+            64
+          ]
+        },
+        "occlusion_patch": {
+          "values": [
+            8
+          ]
+        }
+      }
+    },
+    {
+      "stage": "full-class-occlusion",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-full-class-occlusion-v1",
+      "parameters": {
+        "split": {
+          "values": [
+            "manual_val"
+          ]
+        },
+        "batch_size": {
+          "values": [
+            256
+          ]
+        },
+        "occlusion_patch": {
+          "values": [
+            8
+          ]
+        }
+      }
+    },
+    {
+      "stage": "onnx-cpu-latency",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-onnx-cpu-latency-v2",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "measure_runs": {
+          "values": [
+            200
+          ]
+        },
+        "intra_op_threads": {
+          "values": [
+            1
+          ]
+        },
+        "inter_op_threads": {
+          "values": [
+            1
+          ]
+        }
+      }
+    },
+    {
+      "stage": "ort-web-iphone-latency",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-ort-web-iphone-latency-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "measure_runs": {
+          "values": [
+            200
+          ]
+        }
+      }
+    }
+  ]
+}

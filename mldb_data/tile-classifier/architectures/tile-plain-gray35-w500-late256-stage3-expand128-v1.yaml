@@ -1,0 +1,39 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/tile-plain-gray35-w500-late256-stage3-expand128-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Plain 0.5x stage3 expanded depthwise bottleneck gray35 classifier",
+  "family": "plain-cnn",
+  "description": "Preserve the 0.5x outer widths while replacing stage3 with DW3x3 32->32 plus PW1x1 expansion 32->128, then compress 128->64 after pooling before the baseline stage4 3x3 64->96.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sha256": "2e6c1f98c3131d8169f866345c44d5a3cc4ec05f627b5526540fca6bb96b7e32"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        1,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "Conv16/32; stage3 DW3x3 32->32 + PW1x1 32->128; pool; PW1x1 128->64; Conv3x3 64->96; late PW1x1 96->256; GAP; 256-unit head",
+    "traits": [
+      "grayscale",
+      "shallow",
+      "spatial-width-0.5x",
+      "maxpool",
+      "stage3-depthwise-expand128",
+      "inverted-bottleneck-like",
+      "late-1x1-256"
+    ]
+  }
+}
