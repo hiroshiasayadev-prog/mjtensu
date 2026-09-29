@@ -1,0 +1,43 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/tile-plain-gray35-w500-late192-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Plain 0.5x spatial width late-192 gray35 classifier",
+  "family": "plain-cnn",
+  "description": "Two-dimensional Plain-CNN allocation screen candidate. It keeps the proven three-MaxPool topology while independently varying expensive spatial-convolution width and cheap post-downsampling 1x1 channel capacity.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sources": [
+      {
+        "path": "mldb_data/tile-classifier/lib/plain_width_late_grid_v1.py",
+        "sha256": "c41276c8e498393c64e4f4707814cd13704decb1538d5d2e077afc25b7f8794b"
+      }
+    ],
+    "sha256": "ee69755932689e77fa1c8023372df3e69a5b3ec328f230d434e8576162a9c058"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        1,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "Conv16-32-64-96 with three max-pools, late 1x1 96->192, and 256-unit head",
+    "traits": [
+      "grayscale",
+      "shallow",
+      "spatial-width-0.5x",
+      "maxpool",
+      "late-1x1-192"
+    ]
+  }
+}
