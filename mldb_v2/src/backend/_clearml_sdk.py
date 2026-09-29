@@ -1079,7 +1079,7 @@ def _selectable_image_figure(items: Sequence[tuple[str, bytes]]) -> dict[str, ob
     def image_layout(data: bytes) -> list[dict[str, object]]:
         source = "data:image/png;base64," + base64.b64encode(data).decode("ascii")
         return [{
-            "source": source, "xref": "paper", "yref": "paper",
+            "source": source, "xref": "x", "yref": "y",
             "x": 0.0, "y": 1.0, "sizex": 1.0, "sizey": 1.0,
             "xanchor": "left", "yanchor": "top", "sizing": "contain", "layer": "above",
         }]
@@ -1095,8 +1095,9 @@ def _selectable_image_figure(items: Sequence[tuple[str, bytes]]) -> dict[str, ob
         }],
         "layout": {
             "height": 620,
-            "xaxis": {"visible": False, "range": [0, 1]},
-            "yaxis": {"visible": False, "range": [0, 1], "scaleanchor": "x"},
+            "dragmode": "zoom",
+            "xaxis": {"visible": False, "range": [0, 1], "fixedrange": False},
+            "yaxis": {"visible": False, "range": [0, 1], "scaleanchor": "x", "fixedrange": False},
             "images": image_layout(items[0][1]),
             "updatemenus": [{
                 "type": "dropdown", "direction": "down", "showactive": True,

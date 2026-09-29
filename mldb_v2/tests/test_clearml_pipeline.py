@@ -22,6 +22,7 @@ from mldb_v2.src.backend._clearml_sdk import (
     ClearMLSDKAdapter,
     ClearMLSDKSettings,
     _comparison_bar_figure,
+    _selectable_image_figure,
     _selectable_plotly_figure,
 )
 from mldb_v2.src.backend._config import BackendConfig
@@ -722,7 +723,7 @@ def test_sdk_adapter_projects_selectable_study_artifact_from_child_plots() -> No
 def test_selectable_robustness_plot_reserves_card_edges() -> None:
     figure = _selectable_plotly_figure(
         [(
-            "Tile MobileNetV3-Small 1.0x",
+            "Tile C8",
             {
                 "data": [
                     {
@@ -747,6 +748,11 @@ def test_selectable_robustness_plot_reserves_card_edges() -> None:
                 "layout": {
                     "xaxis": {"title": "condition"},
                     "yaxis": {"title": "accuracy / recall"},
+                    "yaxis2": {
+                        "title": "mean true margin",
+                        "overlaying": "y",
+                        "side": "right",
+                    },
                 },
             },
         )],
@@ -755,10 +761,12 @@ def test_selectable_robustness_plot_reserves_card_edges() -> None:
     assert figure is not None
     layout = figure["layout"]
     assert layout["height"] >= 560
+    assert layout["margin"]["r"] >= 110
     assert layout["margin"]["b"] >= 150
     assert layout["xaxis"]["automargin"] is True
     assert layout["xaxis"]["tickangle"] == -30
     assert layout["yaxis"]["automargin"] is True
+    assert layout["yaxis2"]["automargin"] is True
     assert layout["showlegend"] is True
     assert layout["legend"]["orientation"] == "v"
     assert layout["legend"]["xanchor"] == "right"
@@ -768,6 +776,26 @@ def test_selectable_robustness_plot_reserves_card_edges() -> None:
         "macro recall (35 classes)",
         "worst-class recall",
     ]
+
+
+def test_selectable_image_figure_uses_zoomable_data_coordinates() -> None:
+    figure = _selectable_image_figure([
+        ("Tile C8", b"first-png"),
+        ("Tile Plain", b"second-png"),
+    ])
+
+    assert figure is not None
+    layout = figure["layout"]
+    assert layout["dragmode"] == "zoom"
+    assert layout["xaxis"]["fixedrange"] is False
+    assert layout["yaxis"]["fixedrange"] is False
+    assert layout["images"][0]["xref"] == "x"
+    assert layout["images"][0]["yref"] == "y"
+
+    buttons = layout["updatemenus"][0]["buttons"]
+    replacement_image = buttons[1]["args"][0]["images"][0]
+    assert replacement_image["xref"] == "x"
+    assert replacement_image["yref"] == "y"
 
 
 def test_pipeline_summary_table_failure_is_observational() -> None:
