@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
-  "modelSetVersion": "recognition-v8-2026-09-04",
+  "modelSetVersion": "recognition-v9-2026-09-30",
   "models": {
     "detector": {
       "role": "detector",
-      "url": "rotated-fcos-nano-s05-f64-obb120-gn.onnx?sha256=6bb3b25ea2baa2dc641d5677fbfc8792e0a4e381bd2e0f4cf1dc05de4a38d1b0",
-      "sha256": "6bb3b25ea2baa2dc641d5677fbfc8792e0a4e381bd2e0f4cf1dc05de4a38d1b0",
-      "runtimeSpec": "rotated-fcos-nano-320-v1",
+      "url": "nanodet-plus-m-320-real-capture-ft10-l10.onnx?sha256=9587a02dd1bbccfc14a925dc69c66b3c4a34ab628552b840ec113f7899dbf883",
+      "sha256": "9587a02dd1bbccfc14a925dc69c66b3c4a34ab628552b840ec113f7899dbf883",
+      "runtimeSpec": "nanodet-plus-m-320-v1",
       "providerPreference": [
         "wasm-simd",
         "wasm-threaded",
@@ -15,8 +15,8 @@
     },
     "tile-classifier": {
       "role": "tile-classifier",
-      "url": "mobile-tile-f8-r1.onnx?sha256=5039c044a490b44e8c645ead5a3280293f78c3c43db9baabd9f07219ff883a7e",
-      "sha256": "5039c044a490b44e8c645ead5a3280293f78c3c43db9baabd9f07219ff883a7e",
+      "url": "tile-plain-gray35-w500-late256-late-dw3-pw1-v1.onnx?sha256=0d2768f89a93f41b4e20f3000c4017733413a5f65f9d5f2f77c8325ef8e4f951",
+      "sha256": "0d2768f89a93f41b4e20f3000c4017733413a5f65f9d5f2f77c8325ef8e4f951",
       "runtimeSpec": "gray64-tile-35-v1",
       "providerPreference": [
         "wasm-simd",

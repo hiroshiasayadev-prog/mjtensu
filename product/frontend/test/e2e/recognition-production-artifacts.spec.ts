@@ -21,11 +21,11 @@ test('production Recognition model set loads and executes bounded real-artifact 
   console.log(`R06_DIAGNOSTICS=${JSON.stringify(diagnostics)}`);
 
   expect(diagnostics.status, diagnostics.error).toBe('ready');
-  expect(diagnostics.modelSetVersion).toBe('recognition-v8-2026-09-04');
+  expect(diagnostics.modelSetVersion).toBe('recognition-v9-2026-09-30');
   expect(diagnostics.providers).toEqual([
     {
       role: 'detector',
-      runtimeSpec: 'rotated-fcos-nano-320-v1',
+      runtimeSpec: 'nanodet-plus-m-320-v1',
       selectedProvider: 'wasm-simd',
       failedProviders: [],
     },

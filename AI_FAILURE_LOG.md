@@ -69,6 +69,7 @@ Guard:
 | INC-20260929-01 | `mjtensu-dev` のclassifier状態をproductionと繰り返し誤認した。productionは`mjtensu-product/compose.prod.yaml`と実model artifactで確認する。 |
 | INC-20260929-02 | Investigation guide確認前にINV-015を書き、さらに依頼されていないcommit/pushまで行った。authoring authority確認とrepository mutationを分離する。 |
 | INC-20260929-03 | 実験隔離のためuser合意なしで4本のbranch/worktreeを作り、未merge成果を分散させた。branch/worktree作成は事前合意し、canonical recordsは本体repoへ書く。 |
+| INC-20260930-01 | canonical repoを変更せずCI/CDのdeploy checkoutを直接書き換えてdevへ反映した。deploy checkoutは生成・反映先として扱い、source変更はcanonical repoで行ってcommit/pushしCI/CD経由で反映する。 |
 
 ## Incident template
 
