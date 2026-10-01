@@ -1,12 +1,11 @@
-"""Environment configuration for the runtime-registry service."""
+"""Environment configuration for the standalone runtime-registry service."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 import os
 
-from mldb_v2.src.storage.s3_transport import _S3TransportConfig, _create_s3_transport
-
 from .core import RegistryStore
+from .object_store import S3ObjectStore
 from .service import RuntimeRegistryService
 from .validator import UvSyncValidator
 
@@ -48,13 +47,18 @@ class RegistryConfig:
 
 def compose_service(config: RegistryConfig | None = None) -> RuntimeRegistryService:
     cfg = config or RegistryConfig.from_env()
-    object_store = _create_s3_transport(_S3TransportConfig(
+    try:
+        import boto3
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("boto3 is required by the runtime-registry service") from exc
+    client = boto3.client(
+        "s3",
         endpoint_url=cfg.endpoint_url,
         region_name=cfg.region,
-        access_key_id=cfg.access_key,
-        secret_access_key=cfg.secret_key,
-        session_token=cfg.session_token,
-    ))
-    store = RegistryStore(cfg.db_path, object_store, cfg.bucket, cfg.prefix)
+        aws_access_key_id=cfg.access_key,
+        aws_secret_access_key=cfg.secret_key,
+        aws_session_token=cfg.session_token,
+    )
+    store = RegistryStore(cfg.db_path, S3ObjectStore(client), cfg.bucket, cfg.prefix)
     validator = UvSyncValidator(cfg.uv_binary, cfg.uv_timeout_seconds, cfg.uv_cache_dir)
     return RuntimeRegistryService(store, validator)
