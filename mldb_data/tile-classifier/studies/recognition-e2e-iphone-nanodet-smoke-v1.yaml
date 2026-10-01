@@ -1,0 +1,31 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/recognition-e2e-iphone-nanodet-smoke-v1",
+  "status": "sealed",
+  "name": "iPhone recognition E2E NanoDet smoke",
+  "description": "Actual five-video iPhone end-to-end recognition smoke. Uses one existing canonical base-classifier Model only to verify the full MLDB -> browser-runner -> production recognition pipeline path. Detector and red-five specialist are independently selected by Model ID so later detector/classifier comparisons reuse the same Evaluation Protocol and Corpus.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-bc6fe4f59d1946daa7dbd95f8ac85d1c-trial-0001-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "recognition-e2e-iphone",
+      "corpus": "tile-classifier/recognition-e2e-night-iphone13-v1",
+      "protocol": "tile-classifier/tile-shape-recognition-e2e-iphone-v1",
+      "parameters": {
+        "detector_model": {
+          "values": [
+            "recognition-runtime/nanodet-plus-m-320-real-capture-ft10-l10-v1"
+          ]
+        },
+        "red_five_model": {
+          "values": [
+            "recognition-runtime/red-five-c8-rgb-warmaug-v1"
+          ]
+        }
+      }
+    }
+  ]
+}
