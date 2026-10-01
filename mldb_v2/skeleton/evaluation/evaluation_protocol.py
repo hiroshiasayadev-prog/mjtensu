@@ -42,3 +42,4 @@ class EvaluationProtocol(TypedDict):
     parameters: PublicParameterDeclarations
     metrics: EvaluationMetricDeclarations
     artifacts: EvaluationArtifactDeclarations
+    model_parameters: NotRequired[Mapping[str, str]]

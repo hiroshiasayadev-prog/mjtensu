@@ -47,9 +47,12 @@ Reusable definitions and canonical history live under one namespace root:
     mldb_data/<namespace>/study_results/
     mldb_data/<namespace>/training_results/
     mldb_data/<namespace>/models/
+    mldb_data/<namespace>/runtime_models/
     mldb_data/<namespace>/evaluation_results/
 
 Do not use the old flat v1 `mldb_data_old/` layout as a template for new v2 work.
+
+When an Evaluation needs multiple independently selectable models, keep the Study primary Model in `model.existing`/training and declare auxiliary Model-ID parameters through the Evaluation Protocol `model_parameters` mapping. Use a normal MLDB Model whenever Training Result lineage exists; use a Runtime Model only for an immutable deployable artifact that lacks canonical MLDB training lineage.
 
 Executable definitions pair a YAML definition with a same-basename Python entrypoint. Reusable experiment helpers may live under `mldb_data/<same-namespace>/lib/`; every helper imported directly or transitively must be listed in `implementation.sources` with its exact SHA-256. Repository-owned imports outside that namespace-private `lib/` boundary are invalid. Corpus definitions may additionally reference manifests/builders according to their formal contract.
 

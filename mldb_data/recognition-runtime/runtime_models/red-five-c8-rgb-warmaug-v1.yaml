@@ -1,0 +1,24 @@
+{
+  "schema": "mjtensu.mldb-v2/runtime-model/v1",
+  "id": "recognition-runtime/red-five-c8-rgb-warmaug-v1",
+  "name": "Red-five C8 RGB warm augmentation",
+  "description": "Production binary red-five classifier exported from the historical C8 RGB warm-augmentation run.",
+  "role": "red-five-classifier",
+  "format": "onnx",
+  "runtime_spec": "c8-red-five-v1",
+  "artifact": {
+    "uri": "s3://mldb-runtime-models/recognition-runtime/red-five-c8-rgb-warmaug.onnx",
+    "bytes": 6256955,
+    "sha256": "c2b780f682d84bf186db90290050f8b05016c3e8058de559eea679a28eeb80c6"
+  },
+  "provenance": {
+    "source_run": ".local/recognition/red_five_runs/c8_rgb_cr_ycr_warmaug_seed42/c8_rgb_warmaug_rot22p5_seed42",
+    "checkpoint": "best.pt",
+    "checkpoint_epoch": 15,
+    "checkpoint_sha256": "2b92b8374d0ec2dfdbf8446766fffd7d941ab01a7bc20628daa5831b9de7283c",
+    "normalization": {
+      "mean": [0.6602509360622993, 0.6917274426386547, 0.6489080530422624],
+      "std": [0.30491469480493394, 0.24924454491506576, 0.2710702582444575]
+    }
+  }
+}

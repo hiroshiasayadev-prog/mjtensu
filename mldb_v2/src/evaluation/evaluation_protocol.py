@@ -55,12 +55,14 @@ class EvaluationProtocol(TypedDict):
     parameters: PublicParameterDeclarations
     metrics: EvaluationMetricDeclarations
     artifacts: EvaluationArtifactDeclarations
+    model_parameters: NotRequired[Mapping[str, str]]
 
 
 _REQUIRED_TOP_LEVEL = {
     "schema", "id", "status", "task", "name", "description",
     "implementation", "parameters", "metrics", "artifacts",
 }
+_OPTIONAL_TOP_LEVEL = {"model_parameters"}
 
 
 def _validate_metric_declarations(value: object) -> dict[str, EvaluationMetricDeclaration]:
@@ -130,11 +132,36 @@ def _validate_artifact_declarations(value: object) -> dict[str, EvaluationArtifa
     return result
 
 
+
+def _validate_model_parameters(
+    value: object,
+    parameters: PublicParameterDeclarations,
+) -> dict[str, str]:
+    if type(value) is not dict:
+        raise ValueError("model_parameters must be a mapping")
+    result: dict[str, str] = {}
+    seen_parameters: set[str] = set()
+    for alias, parameter_name in value.items():
+        _require_string(alias, label="model parameter alias", nonempty=True)
+        parameter = _require_string(
+            parameter_name, label=f"model parameter {alias}", nonempty=True
+        )
+        if parameter not in parameters:
+            raise ValueError("model_parameters references an undeclared public parameter")
+        if parameter in seen_parameters:
+            raise ValueError("model_parameters must not reuse a public parameter")
+        seen_parameters.add(parameter)
+        result[alias] = parameter
+    return result
+
 def _parse_evaluation_protocol_document(
     document: object, *, expected_id: str
 ) -> EvaluationProtocol:
     mapping = _require_exact_keys(
-        document, required=_REQUIRED_TOP_LEVEL, label="Evaluation Protocol"
+        document,
+        required=_REQUIRED_TOP_LEVEL,
+        optional=_OPTIONAL_TOP_LEVEL,
+        label="Evaluation Protocol",
     )
     if mapping["schema"] != "mjtensu.mldb-v2/evaluation-protocol/v1":
         raise ValueError("unsupported Evaluation Protocol schema")
@@ -154,9 +181,14 @@ def _parse_evaluation_protocol_document(
     parameters = _validate_parameter_declarations(mapping["parameters"])
     metrics = _validate_metric_declarations(mapping["metrics"])
     artifacts = _validate_artifact_declarations(mapping["artifacts"])
+    model_parameters = (
+        _validate_model_parameters(mapping["model_parameters"], parameters)
+        if "model_parameters" in mapping
+        else {}
+    )
     if not metrics and not artifacts:
         raise ValueError("Evaluation Protocol requires at least one metric or artifact")
-    return {
+    result: EvaluationProtocol = {
         "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
         "id": EvaluationProtocolId(definition_id),
         "status": status,  # type: ignore[typeddict-item]
@@ -168,6 +200,9 @@ def _parse_evaluation_protocol_document(
         "metrics": metrics,
         "artifacts": artifacts,
     }
+    if model_parameters:
+        result["model_parameters"] = model_parameters
+    return result
 
 
 def _load_evaluation_protocol_definition(

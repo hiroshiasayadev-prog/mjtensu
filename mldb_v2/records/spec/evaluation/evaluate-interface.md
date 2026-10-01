@@ -34,10 +34,18 @@ class LoadedModel:
     module: torch.nn.Module
 
 @dataclass(frozen=True)
+class LoadedRuntimeModel:
+    definition: RuntimeModel
+    artifact: bytes
+
+AuxiliaryModel = LoadedModel | LoadedRuntimeModel
+
+@dataclass(frozen=True)
 class EvaluationContext:
     task: Task
     corpus: MaterializedCorpus
     model: LoadedModel
+    models: Mapping[str, AuxiliaryModel]
     parameters: Mapping[str, PublicParameterValue]
     telemetry: TelemetryReporter
     work_dir: Path
@@ -45,7 +53,7 @@ class EvaluationContext:
 `Task`, `Corpus`, `Model`, `TrainingResult`, and `Architecture` mean immutable parsed canonical values;
 concrete Python classes are frozen by Skeleton. `corpus.root` matches the sealed Corpus manifest.
 `model.module` is a fresh Architecture module with canonical learned state loaded strictly according
-to `spec:mldb.v2.training.canonical_weights`. `parameters` is the complete resolved Evaluation
+to `spec:mldb.v2.training.canonical_weights`. `models` contains only auxiliary models declared by the selected Evaluation Protocol `model_parameters` mapping. Canonical learned Models arrive as `LoadedModel`; immutable deployable ONNX catalog entries arrive as `LoadedRuntimeModel`, whose bytes have already been verified against the ArtifactRef. Protocol code therefore consumes model identities without performing repository or credential resolution. `parameters` is the complete resolved Evaluation
 Protocol mapping. `telemetry` is the backend-neutral reporter from
 `spec:mldb.v2.common.telemetry`. `work_dir` is an execution-local writable directory.
 

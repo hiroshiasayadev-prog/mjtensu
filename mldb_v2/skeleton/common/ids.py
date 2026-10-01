@@ -18,12 +18,13 @@ StudyPlanId = NewType("StudyPlanId", str)
 StudyResultId = NewType("StudyResultId", str)
 TrainingResultId = NewType("TrainingResultId", str)
 ModelId = NewType("ModelId", str)
+RuntimeModelId = NewType("RuntimeModelId", str)
 EvaluationResultId = NewType("EvaluationResultId", str)
 TrialId = NewType("TrialId", str)
 EvaluationCoordinateId = NewType("EvaluationCoordinateId", str)
 ExecutionKey = NewType("ExecutionKey", str)
 
-TypedEntityId: TypeAlias = TaskId | CorpusId | ArchitectureId | TrainProtocolId | EvaluationProtocolId | StudyId | StudyPlanId | StudyResultId | TrainingResultId | ModelId | EvaluationResultId
+TypedEntityId: TypeAlias = TaskId | CorpusId | ArchitectureId | TrainProtocolId | EvaluationProtocolId | StudyId | StudyPlanId | StudyResultId | TrainingResultId | ModelId | RuntimeModelId | EvaluationResultId
 
 
 class EntityKind(str, Enum):
@@ -37,6 +38,7 @@ class EntityKind(str, Enum):
     STUDY_PLAN = "study_plan"
     TRAINING_RESULT = "training_result"
     MODEL = "model"
+    RUNTIME_MODEL = "runtime_model"
     EVALUATION_RESULT = "evaluation_result"
     STUDY_RESULT = "study_result"
 

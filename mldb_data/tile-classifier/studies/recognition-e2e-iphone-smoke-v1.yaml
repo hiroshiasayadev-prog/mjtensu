@@ -1,0 +1,31 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/recognition-e2e-iphone-smoke-v1",
+  "status": "sealed",
+  "name": "Recognition E2E iPhone smoke v1",
+  "description": "Actual iPhone browser-runner smoke of the full recognition E2E protocol on the sealed five-video corpus. This run validates the three-model selection seam, browser transport, production pipeline replay, semantic GT scoring, cadence, and timing telemetry before detector/classifier comparison studies are authored.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-bc6fe4f59d1946daa7dbd95f8ac85d1c-trial-0001-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "recognition-e2e-iphone",
+      "corpus": "tile-classifier/recognition-e2e-night-iphone13-v1",
+      "protocol": "tile-classifier/tile-shape-recognition-e2e-iphone-v1",
+      "parameters": {
+        "detector_model": {
+          "values": [
+            "recognition-runtime/nanodet-plus-m-320-real-capture-ft10-l10-v1"
+          ]
+        },
+        "red_five_model": {
+          "values": [
+            "recognition-runtime/red-five-c8-rgb-warmaug-v1"
+          ]
+        }
+      }
+    }
+  ]
+}

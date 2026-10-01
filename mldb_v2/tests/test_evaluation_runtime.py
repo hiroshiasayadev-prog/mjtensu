@@ -95,11 +95,12 @@ def _protocol_document(
     parameters: dict[str, object] | None = None,
     metrics: dict[str, object] | None = None,
     artifacts: dict[str, object] | None = None,
+    model_parameters: dict[str, str] | None = None,
 ) -> dict[str, object]:
     implementation: dict[str, object] = {"entrypoint": "evaluate"}
     if status == "sealed":
         implementation["sha256"] = "2" * 64
-    return {
+    value = {
         "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
         "id": "demo/eval-v1",
         "status": status,
@@ -115,6 +116,9 @@ def _protocol_document(
         else {"score": {"type": "number", "required": True}},
         "artifacts": artifacts if artifacts is not None else {},
     }
+    if model_parameters is not None:
+        value["model_parameters"] = model_parameters
+    return value
 
 
 def _install_pinned_root(
@@ -133,6 +137,7 @@ def _install_pinned_root(
     parameters: dict[str, object] | None = None,
     metrics: dict[str, object] | None = None,
     artifacts: dict[str, object] | None = None,
+    model_parameters: dict[str, str] | None = None,
 ) -> tuple[Path, bytes]:
     root = tmp_path / "pinned"
     _write_namespace(root)
@@ -208,6 +213,7 @@ def _install_pinned_root(
             parameters=parameters,
             metrics=metrics,
             artifacts=artifacts,
+            model_parameters=model_parameters,
         ),
     )
     protocol_dir.mkdir(parents=True, exist_ok=True)
@@ -338,10 +344,12 @@ def _stage_input(
 def _access(
     corpus_bytes: bytes,
     weight_data: bytes,
+    extra_objects: dict[str, bytes] | None = None,
 ) -> tuple[_ObjectByteAccess, DictTransport]:
-    transport = DictTransport(
-        {CORPUS_URI: corpus_bytes, WEIGHTS_URI: weight_data}
-    )
+    objects = {CORPUS_URI: corpus_bytes, WEIGHTS_URI: weight_data}
+    if extra_objects:
+        objects.update(extra_objects)
+    transport = DictTransport(objects)
     return _ObjectByteAccess(transport), transport
 
 
@@ -355,8 +363,9 @@ def _run(
     *,
     artifact_uris: dict[str, str] | None = None,
     telemetry_sink=None,
+    extra_objects: dict[str, bytes] | None = None,
 ):
-    access, transport = _access(corpus_bytes, weight_data)
+    access, transport = _access(corpus_bytes, weight_data, extra_objects)
     work_dir = tmp_path / "work"
     work_dir.mkdir(parents=True, exist_ok=True)
     result = _execute_evaluation_stage(
@@ -734,7 +743,10 @@ def test_exact_loaded_model_and_evaluation_context(
     )
     assert result == {"metrics": {"score": 1.0}, "artifacts": {}}
     context = captured["context"]
-    assert set(context.__dict__) == {"task", "corpus", "model", "parameters", "telemetry", "work_dir"}
+    assert set(context.__dict__) == {
+        "task", "corpus", "model", "models", "parameters", "telemetry", "work_dir"
+    }
+    assert context.models == {}
     assert context.task["id"] == "demo/task-v1"
     assert context.corpus.definition["id"] == "demo/corpus-v1"
     assert context.model.definition["id"] == MODEL_ID
@@ -745,6 +757,77 @@ def test_exact_loaded_model_and_evaluation_context(
     assert torch.equal(context.model.module.weight, source.weight)
     assert torch.equal(context.model.module.bias, source.bias)
     assert transport.reads == [CORPUS_URI, WEIGHTS_URI]
+
+
+def test_runtime_model_parameter_is_resolved_to_verified_onnx_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parameters = {
+        "detector_model": {"default": None},
+    }
+    pinned_root, corpus_bytes = _install_pinned_root(
+        tmp_path,
+        parameters=parameters,
+        model_parameters={"detector": "detector_model"},
+    )
+    artifact = b"onnx-runtime-model"
+    artifact_uri = "s3://bucket/runtime/detector.onnx"
+    _write_json(
+        pinned_root / "demo" / "runtime_models" / "detector-v1.yaml",
+        {
+            "schema": "mjtensu.mldb-v2/runtime-model/v1",
+            "id": "demo/detector-v1",
+            "name": "Detector",
+            "description": "",
+            "role": "detector",
+            "format": "onnx",
+            "runtime_spec": "detector-v1",
+            "artifact": {
+                "uri": artifact_uri,
+                "bytes": len(artifact),
+                "sha256": _sha(artifact),
+            },
+        },
+    )
+    weight_data = _serialize_canonical_state_dict(nn.Linear(3, 2).state_dict())
+    runtime_root = _install_runtime_root(tmp_path, weight_data)
+    captured: dict[str, object] = {}
+
+    def evaluate_spy(context):
+        captured["context"] = context
+        return EvaluationCandidate(metrics={"score": 1.0}, artifacts={})
+
+    monkeypatch.setattr(
+        evaluation_runtime, "_load_evaluation_callable", lambda *_a, **_k: evaluate_spy
+    )
+    stage_input = _stage_input(
+        weight_data, parameters={"detector_model": "demo/detector-v1"}
+    )
+    _run(
+        tmp_path,
+        pinned_root,
+        runtime_root,
+        corpus_bytes,
+        weight_data,
+        stage_input,
+        extra_objects={artifact_uri: artifact},
+    )
+    detector = captured["context"].models["detector"]
+    assert detector.definition["id"] == "demo/detector-v1"
+    assert detector.artifact == artifact
+
+
+def test_model_parameter_must_be_explicitly_resolved_to_an_id(tmp_path: Path) -> None:
+    pinned_root, corpus_bytes = _install_pinned_root(
+        tmp_path,
+        parameters={"detector_model": {"default": None}},
+        model_parameters={"detector": "detector_model"},
+    )
+    weight_data = _serialize_canonical_state_dict(nn.Linear(3, 2).state_dict())
+    runtime_root = _install_runtime_root(tmp_path, weight_data)
+    stage_input = _stage_input(weight_data, parameters={"detector_model": None})
+    with pytest.raises(ValueError, match="must resolve to a Model id"):
+        _run(tmp_path, pinned_root, runtime_root, corpus_bytes, weight_data, stage_input)
 
 
 def test_metric_only_candidate_and_optional_metric_absence(

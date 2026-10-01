@@ -16,12 +16,14 @@ from mldb_v2.src.catalog.architecture import (
 )
 from mldb_v2.src.catalog.architecture_build import ArchitectureBuild, _load_architecture_build
 from mldb_v2.src.catalog._executable_definition_loading import _load_companion_module
+from mldb_v2.src.catalog.runtime_model import RuntimeModel, _validate_runtime_model
 from mldb_v2.src.common.ids import EntityKind
 from mldb_v2.src.evaluation.evaluate_interface import (
     EvaluationCandidate,
     EvaluationCallable,
     EvaluationContext,
     LoadedModel,
+    LoadedRuntimeModel,
     MaterializedCorpus as EvaluationMaterializedCorpus,
     _load_evaluation_callable,
 )
@@ -524,6 +526,49 @@ def test_public_typed_dict_shapes_match_frozen_contract() -> None:
     assert EvaluationMetricDeclaration.__optional_keys__ == frozenset({"description", "preference"})
     assert EvaluationArtifactDeclaration.__required_keys__ == frozenset({"format", "schema", "required"})
     assert EvaluationArtifactDeclaration.__optional_keys__ == frozenset({"description", "study_view"})
+    assert EvaluationProtocol.__optional_keys__ == frozenset({"model_parameters"})
+
+
+def test_evaluation_protocol_model_parameters_are_optional_and_reference_parameters() -> None:
+    value = _evaluation()
+    value["parameters"] = {
+        "detector_model": {"default": None},
+        "red_five_model": {"default": None},
+    }
+    value["model_parameters"] = {
+        "detector": "detector_model",
+        "red-five-classifier": "red_five_model",
+    }
+    parsed = _parse_evaluation_protocol_document(value, expected_id="demo/eval-v1")
+    assert parsed["model_parameters"] == value["model_parameters"]
+
+
+def test_evaluation_protocol_model_parameters_reject_undeclared_parameter() -> None:
+    value = _evaluation()
+    value["model_parameters"] = {"detector": "missing"}
+    with pytest.raises(ValueError, match="undeclared public parameter"):
+        _parse_evaluation_protocol_document(value, expected_id="demo/eval-v1")
+
+
+def test_runtime_model_shape_validates_immutable_onnx_artifact() -> None:
+    value = {
+        "schema": "mjtensu.mldb-v2/runtime-model/v1",
+        "id": "demo/runtime-model-v1",
+        "name": "Runtime model",
+        "description": "",
+        "role": "detector",
+        "format": "onnx",
+        "runtime_spec": "detector-v1",
+        "artifact": {
+            "uri": "s3://bucket/runtime/model.onnx",
+            "bytes": 3,
+            "sha256": "a" * 64,
+        },
+        "provenance": {"source": "historical deployment"},
+    }
+    parsed = _validate_runtime_model(value, expected_id="demo/runtime-model-v1")
+    assert parsed["artifact"]["sha256"] == "a" * 64
+    assert RuntimeModel.__required_keys__ >= frozenset({"schema", "id", "role", "artifact"})
 
 
 def test_executable_integrity_public_shapes_match_frozen_contract() -> None:
@@ -547,13 +592,14 @@ def test_train_and_evaluation_dataclass_shapes_are_frozen_and_exact() -> None:
     assert _field_names(LoadedModel) == (
         "definition", "training_result", "architecture", "module"
     )
+    assert _field_names(LoadedRuntimeModel) == ("definition", "artifact")
     assert _field_names(EvaluationContext) == (
-        "task", "corpus", "model", "parameters", "telemetry", "work_dir"
+        "task", "corpus", "model", "models", "parameters", "telemetry", "work_dir"
     )
     assert _field_names(EvaluationCandidate) == ("metrics", "artifacts")
     for cls in (
         TrainMaterializedCorpus, TrainContext, EvaluationMaterializedCorpus,
-        LoadedModel, EvaluationContext, EvaluationCandidate,
+        LoadedModel, LoadedRuntimeModel, EvaluationContext, EvaluationCandidate,
     ):
         assert cls.__dataclass_params__.frozen is True
     assert "__call__" in TrainCallable.__dict__

@@ -1,0 +1,6 @@
+{
+  "schema": "mjtensu.mldb-v2/namespace/v1",
+  "id": "recognition-runtime",
+  "name": "Recognition Runtime Models",
+  "description": "Immutable deployable ONNX artifacts used as auxiliary models by end-to-end recognition evaluations."
+}

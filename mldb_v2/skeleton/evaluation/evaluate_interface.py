@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Mapping, Protocol
+from typing import TYPE_CHECKING, Mapping, Protocol, TypeAlias
 
 from mldb_v2.skeleton.common.parameters import ResolvedPublicParameters
 from mldb_v2.skeleton.common.telemetry import TelemetryReporter
@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from mldb_v2.skeleton.catalog.architecture import Architecture
     from mldb_v2.skeleton.catalog.corpus import Corpus
     from mldb_v2.skeleton.catalog.task import Task
+    from mldb_v2.skeleton.catalog.runtime_model import RuntimeModel
     from mldb_v2.skeleton.training.model import Model
     from mldb_v2.skeleton.training.training_result import TrainingResult
 
@@ -33,10 +34,20 @@ class LoadedModel:
 
 
 @dataclass(frozen=True)
+class LoadedRuntimeModel:
+    definition: RuntimeModel
+    artifact: bytes
+
+
+AuxiliaryModel: TypeAlias = LoadedModel | LoadedRuntimeModel
+
+
+@dataclass(frozen=True)
 class EvaluationContext:
     task: Task
     corpus: MaterializedCorpus
     model: LoadedModel
+    models: Mapping[str, AuxiliaryModel]
     parameters: ResolvedPublicParameters
     telemetry: TelemetryReporter
     work_dir: Path

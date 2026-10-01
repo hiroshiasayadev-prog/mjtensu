@@ -30,6 +30,8 @@ Required fields are:
 | `metrics` | Mapping of formal scalar declarations; empty is valid. |
 | `artifacts` | Mapping of formal artifact declarations; empty is valid. |
 
+Optional `model_parameters` maps a protocol-local auxiliary-model alias to the name of one declared public parameter. Generic MLDB resolves each referenced parameter before `evaluate()` runs and exposes the loaded objects through `EvaluationContext.models`. A public parameter may appear under at most one alias. Unknown parameter names, duplicate parameter reuse, or a resolved value that is not a typed Model/Runtime Model ID are invalid.
+
 At least one entry across `metrics` and `artifacts` is required.
 Each `parameters.<key>` follows `spec:mldb.v2.common.public_parameters`.
 
@@ -63,7 +65,7 @@ Same-basename `<local-id>.py` is required and exposes `evaluate` according to
 
 A sealed protocol is immutable. Changing parameter keys/defaults/constraints, metric meaning/type/
 requiredness/preference, artifact format/schema/requiredness/`study_view`, or result-affecting executable behavior
-requires a new revision.
+requires a new revision. Changing `model_parameters` aliases or their parameter bindings also requires a new revision.
 
 Backend scalars/plots not declared here remain telemetry only. Missing optional outputs are permitted
 without a partial-success state; missing required outputs fail result acceptance.

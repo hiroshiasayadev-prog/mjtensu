@@ -1,0 +1,20 @@
+{
+  "schema": "mjtensu.mldb-v2/runtime-model/v1",
+  "id": "recognition-runtime/nanodet-plus-m-320-real-capture-ft10-l10-v1",
+  "name": "NanoDet Plus-m 320 real-capture FT10 L10",
+  "description": "Production axis-aligned Mahjong tile detector promoted from the real-capture fine-tune run.",
+  "role": "detector",
+  "format": "onnx",
+  "runtime_spec": "nanodet-plus-m-320-v1",
+  "artifact": {
+    "uri": "s3://mldb-runtime-models/recognition-runtime/nanodet-plus-m-320-real-capture-ft10-l10.onnx",
+    "bytes": 5597449,
+    "sha256": "9587a02dd1bbccfc14a925dc69c66b3c4a34ab628552b840ec113f7899dbf883"
+  },
+  "provenance": {
+    "source_run": ".local/recognition/nanodet_runs/E1_plus_m_320_real_capture_ft10_l10_seed42/model_best",
+    "production_model_set": "recognition-v2-2026-08-28",
+    "input_shape": [1, 3, 320, 320],
+    "output_shape": [1, 2125, 33]
+  }
+}

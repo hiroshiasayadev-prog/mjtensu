@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Mapping, Protocol, cast
+from typing import TYPE_CHECKING, Mapping, Protocol, TypeAlias, cast
 
 from mldb_v2.src.catalog._executable_definition_loading import _load_executable_callable
 from mldb_v2.src.common.ids import EntityKind, EvaluationProtocolId
@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from mldb_v2.src.catalog.task import Task
     from mldb_v2.src.training.model import Model
     from mldb_v2.src.training.training_result import TrainingResult
+    from mldb_v2.src.catalog.runtime_model import RuntimeModel
 
 
 @dataclass(frozen=True)
@@ -36,10 +37,20 @@ class LoadedModel:
 
 
 @dataclass(frozen=True)
+class LoadedRuntimeModel:
+    definition: RuntimeModel
+    artifact: bytes
+
+
+AuxiliaryModel: TypeAlias = LoadedModel | LoadedRuntimeModel
+
+
+@dataclass(frozen=True)
 class EvaluationContext:
     task: Task
     corpus: MaterializedCorpus
     model: LoadedModel
+    models: Mapping[str, AuxiliaryModel]
     parameters: ResolvedPublicParameters
     telemetry: TelemetryReporter
     work_dir: Path

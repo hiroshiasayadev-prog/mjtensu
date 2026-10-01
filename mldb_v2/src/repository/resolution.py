@@ -28,6 +28,7 @@ _DOMAIN_BY_KIND: dict[EntityKind, str] = {
     EntityKind.STUDY_PLAN: "study_plans",
     EntityKind.TRAINING_RESULT: "training_results",
     EntityKind.MODEL: "models",
+    EntityKind.RUNTIME_MODEL: "runtime_models",
     EntityKind.EVALUATION_RESULT: "evaluation_results",
     EntityKind.STUDY_RESULT: "study_results",
 }
@@ -43,6 +44,7 @@ _SCHEMA_BY_KIND: dict[EntityKind, str] = {
     EntityKind.STUDY_PLAN: "mjtensu.mldb-v2/study-plan/v1",
     EntityKind.TRAINING_RESULT: "mjtensu.mldb-v2/training-result/v1",
     EntityKind.MODEL: "mjtensu.mldb-v2/model/v1",
+    EntityKind.RUNTIME_MODEL: "mjtensu.mldb-v2/runtime-model/v1",
     EntityKind.EVALUATION_RESULT: "mjtensu.mldb-v2/evaluation-result/v1",
     EntityKind.STUDY_RESULT: "mjtensu.mldb-v2/study-result/v1",
 }

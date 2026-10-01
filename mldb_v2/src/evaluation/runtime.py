@@ -17,6 +17,7 @@ from mldb_v2.src.backend.stage_input import (
 from mldb_v2.src.catalog.architecture import _load_architecture_definition
 from mldb_v2.src.catalog.corpus import _load_corpus
 from mldb_v2.src.catalog.task import _load_task
+from mldb_v2.src.catalog.runtime_model import _load_runtime_model
 from mldb_v2.src.common.ids import (
     _validate_evaluation_coordinate_id,
     _validate_trial_id,
@@ -31,6 +32,7 @@ from mldb_v2.src.evaluation.evaluate_interface import (
     EvaluationCandidate,
     EvaluationContext,
     LoadedModel,
+    LoadedRuntimeModel,
     MaterializedCorpus,
     _load_evaluation_callable,
 )
@@ -51,7 +53,7 @@ from mldb_v2.src.training.canonical_weights import (
     _load_state_into_fresh_architecture,
     _validate_canonical_weights_artifact_ref,
 )
-from mldb_v2.src.training.model import _load_model
+from mldb_v2.src.training.model import _load_model, _resolve_model_lineage
 from mldb_v2.src.training.training_result import _load_training_result
 
 _STAGE_INPUT_SCHEMA = "mjtensu.mldb-v2/stage-input/v1"
@@ -303,6 +305,60 @@ def _publish_candidate_artifacts(
     return published
 
 
+def _load_auxiliary_models(
+    *,
+    protocol: EvaluationProtocol,
+    parameters: Mapping[str, object],
+    pinned_root: Path,
+    object_bytes: _ObjectByteAccess,
+) -> dict[str, LoadedModel | LoadedRuntimeModel]:
+    loaded: dict[str, LoadedModel | LoadedRuntimeModel] = {}
+    for alias, parameter_name in protocol.get("model_parameters", {}).items():
+        raw_model_id = parameters[parameter_name]
+        if type(raw_model_id) is not str:
+            raise ValueError(f"model parameter {parameter_name} must resolve to a Model id")
+        model_id = _validate_typed_reference(raw_model_id)
+
+        canonical_lineage = None
+        runtime_definition = None
+        try:
+            canonical_lineage = _resolve_model_lineage(pinned_root, model_id)
+        except FileNotFoundError:
+            pass
+        try:
+            runtime_definition = _load_runtime_model(pinned_root, model_id)
+        except FileNotFoundError:
+            pass
+
+        if canonical_lineage is not None and runtime_definition is not None:
+            raise ValueError(f"model parameter {parameter_name} is ambiguous")
+        if canonical_lineage is None and runtime_definition is None:
+            raise ValueError(f"model parameter {parameter_name} does not resolve to a Model")
+
+        if canonical_lineage is not None:
+            weight_bytes = object_bytes.read_verified(canonical_lineage.weights)
+            state = _load_canonical_state_dict_bytes(
+                weight_bytes, ref=canonical_lineage.weights
+            )
+            module = _load_state_into_fresh_architecture(
+                pinned_root, canonical_lineage.architecture["id"], state
+            )
+            loaded[alias] = LoadedModel(
+                definition=canonical_lineage.model,
+                training_result=canonical_lineage.training_result,
+                architecture=canonical_lineage.architecture,
+                module=module,
+            )
+            continue
+
+        assert runtime_definition is not None
+        loaded[alias] = LoadedRuntimeModel(
+            definition=runtime_definition,
+            artifact=object_bytes.read_verified(runtime_definition["artifact"]),
+        )
+    return loaded
+
+
 def _execute_evaluation_stage(
     stage_input: EvaluationStageInput,
     *,
@@ -377,6 +433,12 @@ def _execute_evaluation_stage(
         architecture=architecture,
         module=module,
     )
+    auxiliary_models = _load_auxiliary_models(
+        protocol=protocol,
+        parameters=parameters,
+        pinned_root=pinned_root,
+        object_bytes=object_bytes,
+    )
     telemetry = _RecordingTelemetryReporter(sink=telemetry_sink)
     context = EvaluationContext(
         task=task,
@@ -385,6 +447,7 @@ def _execute_evaluation_stage(
             root=Path(materialized_root),
         ),
         model=loaded_model,
+        models=auxiliary_models,
         parameters=parameters,
         telemetry=telemetry,
         work_dir=Path(work_dir),

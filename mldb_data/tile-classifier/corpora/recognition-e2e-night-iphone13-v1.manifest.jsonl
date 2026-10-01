@@ -1,0 +1,11 @@
+{"path":"ground-truth.json","bytes":10497,"sha256":"dc8ec770a62d41fdd161e307d275a46f2c341db303e6d67e2a0762ade1bc418b"}
+{"path":"t1/capture.json","bytes":1308,"sha256":"d5c2a498c93395ed8f967b993361b98243a91b45f4967d717c506dc5cf225428"}
+{"path":"t1/video.mp4","bytes":35348482,"sha256":"51557d73262cbde333b2cd413ba1b202c66dba144ea1648ac11c5a820c9818f5"}
+{"path":"t2/capture.json","bytes":1308,"sha256":"d115abf05751dda6d7bc9b11c3d76bd59f67e4a34f6fccf77bec9fd129243cce"}
+{"path":"t2/video.mp4","bytes":35690033,"sha256":"e23dea1f6f6b8d87fa69cff4d000b1e7128787793c590ac3630ec85accb86eef"}
+{"path":"t3/capture.json","bytes":1308,"sha256":"a7188caef66f60f8dfdf363fba4e5b13930d3fd83e99a95734be419b864beb01"}
+{"path":"t3/video.mp4","bytes":35332474,"sha256":"edd508f5c155fe2f72eac0ae5032501ee28f6cc395ab49bec22b77c5a658f75d"}
+{"path":"t4/capture.json","bytes":1308,"sha256":"537c4b8fd2f2de421fc3ab677ff54cab7d204465c8b944419027213b6763ee8e"}
+{"path":"t4/video.mp4","bytes":35681157,"sha256":"22b2714dde150a484f0c4f94d118e0e6a460e61c4716c37d7b55234f98585560"}
+{"path":"t5/capture.json","bytes":1308,"sha256":"b85003953ad4c466154221af4fae444ae02adbca67e4edd0cde9e4fa36eb7d00"}
+{"path":"t5/video.mp4","bytes":35734451,"sha256":"5c240c33457ebdac14d9b41670aa93b823a57c7ded90f974bf9f8672978e485f"}
