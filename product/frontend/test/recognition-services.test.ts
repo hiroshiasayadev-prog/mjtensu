@@ -8,7 +8,10 @@ import type {
   RealtimeRecognitionListener,
   RealtimeRecognitionUpdate,
 } from '@/recognition';
-import { createProductionRecognitionPipeline } from '@/recognition/production-pipeline';
+import {
+  createProductionRecognitionPipeline,
+  type RecognitionEvaluationTrace,
+} from '@/recognition/production-pipeline';
 import {
   createRealtimeRecognizer,
   RECOGNITION_REQUEST_CADENCE_MS,
@@ -159,6 +162,43 @@ describe('production recognition one-frame composition', () => {
     expect(base.runCalls).toHaveLength(0);
     expect(redFive.runCalls).toHaveLength(0);
     expect(snapshot.observations).toEqual([]);
+  });
+
+  it('emits lightweight evaluation trace only when requested without changing the snapshot', async () => {
+    const detector = new FakeInferenceSession([
+      tensorOutput(new Float32Array(1), [1, 1, 1]),
+    ]);
+    const base = new FakeInferenceSession([
+      classifierOutput(logitsFor('1m')),
+    ]);
+    const redFive = new FakeInferenceSession([]);
+    const candidate = detection('hand-1', 'completed_hand', 100, 700);
+    const traces: RecognitionEvaluationTrace[] = [];
+    const pipeline = createProductionRecognitionPipeline({
+      modelRuntime: fakeModelInspection({ detector, base, redFive }),
+      classifierNormalizationOverride: testNormalization,
+      detectorPostprocessor: { process: () => [candidate] },
+      platform: fakePipelinePlatform(),
+      onEvaluationTrace: (trace) => traces.push(trace),
+    });
+
+    const snapshot = await pipeline.evaluate(frame());
+
+    expect(traces).toHaveLength(1);
+    expect(traces[0]?.snapshot).toBe(snapshot);
+    expect(traces[0]?.detections).toEqual([
+      {
+        id: 'hand-1',
+        detectionIndex: 0,
+        confidence: 0.9,
+        region: 'completed-hand',
+        sourceBox: { x: 100, y: 700, width: 40, height: 80 },
+        classification: {
+          kind: 'tile',
+          tile: { kind: '1m', red: false },
+        },
+      },
+    ]);
   });
 
   it('captures the exact claimed detector input and output through the debug seam', async () => {

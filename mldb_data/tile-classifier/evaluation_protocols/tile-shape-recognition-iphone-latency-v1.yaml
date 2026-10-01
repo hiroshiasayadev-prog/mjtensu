@@ -1,0 +1,81 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-recognition-iphone-latency-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Production recognition iPhone latency v1",
+  "description": "Replay the sealed five-video iPhone 13 corpus at normal speed on the physical iPhone and measure only production recognition pipeline timing/cadence. Ground-truth comparison, semantic stabilization, prediction tracing, and visualization are intentionally excluded so diagnostic work cannot perturb the latency measurement. The base classifier is the primary MLDB Model; detector and red-five classifier are selected independently by Model ID.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "f8ea26ad1e6ddf2b31961f86450605cdf1fd9fb4328ea63015cdeb651bd6f16d"
+  },
+  "parameters": {
+    "detector_model": {
+      "default": null,
+      "description": "Auxiliary detector Model ID. Must resolve to a browser-deployable detector Runtime Model for this classifier-primary protocol."
+    },
+    "red_five_model": {
+      "default": null,
+      "description": "Auxiliary red-five classifier Runtime Model ID."
+    }
+  },
+  "model_parameters": {
+    "detector": "detector_model",
+    "red-five-classifier": "red_five_model"
+  },
+  "metrics": {
+    "latency_mean_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "latency_p50_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "latency_p95_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "effective_eval_hz": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Completed production-pipeline evaluations per second of source video."
+    },
+    "cadence_fulfillment_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Completed evaluations divided by the nominal 10 Hz evaluation opportunities over source-video duration."
+    },
+    "eval_gap_p95_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Worst per-take p95 gap between evaluated source-video timestamps."
+    },
+    "eval_gap_max_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Maximum gap between evaluated source-video timestamps across all takes."
+    }
+  },
+  "artifacts": {
+    "onnx_model": {
+      "format": "onnx",
+      "schema": "mjtensu.recognition/base-classifier-onnx/v1",
+      "required": true,
+      "description": "Tensor-only ONNX export of the primary base classifier used by ORT Web."
+    },
+    "latency_report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/iphone-latency/v1",
+      "required": true,
+      "description": "Per-take timing/cadence samples, environment, and exact model identity. Contains no GT/semantic trace."
+    }
+  }
+}

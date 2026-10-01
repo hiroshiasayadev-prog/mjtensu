@@ -87,6 +87,21 @@ export type RecognitionDebugCaptureBuilder = (
   input: RecognitionDebugCaptureBuilderInput,
 ) => RecognitionDebugCapture;
 
+export interface RecognitionEvaluationTraceDetection {
+  readonly id: string;
+  readonly detectionIndex: number;
+  readonly confidence: number;
+  readonly region: RecognitionRegion;
+  readonly sourceBox: Rect;
+  readonly sourceOrientedBox?: OrientedRect;
+  readonly classification: TileClassification;
+}
+
+export interface RecognitionEvaluationTrace {
+  readonly detections: readonly RecognitionEvaluationTraceDetection[];
+  readonly snapshot: FrameRecognitionSnapshot;
+}
+
 export interface ProductionRecognitionPipelineDependencies {
   readonly modelRuntime: RecognitionModelRuntimeInspection;
   /** Test-only/internal seam. Production composition resolves this from runtimeSpec. */
@@ -95,6 +110,7 @@ export interface ProductionRecognitionPipelineDependencies {
   readonly platform?: RecognitionPipelinePlatform;
   readonly now?: () => number;
   readonly onEvaluationTiming?: (timing: RecognitionEvaluationTiming) => void;
+  readonly onEvaluationTrace?: (trace: RecognitionEvaluationTrace) => void;
   readonly modelSetVersion?: string;
   readonly claimDebugCapture?: () => boolean;
   readonly onDebugCapture?: (capture: RecognitionDebugCapture) => void;
@@ -264,6 +280,33 @@ export function createProductionRecognitionPipeline(
         redFiveClassifierPreprocessingMs: classifierTiming.redFivePreprocessingMs,
         redFiveClassifierInferenceMs: classifierTiming.redFiveInferenceMs,
       });
+    }
+
+    if (dependencies.onEvaluationTrace !== undefined) {
+      try {
+        dependencies.onEvaluationTrace({
+          detections: detections.map((detection, index) => {
+            const classification = classifications[index];
+            if (classification === undefined) {
+              throw modelIncompatible('tile-classifier');
+            }
+            return {
+              id: detection.id,
+              detectionIndex: detection.detectionIndex,
+              confidence: detection.confidence,
+              region: toRecognitionRegion(detection.region),
+              sourceBox: { ...detection.sourceBox },
+              ...(detection.sourceOrientedBox === undefined
+                ? {}
+                : { sourceOrientedBox: { ...detection.sourceOrientedBox } }),
+              classification,
+            };
+          }),
+          snapshot,
+        });
+      } catch {
+        // Diagnostics must never change Recognition behavior.
+      }
     }
 
     if (debugRequested) {
