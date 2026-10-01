@@ -284,16 +284,16 @@ function mean(values: readonly number[]): number | null {
   return values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
-function waitForVideoReady(video: HTMLVideoElement): Promise<void> {
-  if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) return Promise.resolve();
+function waitForVideoMetadata(video: HTMLVideoElement): Promise<void> {
+  if (video.readyState >= 1 && video.videoWidth > 0 && video.videoHeight > 0) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const ready = () => { cleanup(); resolve(); };
-    const fail = () => { cleanup(); reject(new Error('video load failed')); };
+    const fail = () => { cleanup(); reject(new Error('video metadata load failed')); };
     const cleanup = () => {
-      video.removeEventListener('loadeddata', ready);
+      video.removeEventListener('loadedmetadata', ready);
       video.removeEventListener('error', fail);
     };
-    video.addEventListener('loadeddata', ready, { once: true });
+    video.addEventListener('loadedmetadata', ready, { once: true });
     video.addEventListener('error', fail, { once: true });
   });
 }
@@ -310,7 +310,7 @@ async function runTake(
   video.crossOrigin = 'anonymous';
   video.src = take.videoUrl;
   document.body.appendChild(video);
-  await waitForVideoReady(video);
+  await waitForVideoMetadata(video);
 
   const { aspectRatio, rotation } = take.capture.logicalCapture;
   const size = canonicalCaptureSize(video.videoWidth, video.videoHeight, aspectRatio, rotation);

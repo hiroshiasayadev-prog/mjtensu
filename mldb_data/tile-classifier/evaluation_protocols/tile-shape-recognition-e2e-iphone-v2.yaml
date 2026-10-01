@@ -1,0 +1,107 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-recognition-e2e-iphone-v2",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Full recognition pipeline iPhone video E2E v2",
+  "description": "Replay the sealed five-video iPhone 13 night corpus at normal speed through the production recognition pipeline. The primary MLDB Model is the base tile classifier; detector and red-five classifier are selected by Model ID per evaluation. Measure semantic agreement against fixed ground truth together with production-cadence throughput and end-to-end latency. v2 starts muted playback after loadedmetadata so iOS Safari can advance from metadata-only preload before frame evaluation begins.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "2b5ea1b6a863db5cf1af565685cd5fb372ec9bd5ac5e9b260e72a268ebd64ca3"
+  },
+  "parameters": {
+    "detector_model": {
+      "default": null,
+      "description": "Auxiliary detector Model ID. Must resolve to a browser-deployable detector Runtime Model for this classifier-primary protocol."
+    },
+    "red_five_model": {
+      "default": null,
+      "description": "Auxiliary red-five classifier Runtime Model ID."
+    }
+  },
+  "model_parameters": {
+    "detector": "detector_model",
+    "red-five-classifier": "red_five_model"
+  },
+  "metrics": {
+    "frame_semantic_exact_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Fraction of evaluated frames whose completed hand, dora indicators, and meld semantics exactly match GT."
+    },
+    "completed_hand_exact_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "dora_exact_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "meld_exact_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "eligible_frame_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "take_confirmed_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Fraction of the five takes that reach the production three-consecutive semantic confirmation state."
+    },
+    "take_confirmed_exact_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Fraction of the five takes whose first production confirmation exactly matches GT."
+    },
+    "latency_mean_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "latency_p50_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "latency_p95_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "effective_eval_hz": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Completed production-pipeline evaluations per second of source video."
+    },
+    "cadence_skip_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Fraction of 100 ms recognition request ticks skipped because an evaluation was already in flight."
+    }
+  },
+  "artifacts": {
+    "onnx_model": {
+      "format": "onnx",
+      "schema": "mjtensu.recognition/base-classifier-onnx/v1",
+      "required": true,
+      "description": "Tensor-only ONNX export of the primary base classifier used by ORT Web."
+    },
+    "e2e_report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/e2e-iphone/v1",
+      "required": true,
+      "description": "Per-take semantic, cadence, timing, environment, and exact model identity report."
+    }
+  }
+}
