@@ -3,10 +3,10 @@
   "id": "tile-classifier/recognition-e2e-iphone-smoke-v1",
   "status": "sealed",
   "name": "Recognition E2E iPhone smoke v1",
-  "description": "Actual iPhone browser-runner smoke of the full recognition E2E protocol on the sealed five-video corpus. This run validates the three-model selection seam, browser transport, production pipeline replay, semantic GT scoring, cadence, and timing telemetry before detector/classifier comparison studies are authored.",
+  "description": "Actual iPhone browser-runner smoke of the full recognition E2E protocol on the sealed five-video corpus. This run validates the three-model selection seam, browser transport, production pipeline replay, semantic GT scoring, cadence, and timing telemetry before detector/classifier comparison studies are authored. The primary classifier is an existing ShuffleNet model whose canonical weights remain available in MLDB object storage.",
   "model": {
     "existing": [
-      "tile-classifier/run-bc6fe4f59d1946daa7dbd95f8ac85d1c-trial-0001-model"
+      "tile-classifier/run-70f6ddae5a5446478dbd0e15a9523d52-trial-0004-model"
     ]
   },
   "evaluations": [
