@@ -7,7 +7,7 @@
   "description": "Evaluate the sealed five-video corpus at deterministic 100 ms source-video intervals on a normal worker. Run the production TypeScript detector/classifier/semantic pipeline and production three-consecutive stabilizer, compare against fixed GT, emit per-evaluation bbox/OBB/classification trace, and render an overlay MP4. This protocol intentionally does not measure physical-iPhone latency.",
   "implementation": {
     "entrypoint": "evaluate",
-    "sha256": "1bf1f36e4c80b341b7d5c73ef058a5534d99deee808c519ce283e73ac77419d3"
+    "sha256": "8c4c012d1415e1e188ca00d94b438a57e7003668efcfac7ecffc28c88e079017"
   },
   "parameters": {
     "detector_model": {

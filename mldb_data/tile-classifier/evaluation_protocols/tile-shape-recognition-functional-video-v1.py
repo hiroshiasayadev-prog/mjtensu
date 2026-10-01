@@ -682,6 +682,8 @@ def _render_overlay_video(
         raise RuntimeError("could not decode first functional video")
     canonical = _canonical_frame(first_frame, first_capture)
     height, width = canonical.shape[:2]
+    encoded_width = width + (width % 2)
+    encoded_height = height + (height % 2)
     output_fps = 30.0
 
     command = [
@@ -689,6 +691,7 @@ def _render_overlay_video(
         "-f", "rawvideo", "-pix_fmt", "bgr24",
         "-s", f"{width}x{height}", "-r", str(output_fps),
         "-i", "-", "-an",
+        "-vf", f"pad={encoded_width}:{encoded_height}:0:0",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
         "-pix_fmt", "yuv420p", str(destination),
     ]
@@ -737,8 +740,10 @@ def _render_overlay_video(
     return {
         "frames": total_frames,
         "fps": output_fps,
-        "width": width,
-        "height": height,
+        "width": encoded_width,
+        "height": encoded_height,
+        "source_width": width,
+        "source_height": height,
         "bytes": destination.stat().st_size,
         "sha256": hashlib.sha256(destination.read_bytes()).hexdigest(),
     }
