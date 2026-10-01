@@ -101,6 +101,7 @@ _ARTIFACT_EXTENSIONS = {
     "json": ".json",
     "jsonl": ".jsonl",
     "html": ".html",
+    "mp4": ".mp4",
 }
 
 
@@ -165,7 +166,7 @@ def _project_evaluation_artifacts(
                 },
                 wait_on_upload=False,
             )
-            if artifact_format not in {"png", "csv", "plotly-json"}:
+            if artifact_format not in {"png", "csv", "plotly-json", "mp4"}:
                 continue
             if logger is None:
                 logger = _clearml_logger(task)
@@ -179,7 +180,7 @@ def _project_evaluation_artifacts(
                 if not callable(report_table):
                     raise ClearMLSDKError("ClearML logger does not expose report_table()")
                 report_table(title="evaluation tables", series=name, iteration=0, csv=str(path))
-            else:
+            elif artifact_format == "plotly-json":
                 report_plotly = getattr(logger, "report_plotly", None)
                 if not callable(report_plotly):
                     raise ClearMLSDKError("ClearML logger does not expose report_plotly()")
@@ -188,6 +189,16 @@ def _project_evaluation_artifacts(
                     series=name,
                     iteration=0,
                     figure=json.loads(data.decode("utf-8")),
+                )
+            else:
+                report_media = getattr(logger, "report_media", None)
+                if not callable(report_media):
+                    raise ClearMLSDKError("ClearML logger does not expose report_media()")
+                report_media(
+                    title="evaluation media",
+                    series=name,
+                    iteration=0,
+                    local_path=str(path),
                 )
         except Exception as exc:
             print(f"MLDB ClearML artifact projection skipped {name!r}: {exc}")

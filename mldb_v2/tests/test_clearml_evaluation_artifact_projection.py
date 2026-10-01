@@ -27,6 +27,7 @@ class _Logger:
         self.images: list[dict[str, object]] = []
         self.tables: list[dict[str, object]] = []
         self.plots: list[dict[str, object]] = []
+        self.media: list[dict[str, object]] = []
 
     def report_image(self, **kwargs: object) -> None:
         self.images.append(dict(kwargs))
@@ -36,6 +37,9 @@ class _Logger:
 
     def report_plotly(self, **kwargs: object) -> None:
         self.plots.append(dict(kwargs))
+
+    def report_media(self, **kwargs: object) -> None:
+        self.media.append(dict(kwargs))
 
 
 class _Task:
@@ -69,17 +73,20 @@ def test_evaluation_artifacts_project_to_clearml_rich_surfaces(tmp_path: Path) -
     csv_data = b"case,accuracy\nfront,1.0\n"
     plot = json.dumps({"data": [{"type": "bar", "x": ["front"], "y": [1.0]}]}).encode()
     report = b'{"schema":"demo/report/v1"}\n'
+    video = b"\x00\x00\x00\x18ftypmp42fixture"
     objects = {
         "s3://bucket/contact.png": png,
         "s3://bucket/summary.csv": csv_data,
         "s3://bucket/robustness.plotly.json": plot,
         "s3://bucket/report.json": report,
+        "s3://bucket/overlay.mp4": video,
     }
     artifacts = {
         "contact_sheet": _ref("s3://bucket/contact.png", png, "png"),
         "summary_table": _ref("s3://bucket/summary.csv", csv_data, "csv"),
         "robustness_plot": _ref("s3://bucket/robustness.plotly.json", plot, "plotly-json"),
         "report_json": _ref("s3://bucket/report.json", report, "json"),
+        "overlay_video": _ref("s3://bucket/overlay.mp4", video, "mp4"),
     }
     task = _Task()
 
@@ -93,13 +100,18 @@ def test_evaluation_artifacts_project_to_clearml_rich_surfaces(tmp_path: Path) -
     assert [call["name"] for call in task.uploads] == [
         "evaluation/contact_sheet", "evaluation/summary_table",
         "evaluation/robustness_plot", "evaluation/report_json",
+        "evaluation/overlay_video",
     ]
     assert [call["series"] for call in task.logger.images] == ["contact_sheet"]
     assert [call["series"] for call in task.logger.tables] == ["summary_table"]
     assert [call["series"] for call in task.logger.plots] == ["robustness_plot"]
+    assert [call["series"] for call in task.logger.media] == ["overlay_video"]
     assert task.logger.plots[0]["figure"] == json.loads(plot)
+    assert task.logger.media[0]["title"] == "evaluation media"
+    assert task.logger.media[0]["local_path"] == str(tmp_path / "overlay_video.mp4")
     assert (tmp_path / "contact_sheet.png").read_bytes() == png
     assert (tmp_path / "summary_table.csv").read_bytes() == csv_data
+    assert (tmp_path / "overlay_video.mp4").read_bytes() == video
 
 
 def test_projection_failure_isolated_from_other_artifacts(tmp_path: Path) -> None:
