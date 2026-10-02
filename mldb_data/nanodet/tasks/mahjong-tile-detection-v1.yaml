@@ -1,0 +1,38 @@
+{
+  "schema": "mjtensu.mldb-v2/task/v1",
+  "id": "nanodet/mahjong-tile-detection-v1",
+  "status": "sealed",
+  "name": "Mahjong tile axis-aligned detection",
+  "problem_type": "object-detection",
+  "description": "Detect every Mahjong tile in the fixed 320x320 semantic composite and regress an axis-aligned bounding box.",
+  "input": {
+    "semantic_unit": "fixed-semantic-composite-image",
+    "width": 320,
+    "height": 320
+  },
+  "target": {
+    "type": "object-detection",
+    "labels": [
+      "mahjong_tile"
+    ],
+    "geometry": {
+      "format": "x-y-width-height",
+      "coordinate_space": "composite-pixels"
+    }
+  },
+  "semantics": {
+    "class_policy": "all tile faces share one detector class",
+    "box_policy": "one axis-aligned box per visible Mahjong tile"
+  },
+  "scope": {
+    "includes": [
+      "completed hand",
+      "dora indicators",
+      "melds"
+    ],
+    "excludes": [
+      "tile identity classification",
+      "tile rotation angle regression"
+    ]
+  }
+}

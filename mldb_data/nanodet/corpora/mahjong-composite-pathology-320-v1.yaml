@@ -1,0 +1,35 @@
+{
+  "schema": "mjtensu.mldb-v2/corpus/v1",
+  "id": "nanodet/mahjong-composite-pathology-320-v1",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "description": "Frozen application-format 320x320 composite corpus for NanoDet localization-pathology evaluation. train_diag contains unique detector-training composites only; val combines held-out composite and held-out real-capture layouts.",
+  "storage": {
+    "root_uri": "s3://mldb-corpora/nanodet/mahjong-composite-pathology-320-v1"
+  },
+  "manifest": {
+    "file": "mahjong-composite-pathology-320-v1.manifest.jsonl",
+    "sha256": "2ce7ba61fd437910c34da5d1e78ed42ec9c652236b25c59bb86de52902c48ebf",
+    "entries": 1
+  },
+  "representation": {
+    "kind": "sqlite-axis-aligned-object-detection",
+    "file": "dataset.sqlite",
+    "table": "sample",
+    "image_column": "image_chw_u8",
+    "annotations_column": "annotations_json",
+    "source_domain_column": "source_domain",
+    "source_file_name_column": "source_file_name",
+    "dtype": "uint8",
+    "shape": [
+      3,
+      320,
+      320
+    ],
+    "geometry": "x-y-width-height"
+  },
+  "splits": {
+    "train_diag": 318,
+    "val": 79
+  }
+}

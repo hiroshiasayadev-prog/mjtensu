@@ -1,0 +1,68 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "nanodet/nanodet-plus-m320-ghostpan-baseline-v1",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "name": "NanoDet Plus M320 GhostPAN baseline",
+  "family": "nanodet-plus-m320-ghostpan-screen",
+  "description": "NanoDet Plus-m 320 AABB detector using ShuffleNetV2 1.0x with the production-compatible head and one controlled GhostPAN variation.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sources": [
+      {
+        "path": "mldb_data/nanodet/lib/nanodet_plus_aabb_v1.py",
+        "sha256": "24d87befabf580d14126ce8284695f9a77603944f2ecd9dcd7be10c22c688cc8"
+      }
+    ],
+    "sha256": "6de5d6eec9b88d12b5b6d2aa052a5e0cace36210f571599f3f2e03ca65aedcd0"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        3,
+        320,
+        320
+      ]
+    },
+    "output": {
+      "kind": "nanodet-dense-aabb",
+      "shape": [
+        "N",
+        2125,
+        33
+      ]
+    }
+  },
+  "structure": {
+    "summary": "ShuffleNetV2 1.0x + GhostPAN96 k5 extra1 + NanoDet Plus head; use_depthwise=true, use_res=false, num_blocks=1",
+    "traits": [
+      "rgb",
+      "shufflenet-v2-1.0x",
+      "nanodet-plus",
+      "qfl",
+      "dfl",
+      "dsla",
+      "aux-head",
+      "ghostpan",
+      "depthwise-downsample",
+      "single-block"
+    ]
+  },
+  "parameters": {
+    "ghostpan_out_channels": 96,
+    "ghostpan_kernel_size": 5,
+    "ghostpan_num_extra_level": 1,
+    "ghostpan_use_depthwise": true,
+    "ghostpan_use_res": false,
+    "ghostpan_num_blocks": 1,
+    "strides": [
+      8,
+      16,
+      32,
+      64
+    ],
+    "reg_max": 7
+  }
+}

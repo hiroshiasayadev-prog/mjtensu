@@ -1,0 +1,291 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "nanodet/bbox-pathology-v2",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "name": "NanoDet bounding-box pathology evaluation v2",
+  "description": "Evaluate NanoDet-style raw head outputs on frozen 320x320 application composites. v2 adds pathological bbox-explosion diagnostics at the score-threshold candidate stage and after NMS while preserving duplicate, multi-GT, spurious, miss, count-delta, and ordinary IoU=0.5 detection metrics.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "07186cffcfb224247b44b5d954e00296cf607db6046317780d13fee5a6ab52b1"
+  },
+  "parameters": {
+    "split": {
+      "default": "val",
+      "type": "string"
+    },
+    "batch_size": {
+      "default": 32,
+      "type": "integer",
+      "minimum": 1
+    },
+    "workers": {
+      "default": 4,
+      "type": "integer",
+      "minimum": 0
+    },
+    "score_threshold": {
+      "default": 0.35,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "nms_iou_threshold": {
+      "default": 0.6,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "max_detections": {
+      "default": 200,
+      "type": "integer",
+      "minimum": 1
+    },
+    "pathology_overlap_threshold": {
+      "default": 0.25,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "duplicate_overlap_threshold": {
+      "default": 0.8,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "worst_count": {
+      "default": 16,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64
+    }
+  },
+  "metrics": {
+    "precision_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "recall_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "f1_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "duplicate_gt_rate_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "multi_gt_prediction_rate_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "spurious_prediction_rate_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "missed_gt_rate_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "affected_image_rate_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "positive_count_delta_image_rate_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "precision_after_product": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "recall_after_product": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "f1_after_product": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "duplicate_gt_rate_after_product": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "multi_gt_prediction_rate_after_product": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "spurious_prediction_rate_after_product": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "missed_gt_rate_after_product": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "affected_image_rate_after_product": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "positive_count_delta_image_rate_after_product": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "ground_truth_count": {
+      "type": "integer",
+      "required": true,
+      "preference": "neutral"
+    },
+    "prediction_count_after_nms": {
+      "type": "integer",
+      "required": true,
+      "preference": "neutral"
+    },
+    "prediction_count_after_product": {
+      "type": "integer",
+      "required": true,
+      "preference": "neutral"
+    },
+    "raw_candidate_count_p95": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Nearest-rank p95 count of score-threshold-passing raw head candidates before NMS."
+    },
+    "raw_candidate_count_max": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower",
+      "description": "Maximum score-threshold-passing raw head candidate count on one image before NMS."
+    },
+    "bbox_excess_p95_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Nearest-rank p95 of max(0, prediction_count - GT_count) after NMS."
+    },
+    "bbox_excess_max_after_nms": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower",
+      "description": "Maximum max(0, prediction_count - GT_count) after NMS."
+    },
+    "bbox_count_ratio_p95_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Nearest-rank p95 of prediction_count / GT_count after NMS."
+    },
+    "bbox_count_ratio_max_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Maximum prediction_count / GT_count after NMS."
+    },
+    "max_detections_hit_rate_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Image fraction whose NMS output reaches max_detections, indicating a censored bbox explosion."
+    },
+    "bbox_excess_p95_after_product": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Nearest-rank p95 of max(0, prediction_count - GT_count) after production duplicate suppression."
+    },
+    "bbox_excess_max_after_product": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower",
+      "description": "Maximum max(0, prediction_count - GT_count) after production duplicate suppression."
+    },
+    "bbox_count_ratio_p95_after_product": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Nearest-rank p95 of prediction_count / GT_count after production duplicate suppression."
+    },
+    "bbox_count_ratio_max_after_product": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Maximum prediction_count / GT_count after production duplicate suppression."
+    }
+  },
+  "artifacts": {
+    "summary_json": {
+      "format": "json",
+      "schema": "mjtensu.nanodet/bbox-pathology-summary/v2",
+      "required": true
+    },
+    "per_image_details": {
+      "format": "jsonl",
+      "schema": "mjtensu.nanodet/bbox-pathology-per-image/v2",
+      "required": true
+    },
+    "after_nms_duplicate_contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.nanodet/bbox-pathology-contact-sheet/v1",
+      "required": true,
+      "study_view": "select"
+    },
+    "after_nms_multi_gt_contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.nanodet/bbox-pathology-contact-sheet/v1",
+      "required": true,
+      "study_view": "select"
+    },
+    "after_nms_spurious_contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.nanodet/bbox-pathology-contact-sheet/v1",
+      "required": true,
+      "study_view": "select"
+    },
+    "after_nms_miss_contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.nanodet/bbox-pathology-contact-sheet/v1",
+      "required": true,
+      "study_view": "select"
+    },
+    "after_nms_overall_contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.nanodet/bbox-pathology-contact-sheet/v1",
+      "required": true,
+      "study_view": "select"
+    },
+    "after_product_overall_contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.nanodet/bbox-pathology-contact-sheet/v1",
+      "required": true,
+      "study_view": "select"
+    },
+    "after_nms_explosion_contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.nanodet/bbox-pathology-contact-sheet/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "Worst NMS-stage bbox-count explosion samples ranked by prediction/GT ratio, excess count, then raw candidate count."
+    }
+  }
+}

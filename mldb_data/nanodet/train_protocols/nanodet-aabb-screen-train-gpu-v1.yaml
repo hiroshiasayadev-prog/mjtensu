@@ -1,0 +1,71 @@
+{
+  "schema": "mjtensu.mldb-v2/train-protocol/v1",
+  "id": "nanodet/nanodet-aabb-screen-train-gpu-v1",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "name": "NanoDet AABB compact architecture-screen training",
+  "description": "Scratch-train NanoDet Plus AABB candidates on the frozen application-composite diagnostic train split with the native NanoDet QFL/DFL/GIoU loss, DSLA assignment, and auxiliary guidance. This is a bounded architecture-screen protocol, not the later full 14k-corpus production retrain.",
+  "implementation": {
+    "entrypoint": "train",
+    "sha256": "606c1826c02637964e0f9441eaedbf7d43d6eca032dba4d10f3fb7c41e097020"
+  },
+  "parameters": {
+    "epochs": {
+      "default": 80,
+      "type": "integer",
+      "minimum": 1
+    },
+    "batch_size": {
+      "default": 16,
+      "type": "integer",
+      "minimum": 1
+    },
+    "workers": {
+      "default": 4,
+      "type": "integer",
+      "minimum": 0
+    },
+    "learning_rate": {
+      "default": 0.001,
+      "type": "number",
+      "minimum": 1e-07
+    },
+    "weight_decay": {
+      "default": 0.05,
+      "type": "number",
+      "minimum": 0.0
+    },
+    "warmup_epochs": {
+      "default": 3.0,
+      "type": "number",
+      "minimum": 0.0
+    },
+    "eta_min": {
+      "default": 0.00005,
+      "type": "number",
+      "minimum": 0.0
+    },
+    "grad_clip": {
+      "default": 35.0,
+      "type": "number",
+      "minimum": 0.0
+    },
+    "validation_interval": {
+      "default": 5,
+      "type": "integer",
+      "minimum": 1
+    },
+    "train_split": {
+      "default": "train_diag",
+      "type": "string"
+    },
+    "validation_split": {
+      "default": "val",
+      "type": "string"
+    },
+    "amp": {
+      "default": true,
+      "type": "boolean"
+    }
+  }
+}

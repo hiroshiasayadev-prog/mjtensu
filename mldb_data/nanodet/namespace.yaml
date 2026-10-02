@@ -1,0 +1,6 @@
+{
+  "schema": "mjtensu.mldb-v2/namespace/v1",
+  "id": "nanodet",
+  "name": "NanoDet",
+  "description": "Mahjong tile detector experiments based on NanoDet Plus and project-owned NanoDet-derived variants."
+}

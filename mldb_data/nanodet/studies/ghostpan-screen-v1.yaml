@@ -1,0 +1,58 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "nanodet/ghostpan-screen-v1",
+  "status": "sealed",
+  "name": "NanoDet GhostPAN pathology screen v1",
+  "description": "Hold ShuffleNetV2 1.0x, NanoDet Plus head, loss, assignment, input size, corpus, seed, and training protocol fixed while varying only GhostPAN spatial/fusion structure. Primary purpose is to reduce duplicate, merged, spurious, and bbox-explosion pathologies without sacrificing ordinary detector performance.",
+  "model": {
+    "train": {
+      "corpus": "nanodet/mahjong-composite-pathology-320-v1",
+      "protocol": "nanodet/nanodet-aabb-screen-train-gpu-v1",
+      "architectures": [
+        "nanodet/nanodet-plus-m320-ghostpan-baseline-v1",
+        "nanodet/nanodet-plus-m320-ghostpan-fullconv-v1",
+        "nanodet/nanodet-plus-m320-ghostpan-residual-v1",
+        "nanodet/nanodet-plus-m320-ghostpan-deep-v1"
+      ],
+      "parameters": {
+        "epochs": {
+          "values": [80]
+        },
+        "batch_size": {
+          "values": [16]
+        },
+        "validation_interval": {
+          "values": [5]
+        }
+      },
+      "seeds": [42]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "bbox-pathology",
+      "corpus": "nanodet/mahjong-composite-pathology-320-v1",
+      "protocol": "nanodet/bbox-pathology-v2",
+      "parameters": {
+        "split": {
+          "values": ["val"]
+        },
+        "score_threshold": {
+          "values": [0.35]
+        },
+        "nms_iou_threshold": {
+          "values": [0.6]
+        },
+        "max_detections": {
+          "values": [200]
+        },
+        "pathology_overlap_threshold": {
+          "values": [0.25]
+        },
+        "duplicate_overlap_threshold": {
+          "values": [0.8]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,218 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "nanodet/bbox-pathology-v1",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "name": "NanoDet bounding-box pathology evaluation",
+  "description": "Evaluate NanoDet-style raw head outputs on frozen 320x320 application composites. Preserve ordinary IoU=0.5 precision/recall/F1 while separately measuring one-GT-to-many-prediction duplicates, one-prediction-to-many-GT merged boxes, unrelated predictions, misses, and positive prediction-count deltas before and after the production duplicate suppressor.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "70674f4c1b57aeef707d24c8f1b30674d435a990d96dec62bdbaeeec3fedc523"
+  },
+  "parameters": {
+    "split": {
+      "default": "val",
+      "type": "string"
+    },
+    "batch_size": {
+      "default": 32,
+      "type": "integer",
+      "minimum": 1
+    },
+    "workers": {
+      "default": 4,
+      "type": "integer",
+      "minimum": 0
+    },
+    "score_threshold": {
+      "default": 0.35,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "nms_iou_threshold": {
+      "default": 0.6,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "max_detections": {
+      "default": 200,
+      "type": "integer",
+      "minimum": 1
+    },
+    "pathology_overlap_threshold": {
+      "default": 0.25,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "duplicate_overlap_threshold": {
+      "default": 0.8,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "worst_count": {
+      "default": 16,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64
+    }
+  },
+  "metrics": {
+    "precision_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "recall_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "f1_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "duplicate_gt_rate_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "multi_gt_prediction_rate_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "spurious_prediction_rate_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "missed_gt_rate_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "affected_image_rate_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "positive_count_delta_image_rate_after_nms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "precision_after_product": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "recall_after_product": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "f1_after_product": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "duplicate_gt_rate_after_product": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "multi_gt_prediction_rate_after_product": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "spurious_prediction_rate_after_product": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "missed_gt_rate_after_product": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "affected_image_rate_after_product": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "positive_count_delta_image_rate_after_product": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "ground_truth_count": {
+      "type": "integer",
+      "required": true,
+      "preference": "neutral"
+    },
+    "prediction_count_after_nms": {
+      "type": "integer",
+      "required": true,
+      "preference": "neutral"
+    },
+    "prediction_count_after_product": {
+      "type": "integer",
+      "required": true,
+      "preference": "neutral"
+    }
+  },
+  "artifacts": {
+    "summary_json": {
+      "format": "json",
+      "schema": "mjtensu.nanodet/bbox-pathology-summary/v1",
+      "required": true
+    },
+    "per_image_details": {
+      "format": "jsonl",
+      "schema": "mjtensu.nanodet/bbox-pathology-per-image/v1",
+      "required": true
+    },
+    "after_nms_duplicate_contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.nanodet/bbox-pathology-contact-sheet/v1",
+      "required": true,
+      "study_view": "select"
+    },
+    "after_nms_multi_gt_contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.nanodet/bbox-pathology-contact-sheet/v1",
+      "required": true,
+      "study_view": "select"
+    },
+    "after_nms_spurious_contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.nanodet/bbox-pathology-contact-sheet/v1",
+      "required": true,
+      "study_view": "select"
+    },
+    "after_nms_miss_contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.nanodet/bbox-pathology-contact-sheet/v1",
+      "required": true,
+      "study_view": "select"
+    },
+    "after_nms_overall_contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.nanodet/bbox-pathology-contact-sheet/v1",
+      "required": true,
+      "study_view": "select"
+    },
+    "after_product_overall_contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.nanodet/bbox-pathology-contact-sheet/v1",
+      "required": true,
+      "study_view": "select"
+    }
+  }
+}
