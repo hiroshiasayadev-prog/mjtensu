@@ -12,7 +12,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit, urlunsplit
 
 from mldb_v2.src.backend._clearml_admission import (
     ClearMLCreateRequest,
@@ -122,6 +122,21 @@ def _clearml_logger(task: object) -> object:
     return logger
 
 
+def _clearml_files_proxy_url(url: str) -> str:
+    """Route ClearML files through the authenticated Web UI proxy when configured."""
+    web_host = os.environ.get("CLEARML_WEB_HOST")
+    files_host = os.environ.get("CLEARML_FILES_HOST")
+    if not web_host or not files_host:
+        return url
+    source = urlsplit(url)
+    files = urlsplit(files_host)
+    if source.scheme != files.scheme or source.netloc != files.netloc:
+        return url
+    web = urlsplit(web_host)
+    proxy_path = "/files" + source.path
+    return urlunsplit((web.scheme, web.netloc, proxy_path, source.query, source.fragment))
+
+
 def _project_evaluation_artifacts(
     *,
     task: object,
@@ -155,8 +170,9 @@ def _project_evaluation_artifacts(
             upload_artifact = getattr(task, "upload_artifact", None)
             if not callable(upload_artifact):
                 raise ClearMLSDKError("ClearML Task does not expose upload_artifact()")
-            upload_artifact(
-                name=f"evaluation/{name}",
+            artifact_name = f"evaluation/{name}"
+            upload_ok = upload_artifact(
+                name=artifact_name,
                 artifact_object=str(path),
                 metadata={
                     "canonical_uri": str(raw_ref.get("uri") or ""),
@@ -164,8 +180,10 @@ def _project_evaluation_artifacts(
                     "format": artifact_format,
                     "schema": str(raw_ref.get("schema") or ""),
                 },
-                wait_on_upload=False,
+                wait_on_upload=artifact_format == "mp4",
             )
+            if upload_ok is False:
+                raise ClearMLSDKError(f"ClearML artifact upload failed for {artifact_name!r}")
             if artifact_format not in {"png", "csv", "plotly-json", "mp4"}:
                 continue
             if logger is None:
@@ -194,11 +212,16 @@ def _project_evaluation_artifacts(
                 report_media = getattr(logger, "report_media", None)
                 if not callable(report_media):
                     raise ClearMLSDKError("ClearML logger does not expose report_media()")
+                task_artifacts = getattr(task, "artifacts", None)
+                projected = task_artifacts.get(artifact_name) if isinstance(task_artifacts, Mapping) else None
+                media_url = getattr(projected, "url", None)
+                if type(media_url) is not str or not media_url:
+                    raise ClearMLSDKError(f"ClearML uploaded artifact URL unavailable for {artifact_name!r}")
                 report_media(
                     title="evaluation media",
                     series=name,
                     iteration=0,
-                    local_path=str(path),
+                    url=_clearml_files_proxy_url(media_url),
                 )
         except Exception as exc:
             print(f"MLDB ClearML artifact projection skipped {name!r}: {exc}")

@@ -42,16 +42,27 @@ class _Logger:
         self.media.append(dict(kwargs))
 
 
+class _Artifact:
+    def __init__(self, url: str) -> None:
+        self.url = url
+
+
 class _Task:
     def __init__(self) -> None:
         self.logger = _Logger()
         self.uploads: list[dict[str, object]] = []
+        self.artifacts: dict[str, _Artifact] = {}
 
     def get_logger(self) -> _Logger:
         return self.logger
 
     def upload_artifact(self, **kwargs: object) -> bool:
         self.uploads.append(dict(kwargs))
+        name = str(kwargs["name"])
+        local_path = Path(str(kwargs["artifact_object"]))
+        self.artifacts[name] = _Artifact(
+            f"https://clearml-files.example.test/task/artifacts/{local_path.name}"
+        )
         return True
 
 
@@ -68,7 +79,9 @@ def _ref(uri: str, data: bytes, artifact_format: str) -> dict[str, object]:
 def _candidate(artifacts: dict[str, dict[str, object]]) -> dict[str, object]:
     return {"status": "completed", "result": {"metrics": {}, "artifacts": artifacts}}
 
-def test_evaluation_artifacts_project_to_clearml_rich_surfaces(tmp_path: Path) -> None:
+def test_evaluation_artifacts_project_to_clearml_rich_surfaces(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CLEARML_WEB_HOST", "https://clearml.example.test")
+    monkeypatch.setenv("CLEARML_FILES_HOST", "https://clearml-files.example.test")
     png = b"\x89PNG\r\n\x1a\nfixture"
     csv_data = b"case,accuracy\nfront,1.0\n"
     plot = json.dumps({"data": [{"type": "bar", "x": ["front"], "y": [1.0]}]}).encode()
@@ -107,8 +120,12 @@ def test_evaluation_artifacts_project_to_clearml_rich_surfaces(tmp_path: Path) -
     assert [call["series"] for call in task.logger.plots] == ["robustness_plot"]
     assert [call["series"] for call in task.logger.media] == ["overlay_video"]
     assert task.logger.plots[0]["figure"] == json.loads(plot)
+    assert [call["wait_on_upload"] for call in task.uploads] == [False, False, False, False, True]
     assert task.logger.media[0]["title"] == "evaluation media"
-    assert task.logger.media[0]["local_path"] == str(tmp_path / "overlay_video.mp4")
+    assert task.logger.media[0]["url"] == (
+        "https://clearml.example.test/files/task/artifacts/overlay_video.mp4"
+    )
+    assert "local_path" not in task.logger.media[0]
     assert (tmp_path / "contact_sheet.png").read_bytes() == png
     assert (tmp_path / "summary_table.csv").read_bytes() == csv_data
     assert (tmp_path / "overlay_video.mp4").read_bytes() == video
