@@ -153,7 +153,7 @@ Use experiment namespaces only for scientific/model work whose Run history is it
 
 MLDB uses one global versioned runtime registry for Python package state. Do **not** add package lists, repository selectors, environment names, virtualenv fields, or runtime-registry versions to Architecture, Train Protocol, Evaluation Protocol, or Study definitions. Executable Python imports the package/module it needs; the runtime layer is responsible for making the globally registered package set available.
 
-When a new implementation needs an additional package or a different package version, publish a new global runtime-registry snapshot through the runtime-administration path. Prefer unique package/module names for model-specific implementations when multiple variants must coexist; do not make experiment definitions choose among repository-specific environments.
+When a new implementation needs an additional package or a different package version, publish a new global runtime-registry snapshot through the runtime-administration path. Modified external OSS must use a unique distribution **and** import namespace whose short name communicates the meaningful fork modification; never rely on changing only the wheel name while keeping the upstream import namespace. See `EXTERNAL_FORK_PACKAGES.md`. Do not make experiment definitions choose among repository-specific environments.
 
 A fresh Study Run automatically pins the current registry version once. Authors do not type that version into YAML. Rerun preserves the earlier run's registry version for reproducibility.
 

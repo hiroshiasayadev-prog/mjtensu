@@ -11,7 +11,8 @@ node_modules/
 /errors.html
 
 # External source repositories (managed as independent Git repositories)
-/external/agari/
+/external/*/
+!/external/README.md
 
 # NanoDet browser probe generated artifacts
 tools/recognition/pwa_detector_probe/node_modules/

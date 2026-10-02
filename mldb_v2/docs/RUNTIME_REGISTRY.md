@@ -142,6 +142,8 @@ Use queue `precision5820-gpu3060` when the purpose is to isolate the new-server 
 
 A package-set change is an operational runtime change. Build a candidate `pyproject.toml` with exact direct pins, resolve it to `uv.lock`, and publish both through `PUT /`.
 
+Modified external OSS must first be published as a uniquely named Python package with a non-conflicting import namespace. The default public-fork path is independent Git repository under `external/` -> Git tag -> wheel build -> GitHub Release asset -> runtime-registry dependency/lock. See `EXTERNAL_FORK_PACKAGES.md`; do not install a modified fork under its upstream import name or make experiment YAML select a fork/repository.
+
 The server performs a clean `uv sync --locked` before publication. Only after that validation succeeds are the immutable objects stored and the next SQLite registry version committed.
 
 Publishing a registry version does not rewrite an already-started Study. New Study Runs may resolve the new latest version; existing runs, retries, resumes, and reruns keep their previously pinned version.

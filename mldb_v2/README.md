@@ -13,6 +13,7 @@ Choose the document by what you are trying to do:
 - Decide which training/evaluation values should be observable: [`docs/TELEMETRY.md`](docs/TELEMETRY.md)
 - Understand the approved StudyResult -> ClearML Pipeline execution mapping: [`docs/CLEARML_PIPELINES.md`](docs/CLEARML_PIPELINES.md)
 - Understand the global Python runtime registry and worker rollout: [`docs/RUNTIME_REGISTRY.md`](docs/RUNTIME_REGISTRY.md)
+- Package modified third-party OSS without worker import collisions: [`docs/EXTERNAL_FORK_PACKAGES.md`](docs/EXTERNAL_FORK_PACKAGES.md)
 - Diagnose a failed plan/run/backend execution: [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)
 - AI/agent operating rules for v2 work: [`AGENTS.md`](AGENTS.md)
 

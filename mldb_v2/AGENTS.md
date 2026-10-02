@@ -49,6 +49,7 @@ Never write credentials, API keys, MinIO passwords, or session tokens into Markd
 - `docs/TELEMETRY.md`: how to choose useful Protocol-specific observations
 - `docs/CLEARML_PIPELINES.md`: approved StudyResult-to-ClearML-Pipeline execution mapping and backend responsibility split
 - `docs/RUNTIME_REGISTRY.md`: global Python package authority, run pinning, reference-worker materialization, and rollout rules
+- `docs/EXTERNAL_FORK_PACKAGES.md`: independent OSS forks, non-conflicting package/import naming, wheel publication, and runtime-registry registration
 - `mldb_data/mldb-smoke/`: dedicated namespace for MLDB/integration/device/render smoke Studies; do not put smoke Studies in ML experiment namespaces
 - `docs/TROUBLESHOOTING.md`: symptom-first recovery runbook
 
