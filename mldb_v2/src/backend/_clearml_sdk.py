@@ -875,7 +875,7 @@ def _comparison_bar_figure(
         labels.append(trial)
         values.append(numeric)
 
-    if not labels:
+    if not labels or not any(value is not None for value in values):
         return None
 
     preference = metric_preference if metric_preference in {"higher", "lower", "neutral"} else "neutral"

@@ -1166,3 +1166,17 @@ def test_pipeline_summary_groups_functional_rates_into_one_plot() -> None:
     assert [trace["name"] for trace in figure["data"]] == ["Model A"]
     assert figure["layout"]["showlegend"] is True
     assert "Measures semantic correctness over the fixed five-video corpus." in figure["layout"]["title"]["text"]
+
+
+def test_comparison_bar_omits_metric_when_every_row_has_no_value() -> None:
+    figure = _comparison_bar_figure(
+        stage="latency",
+        evaluation_name="Latency",
+        metric_name="latency_mean_ms",
+        metric_preference="lower",
+        rows=[
+            {"trial": "trial-0001", "trial_label": "Model A", "metrics": {}},
+            {"trial": "trial-0002", "trial_label": "Model B", "metrics": {}},
+        ],
+    )
+    assert figure is None
