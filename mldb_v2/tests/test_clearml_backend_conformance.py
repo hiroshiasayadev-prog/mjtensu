@@ -476,7 +476,8 @@ class FakeSDKTask:
     def get_tasks(cls, *, project_name, tags, allow_archived):
         return [
             task for task in cls.tasks
-            if task.project == project_name and all(tag in task.tags for tag in tags)
+            if (project_name is None or task.project == project_name)
+            and all(tag in task.tags for tag in tags)
         ]
 
     @classmethod
@@ -772,3 +773,21 @@ def test_sdk_publishing_task_is_cancelled_as_active_work() -> None:
     adapter.request_cancellation(task_id=task_id)
 
     assert task.status == "stopped"
+
+
+def test_sdk_search_recovers_owned_task_after_clearml_project_relocation() -> None:
+    FakeSDKTask.reset()
+    adapter = ClearMLSDKAdapter(task_class=FakeSDKTask)
+    stage_input = _evaluation_stage_input()
+    request = _sdk_request(stage_input)
+    task_id = cast(str, adapter.create_task(request))
+    task = FakeSDKTask.get_task(task_id=task_id)
+    assert task is not None
+    assert task.project == "mldb/demo"
+
+    # Pipeline/project organization is operational projection and may move the
+    # Task after admission; logical ownership must remain recoverable.
+    task.project = "mldb/mldb-smoke"
+    ownership = request.metadata["mldb.ownership_key"]
+    found = adapter.search_tasks(project="mldb/demo", ownership_key=ownership)
+    assert [item.task_id for item in found] == [task_id]

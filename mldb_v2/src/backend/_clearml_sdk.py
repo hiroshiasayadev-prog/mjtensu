@@ -1530,15 +1530,30 @@ class ClearMLSDKAdapter:
             raise ClearMLSDKError("ClearML Pipeline Project placement failed") from error
 
     def _search(self, *, project: str, key: str, value: str) -> tuple[object, ...]:
+        search_tag = _search_tag(key, value)
         tasks = self._Task().get_tasks(
             project_name=project,
-            tags=[_search_tag(key, value)],
+            tags=[search_tag],
             allow_archived=True,
         )
-        return tuple(
+        exact = tuple(
             task
             for task in tasks
             if _project_name(task) == project and _metadata(task).get(key) == value
+        )
+        if exact:
+            return exact
+
+        # ClearML may relocate a Task after it is attached to a Pipeline. The
+        # MLDB ownership/search tag remains authoritative, so recover globally
+        # when the logical project lookup is empty instead of losing the owner.
+        relocated = self._Task().get_tasks(
+            project_name=None,
+            tags=[search_tag],
+            allow_archived=True,
+        )
+        return tuple(
+            task for task in relocated if _metadata(task).get(key) == value
         )
 
     def search_pipeline_runs(
