@@ -1,0 +1,6 @@
+{
+  "schema": "mjtensu.mldb-v2/namespace/v1",
+  "id": "mldb-smoke",
+  "name": "MLDB Smoke Tests",
+  "description": "Integration and infrastructure smoke tests for MLDB and the production recognition pipeline. Not an ML experiment namespace."
+}

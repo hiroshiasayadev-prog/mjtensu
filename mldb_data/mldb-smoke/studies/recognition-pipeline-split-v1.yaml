@@ -1,9 +1,9 @@
 {
   "schema": "mjtensu.mldb-v2/study/v1",
-  "id": "tile-classifier/recognition-pipeline-split-smoke-v2",
+  "id": "mldb-smoke/recognition-pipeline-split-v1",
   "status": "sealed",
-  "name": "Recognition pipeline split latency and functional smoke v2",
-  "description": "Use one fixed five-video corpus and one three-model selection for two independent evaluations: physical-iPhone latency/cadence only, and normal-worker functional correctness/trace/overlay video. This prevents diagnostic tracing and visualization from perturbing target-device latency. Functional visualization uses the v2 overlay encoder contract with even-dimension H.264 padding.",
+  "name": "Recognition pipeline split integration smoke v1",
+  "description": "Integration smoke for the production recognition pipeline. Reuse one fixed five-video corpus and the sealed classifier/detector/red-five models, but validate physical-iPhone latency/cadence separately from normal-worker functional correctness, trace, and overlay rendering. This is infrastructure/integration verification, not an ML architecture experiment.",
   "model": {
     "existing": [
       "tile-classifier/run-70f6ddae5a5446478dbd0e15a9523d52-trial-0004-model"
@@ -13,7 +13,7 @@
     {
       "stage": "recognition-iphone-latency",
       "corpus": "tile-classifier/recognition-e2e-night-iphone13-v1",
-      "protocol": "tile-classifier/tile-shape-recognition-iphone-latency-v1",
+      "protocol": "tile-classifier/tile-shape-recognition-iphone-latency-v2",
       "parameters": {
         "detector_model": {
           "values": [
@@ -30,7 +30,7 @@
     {
       "stage": "recognition-functional-video",
       "corpus": "tile-classifier/recognition-e2e-night-iphone13-v1",
-      "protocol": "tile-classifier/tile-shape-recognition-functional-video-v2",
+      "protocol": "tile-classifier/tile-shape-recognition-functional-video-v4",
       "parameters": {
         "detector_model": {
           "values": [

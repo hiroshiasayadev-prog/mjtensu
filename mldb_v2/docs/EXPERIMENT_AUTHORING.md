@@ -143,7 +143,13 @@ A Study should express experiment intent, not reproduce implementation code. Kee
 
 Before execution, record what conclusion each Evaluation metric can support. Do not run a large sweep with no planned decision rule.
 
-## 9. Runtime dependencies are not experiment definitions
+## 9. Smoke and integration checks are not ML experiments
+
+Infrastructure, backend, worker-routing, device-path, end-to-end pipeline, and render/trace smoke checks must live under the dedicated `mldb-smoke` namespace. Do not place those Studies under model/domain experiment namespaces such as `tile-classifier`, `nanodet`, or `rotated-fcos`. They may reference sealed Models, Corpora, Train/Evaluation Protocols, and Runtime Models from those namespaces, but their Study/StudyResult namespace must remain `mldb-smoke` so ClearML execution is projected into the dedicated smoke-test Project rather than the ML experiment Project.
+
+Use experiment namespaces only for scientific/model work whose Run history is itself part of the experiment record.
+
+## 10. Runtime dependencies are not experiment definitions
 
 MLDB uses one global versioned runtime registry for Python package state. Do **not** add package lists, repository selectors, environment names, virtualenv fields, or runtime-registry versions to Architecture, Train Protocol, Evaluation Protocol, or Study definitions. Executable Python imports the package/module it needs; the runtime layer is responsible for making the globally registered package set available.
 
@@ -151,7 +157,7 @@ When a new implementation needs an additional package or a different package ver
 
 A fresh Study Run automatically pins the current registry version once. Authors do not type that version into YAML. Rerun preserves the earlier run's registry version for reproducibility.
 
-## 10. Source pinning is part of authoring
+## 11. Source pinning is part of authoring
 
 A Study is not execution-ready merely because its YAML validates. Formal planning requires every consumed source input to match the selected Git commit.
 
@@ -165,13 +171,13 @@ When authoring changes executable or canonical inputs:
 
 Unrelated dirty files may remain. Never broaden the commit just to make `git status` look clean.
 
-## 11. Result interpretation
+## 12. Result interpretation
 
 The experiment conclusion comes from canonical Training/Evaluation/Study records and formal artifacts. ClearML logs/Charts help explain what happened during execution but are not canonical result fields.
 
 Do not manually edit a failed/partial result into success. Fix the actual blocker and use the supported resume/rerun/new-run flow.
 
-## 12. Definition/spec references
+## 13. Definition/spec references
 
 For exact fields and validation semantics, follow the matching formal specs under:
 
