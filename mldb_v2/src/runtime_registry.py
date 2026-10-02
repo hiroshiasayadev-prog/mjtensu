@@ -549,8 +549,10 @@ class ManagedRuntimeMaterializer:
 
 def runtime_registry_version_resolver(
     base_url: str = DEFAULT_RUNTIME_REGISTRY_URL,
+    *,
+    ca_bundle: str | Path | None = None,
 ) -> Callable[[], int]:
-    client = RuntimeRegistryClient(base_url)
+    client = RuntimeRegistryClient(base_url, ca_bundle=ca_bundle)
     return client.latest_version
 
 

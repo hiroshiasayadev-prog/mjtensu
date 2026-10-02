@@ -213,6 +213,9 @@ def compose_application(
         _optional_environment_value(runtime_environment, "MLDB_V2_RUNTIME_REGISTRY_URL")
         or DEFAULT_RUNTIME_REGISTRY_URL
     )
+    runtime_registry_ca_bundle = _optional_environment_value(
+        runtime_environment, "MLDB_RUNTIME_REGISTRY_CA_BUNDLE"
+    )
     registry = BackendRegistry()
     register_clearml_backend(registry)
     application = Application(
@@ -228,7 +231,7 @@ def compose_application(
         },
         mldb_tests_root=Path(repository_root) / "mldb_tests",
         runtime_registry_version_resolver=runtime_registry_version_resolver(
-            runtime_registry_url
+            runtime_registry_url, ca_bundle=runtime_registry_ca_bundle
         ),
     )
     return ApplicationComposition(
