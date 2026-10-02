@@ -1,0 +1,312 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-recognition-iphone-latency-v2",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Production recognition iPhone latency v2",
+  "description": "Replay the sealed five-video iPhone 13 corpus at normal speed on the physical iPhone and measure only production recognition pipeline timing/cadence. Ground-truth comparison, semantic stabilization, prediction tracing, and visualization are intentionally excluded so diagnostic work cannot perturb the latency measurement. The base classifier is the primary MLDB Model; detector and red-five classifier are selected independently by Model ID. v2 exposes every production timing component captured per evaluation, plus total/unattributed overhead and candidate-count distributions, as formal MLDB metrics.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "3230bb495fddd44972eb1e0fe701677fa9009af4053a6b3097ad633505e52ba3"
+  },
+  "parameters": {
+    "detector_model": {
+      "default": null,
+      "description": "Auxiliary detector Model ID. Must resolve to a browser-deployable detector Runtime Model for this classifier-primary protocol."
+    },
+    "red_five_model": {
+      "default": null,
+      "description": "Auxiliary red-five classifier Runtime Model ID."
+    }
+  },
+  "model_parameters": {
+    "detector": "detector_model",
+    "red-five-classifier": "red_five_model"
+  },
+  "metrics": {
+    "latency_mean_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "latency_p50_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "latency_p95_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "latency_max_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "effective_eval_hz": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Completed production-pipeline evaluations per second of source video."
+    },
+    "cadence_fulfillment_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Completed evaluations divided by nominal 10 Hz opportunities."
+    },
+    "cadence_skip_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Fraction of scheduled recognition ticks skipped because an evaluation was already in flight."
+    },
+    "eval_gap_p95_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Worst per-take p95 gap between evaluated source-video timestamps."
+    },
+    "eval_gap_max_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Maximum gap between evaluated source-video timestamps across all takes."
+    },
+    "detector_preprocessing_mean_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "detector_preprocessing_p50_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "detector_preprocessing_p95_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "detector_preprocessing_max_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "detector_inference_mean_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "detector_inference_p50_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "detector_inference_p95_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "detector_inference_max_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "detector_postprocessing_mean_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "detector_postprocessing_p50_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "detector_postprocessing_p95_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "detector_postprocessing_max_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "crop_extraction_mean_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "crop_extraction_p50_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "crop_extraction_p95_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "crop_extraction_max_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "base_classifier_preprocessing_mean_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "base_classifier_preprocessing_p50_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "base_classifier_preprocessing_p95_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "base_classifier_preprocessing_max_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "base_classifier_inference_mean_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "base_classifier_inference_p50_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "base_classifier_inference_p95_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "base_classifier_inference_max_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "red_five_classifier_preprocessing_mean_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "red_five_classifier_preprocessing_p50_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "red_five_classifier_preprocessing_p95_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "red_five_classifier_preprocessing_max_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "red_five_classifier_inference_mean_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "red_five_classifier_inference_p50_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "red_five_classifier_inference_p95_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "red_five_classifier_inference_max_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "pipeline_unattributed_overhead_mean_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "pipeline_unattributed_overhead_p50_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "pipeline_unattributed_overhead_p95_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "pipeline_unattributed_overhead_max_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "candidate_count_mean": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral"
+    },
+    "candidate_count_p50": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral"
+    },
+    "candidate_count_p95": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral"
+    },
+    "candidate_count_max": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral"
+    },
+    "red_five_candidate_count_mean": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral"
+    },
+    "red_five_candidate_count_p50": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral"
+    },
+    "red_five_candidate_count_p95": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral"
+    },
+    "red_five_candidate_count_max": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral"
+    }
+  },
+  "artifacts": {
+    "onnx_model": {
+      "format": "onnx",
+      "schema": "mjtensu.recognition/base-classifier-onnx/v1",
+      "required": true,
+      "description": "Tensor-only ONNX export of the primary base classifier used by ORT Web."
+    },
+    "latency_report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/iphone-latency/v2",
+      "required": true,
+      "description": "Per-take timing/cadence samples, environment, and exact model identity. Contains no GT/semantic trace."
+    }
+  }
+}

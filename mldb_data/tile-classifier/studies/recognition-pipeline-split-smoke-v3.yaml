@@ -1,0 +1,48 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/recognition-pipeline-split-smoke-v3",
+  "status": "sealed",
+  "name": "Recognition pipeline split latency and functional smoke v3",
+  "description": "Use one fixed five-video corpus and one three-model selection for separate physical-iPhone latency/cadence and normal-worker functional correctness. v3 uses full component-level iPhone timing metrics and the corrected functional overlay/GT semantics.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-70f6ddae5a5446478dbd0e15a9523d52-trial-0004-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "recognition-iphone-latency",
+      "corpus": "tile-classifier/recognition-e2e-night-iphone13-v1",
+      "protocol": "tile-classifier/tile-shape-recognition-iphone-latency-v2",
+      "parameters": {
+        "detector_model": {
+          "values": [
+            "recognition-runtime/nanodet-plus-m-320-real-capture-ft10-l10-v1"
+          ]
+        },
+        "red_five_model": {
+          "values": [
+            "recognition-runtime/red-five-c8-rgb-warmaug-v1"
+          ]
+        }
+      }
+    },
+    {
+      "stage": "recognition-functional-video",
+      "corpus": "tile-classifier/recognition-e2e-night-iphone13-v1",
+      "protocol": "tile-classifier/tile-shape-recognition-functional-video-v4",
+      "parameters": {
+        "detector_model": {
+          "values": [
+            "recognition-runtime/nanodet-plus-m-320-real-capture-ft10-l10-v1"
+          ]
+        },
+        "red_five_model": {
+          "values": [
+            "recognition-runtime/red-five-c8-rgb-warmaug-v1"
+          ]
+        }
+      }
+    }
+  ]
+}
