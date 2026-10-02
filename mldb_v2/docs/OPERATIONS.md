@@ -2,7 +2,7 @@
 
 This is the day-to-day runbook for executing existing MLDB v2 Studies from the Windows development repository through ClearML to the GPU worker.
 
-> W011 transition note (2026-09-17): the approved target maps one MLDB Study Result to one ClearML Pipeline Run and delegates physical child-Task scheduling/retry/liveness to ClearML. The current runtime still uses the earlier flat stage-Task mapping until W011 implementation closes. See `CLEARML_PIPELINES.md` before changing backend execution code.
+> Current execution model (2026-10-02): one MLDB Study Result maps to one ClearML Pipeline Run. MLDB owns semantic release/canonical acceptance, ClearML owns physical child-Task execution, and the Study Result pins one immutable global runtime-registry version for the full run.
 
 ## 1. Proven deployment
 
@@ -24,10 +24,12 @@ The currently validated external services are:
 | ClearML API | `https://clearml-api.thebugrat.dev/` |
 | ClearML Files | `https://clearml-files.thebugrat.dev/` |
 | ClearML default queue | `default` |
+| Registry-reference queue | `precision5820-gpu3060` |
 | Canonical CPU-latency queue | `latency-cpu` |
-| Validated general/GPU worker | `bugrat-gpu0` |
-| Canonical latency worker | `bugrat-gpu0` (same single worker process; `latency-cpu` has higher queue priority) |
-| Validated GPU | NVIDIA GeForce RTX 3090, 24 GB |
+| Registry-aware reference worker | `precision5820-gpu3060` (new server, RTX 3060) |
+| Registry-aware GPU/render worker | `old-gpu3090` (RTX 3090; `default` + `recognition-functional`) |
+| Canonical latency worker | `old-cpu` (dedicated CPU-only ClearML Agent on the old host; not yet registry-managed) |
+| Runtime registry | `https://mjtensu-dev.home.arpa/mldb-runtime-registry/` |
 | S3 endpoint | `https://mldb-s3.thebugrat.dev` |
 | S3 region | `us-east-1` |
 
@@ -65,6 +67,7 @@ Environment variables consumed by the production composition include:
 | `MLDB_V2_CLEARML_DOCKER_GPU` | Docker GPU selector | no |
 | `MLDB_V2_CLEARML_DOCKER_SHM_SIZE` | container shared-memory size | no |
 | `MLDB_V2_RUNTIME_DATA_ROOT` | optional runtime canonical snapshot root | no |
+| `MLDB_V2_RUNTIME_REGISTRY_URL` | global runtime-registry endpoint used to resolve immutable runtime snapshots | no |
 | `MLDB_V2_ARTIFACT_URI_PREFIX` | explicit artifact URI prefix | no |
 | `MLDB_S3_BUCKET` | fallback artifact bucket | no |
 | `MLDB_S3_ENDPOINT_URL` | S3/MinIO endpoint | no |
@@ -92,6 +95,17 @@ Normal startup is therefore just:
 
 If you bypass `mldb.cmd` and invoke `python -m mldb_v2.src.cli` directly, `.env` is not loaded by the Python module and `MLDB_REPO_ROOT` is not supplied automatically. Prefer the wrapper for normal operation.
 
+### Global runtime registry
+
+Every new Study Result resolves the current runtime-registry `latest` exactly once when the run is created and persists that positive integer as `runtime_registry_version`. Every Training/Evaluation StageInput for that Study carries the same version. `resume` and stage retry retain it; `rerun` creates a fresh Study Result from the old immutable Plan but reuses the source Study Result's runtime-registry version rather than resolving a newer `latest`.
+
+This is deployment/runtime state, not experiment authoring state. Do not add package, repository, environment, virtualenv, or registry-version fields to Study, Architecture, Train Protocol, or Evaluation Protocol YAML. Publish package-set changes through the global registry instead.
+
+Registry enforcement is active on `precision5820-gpu3060` and `old-gpu3090`. Each worker reuses one managed `--system-site-packages` venv, applies only required package add/upgrade/downgrade/removal changes with `uv pip`, verifies the complete resolved target, and atomically advances its marker only after success. Packages already visible at the exact target version from the worker image are reused, so the CUDA/PyTorch stack is not reinstalled when it already matches.
+
+`old-gpu3090` additionally serves queue `recognition-functional`. Its `mldb-clearml-runner:recognition-functional-v1` image supplies Chrome and ffmpeg; registry v2 supplies the Python package authority including `opencv-python-headless==4.11.0.86`. A completed runtime-registry smoke produced both the prediction trace and overlay MP4 while the MLDB harness ran from the managed venv. `old-cpu`, `old-iphone`, and `dev-wsl-gpu3060` are not yet migrated. See `RUNTIME_REGISTRY.md` for the full ownership, publish, materialization, locking, and rollout rules.
+
+A pre-registry historical Study Result remains readable, but MLDB does not invent a runtime version for reproducible re-execution. A rerun/recovery path that requires an unknown version fails closed rather than silently substituting current `latest`.
 
 ### ClearML run hygiene and archiving
 
@@ -109,11 +123,11 @@ ClearML SDK exposes this as `Task.set_archived(True)`. Archived Tasks remain rec
 
 ### CPU latency queue and comparability
 
-`onnx-cpu-latency` is a benchmark stage, not ordinary throughput work. Route it only to `latency-cpu`. The canonical Linux worker `bugrat-gpu0` subscribes to `latency-cpu` first and `default` second. Because it is one ClearML Agent process, it executes at most one MLDB Task at a time on that host, so a default Evaluation cannot overlap a latency benchmark there. Do **not** subscribe a Windows development worker, another CPU model, or any heterogeneous machine to `latency-cpu`; doing so changes benchmark hardware and invalidates direct historical/model comparison. Additional workers may subscribe to `default` for ordinary Training/Evaluation once they have the required runtime image and data access.
+`onnx-cpu-latency` is a benchmark stage, not ordinary throughput work. Route it only to `latency-cpu`. The canonical Linux worker is the dedicated CPU-only Agent `old-cpu`; the GPU Agent `old-gpu3090` subscribes only to `default`. The two Agents may execute concurrently on the same physical old host, so CPU latency work no longer occupies the GPU worker slot. Do **not** subscribe a Windows development worker, another CPU model, or any heterogeneous machine to `latency-cpu`; doing so changes benchmark hardware and invalidates direct historical/model comparison. Additional workers may subscribe to `default` for ordinary Training/Evaluation once they have the required runtime image and data access.
 
-Queue isolation fixes worker identity and prevents same-agent overlap, but unrelated host processes can still perturb timing. For comparable latency numbers, keep other CPU-heavy host workloads away from the benchmark window. If host contention cannot be controlled, treat the latency values as non-comparable and rerun under controlled load. Keep the Protocol's batch size, ORT provider, intra/inter-op thread counts, execution mode, and runtime versions fixed as well.
+Queue isolation fixes worker identity, but same-host GPU work and unrelated host processes can still perturb timing. For comparable latency numbers, keep other CPU-heavy host workloads away from the benchmark window. If host contention cannot be controlled, treat the latency values as non-comparable and rerun under controlled load. Keep the Protocol's batch size, ORT provider, intra/inter-op thread counts, execution mode, and runtime versions fixed as well.
 
-The prebuilt task image `mldb-clearml-runner:torch2.5.1-cu124-v1` contains the pinned MLDB remote runtime dependencies. `MLDB_V2_CLEARML_PREBUILT_RUNTIME=true` tells the ClearML task launcher to reuse `/opt/conda/bin/python` instead of building a fresh virtualenv; Task requirements remain declared and are reconciled against that interpreter. Rebuild the image when `_REMOTE_PACKAGES` changes.
+The prebuilt task image `mldb-clearml-runner:torch2.5.1-cu124-v1` remains the base Python/CUDA runtime. `MLDB_V2_CLEARML_PREBUILT_RUNTIME=true` prevents ClearML Agent from building its own per-Task environment. On the registry-aware reference worker, the global runtime registry is the package-version authority and the reusable managed venv overlays only required differences while retaining compatible base-image packages. ClearML Task requirements remain projected for compatibility/visibility; do not treat that smaller list as the runtime authority.
 
 ## 3. Preflight before a run
 
@@ -160,7 +174,7 @@ or, without a configured default backend:
 
     .\mldb.cmd run <namespace>/<study-id> --backend clearml
 
-`run` plans/compiles the Study and creates a fresh durable Study Result. Under the W011 target mapping it then creates/recover one ClearML Pipeline Run for that Study Result; ClearML owns child-Task scheduling while the foreground MLDB process reconciles canonical results until terminal. Interrupting the local process does not mean cancellation; the backend Pipeline may continue. Use `resume` to reconnect/reconcile or `cancel` to request cancellation.
+`run` plans/compiles the Study, resolves registry `latest` once, and creates a fresh durable Study Result containing that `runtime_registry_version`. It then creates/recovers one ClearML Pipeline Run for that Study Result; ClearML owns child-Task scheduling while the foreground MLDB process reconciles canonical results until terminal. Interrupting the local process does not mean cancellation; the backend Pipeline may continue. Use `resume` to reconnect/reconcile or `cancel` to request cancellation.
 
 ## 6. Monitor and recover
 
@@ -175,7 +189,7 @@ Useful read/control commands:
     .\mldb.cmd retry-stage <study-result-id> --trial <trial-id> --coordinate <evaluation-coordinate>
     .\mldb.cmd cancel <study-result-id>
 
-`watch` is read-only. `advance` performs one explicit canonical reconciliation pass and is mainly for recovery/debugging. `rerun` creates a fresh Study Result from the immutable Plan of an earlier execution rather than recompiling the current mutable Study definition.
+`watch` is read-only. `advance` performs one explicit canonical reconciliation pass and is mainly for recovery/debugging. `rerun` creates a fresh Study Result from the immutable Plan of an earlier execution rather than recompiling the current mutable Study definition, and it preserves the source Study Result's `runtime_registry_version`.
 
 `retry-stage` is different from `rerun`. It synchronously retries exactly one **failed Evaluation** inside an existing `completed_with_failures` Study Result. The Study Result ID, execution key, Plan/source commit, logical evaluation coordinate, Evaluation Result ID, training result, and completed sibling evaluations are retained. The backend creates one new physical attempt; the failed physical attempt and its logs remain preserved. Canonical Evaluation Result `attempts` is extended by exactly one ordered attempt. If the retry succeeds, that same stage slot changes `failed -> completed` and the Study Result becomes `completed` only when every planned stage is completed. If the retry fails again, the Study Result remains `completed_with_failures`.
 
@@ -199,7 +213,7 @@ Namespace-first files are stored under paths such as:
     mldb_data/<namespace>/models/
     mldb_data/<namespace>/evaluation_results/
 
-Use Evaluation Result metrics for scientific comparison. ClearML telemetry is for understanding execution behavior, not for replacing canonical result metrics.
+Use Evaluation Result metrics for scientific comparison. The Study Result's `runtime_registry_version` is the canonical environment-provenance handle for that run; the immutable registry snapshot reconstructs the package set, so canonical results do not duplicate a full package dump. ClearML telemetry is for understanding execution behavior, not for replacing canonical result metrics.
 
 ## 8. Known-good telemetry evidence
 
@@ -218,4 +232,7 @@ Those names are Protocol-specific examples, not generic MLDB requirements. See `
 - Do not treat ClearML Task status as canonical experiment truth.
 - Do not commit `.env` or secrets.
 - Do not merge v1 SSH-worker procedures into the v2 ClearML path.
+- Do not resolve runtime-registry `latest` separately per stage; one Study Result owns one pinned version.
+- Do not add package/environment declarations to experiment YAML to bypass the global registry.
+- Do not advance a worker runtime marker after partial/failed convergence.
 - Do not modify MLDB core for an experiment unless the existing surface demonstrably blocks that experiment.

@@ -33,7 +33,7 @@ Do not attach the uncommitted patch to the ClearML Task as a workaround.
 Check in this order:
 
 1. ClearML queue configured by `MLDB_V2_CLEARML_QUEUE` (validated deployment: `default`).
-2. Worker registration/activity (validated worker: `bugrat-gpu0`).
+2. Worker registration/activity. For registry-enforcement validation, use `precision5820-gpu3060`; legacy/default workers may still be active on `default`.
 3. That the agent is actually attached to the intended queue.
 4. Whether an earlier Task is still occupying the worker/GPU.
 5. Admission metadata/ownership rather than resubmitting blindly.
@@ -42,9 +42,28 @@ A retry must not create a second logical stage just because admission status was
 
 ## ClearML Task fails before the MLDB harness runs
 
-Typical causes are source checkout, package/container setup, Docker arguments, or credentials. Verify the pinned Git commit is remote-reachable, repository URL is correct, the configured Docker image exists, and ClearML credentials/endpoints are present in the launching process.
+Typical causes are source checkout, package/container setup, Docker arguments, runtime-registry bootstrap, or credentials. Verify the pinned Git commit is remote-reachable, repository URL is correct, the configured Docker image exists, and ClearML credentials/endpoints are present in the launching process.
+
+On `precision5820-gpu3060`, also verify that the Task received `MLDB_RUNTIME_REGISTRY_VERSION`, the worker-injected registry root/internal endpoint are present, `/usr/local/bin/uv` is mounted, and the managed runtime root is writable. The bootstrap is fail-closed: a failed convergence must leave the previous `current.json` marker unchanged.
 
 Use the Task logs. Do not classify this as a Training Protocol failure until the harness actually enters domain execution.
+
+## Runtime registry / managed environment failure
+
+First distinguish run-level pinning from worker enforcement. The Study Result should contain one positive `runtime_registry_version`, and every StageInput for that Study should carry the same value. If a stage shows a different value, treat it as a lifecycle/provenance defect; do not resolve `latest` again to repair it.
+
+For a migrated worker (`precision5820-gpu3060` or `old-gpu3090`), check:
+
+1. the pinned snapshot exists through `GET /?version=N`;
+2. the worker-specific `.../clearml/runtime-registry/<worker-id>/current.json` still names the last successfully verified version;
+3. the reusable venv exists and is `include-system-site-packages = true`;
+4. the Task is actually re-executed as `/mldb-runtime-registry/venv/bin/python ...`;
+5. version changes acquire the exclusive runtime lock while running Tasks retain a shared lock;
+6. package verification succeeds after differential `uv pip` operations.
+
+Do not delete the marker or venv merely to force progress unless corruption has been established. Do not manually advance the marker. A base-image package that must be removed entirely cannot currently be hidden by the system-site-packages overlay; that case intentionally fails closed and requires a base-runtime/worker design change.
+
+Pre-registry historical Study Results may lack `runtime_registry_version`. They remain readable, but reproducible rerun/recovery must not silently substitute current `latest`.
 
 ## S3 / artifact / corpus failure
 
@@ -56,7 +75,7 @@ Do not change artifact URIs or hashes in canonical records to match whatever byt
 
 Separate scheduling from domain execution. A Task reaching a worker does not prove CUDA is available inside the Task container.
 
-Check the Docker image, GPU selector, worker Docker/NVIDIA runtime, and Protocol-specific requirements. The current validated configuration uses `pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel` with `MLDB_V2_CLEARML_DOCKER_GPU=all` on an RTX 3090.
+Check the Docker image, GPU selector, worker Docker/NVIDIA runtime, and Protocol-specific requirements. The current prebuilt runtime is `mldb-clearml-runner:torch2.5.1-cu124-v1`. GPU availability still depends on the selected worker and Docker GPU route; registry package convergence does not provision a GPU device by itself.
 
 Classifier verification can require `cache_device=cuda` to prevent silent CPU fallback. The rotated detector Protocol already requires CUDA.
 
@@ -97,7 +116,7 @@ Do not edit StudyResult/TrainingResult/EvaluationResult YAML to terminal status 
 
 Under the W011 target mapping, interrupting `run`/`resume` stops local canonical reconciliation but does not cancel the ClearML Pipeline; backend work may continue. Inspect `mldb status`, then `resume` the existing Study Result to reconnect/reconcile. Use `cancel` only when cancellation is actually intended.
 
-Until W011 runtime migration is complete, current flat-Task executions retain the older local progression behavior; do not infer Pipeline support from the amended documentation alone.
+The W011 Pipeline mapping is implemented. Interruption recovery should reconnect to the existing Study Result/Pipeline and therefore preserve its pinned runtime-registry version.
 
 ## Historical result looks wrong
 

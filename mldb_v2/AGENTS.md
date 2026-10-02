@@ -48,6 +48,7 @@ Never write credentials, API keys, MinIO passwords, or session tokens into Markd
 - `docs/EXPERIMENT_AUTHORING.md`: how to decide which entity to create/change and how to author/verify/seal it
 - `docs/TELEMETRY.md`: how to choose useful Protocol-specific observations
 - `docs/CLEARML_PIPELINES.md`: approved StudyResult-to-ClearML-Pipeline execution mapping and backend responsibility split
+- `docs/RUNTIME_REGISTRY.md`: global Python package authority, run pinning, reference-worker materialization, and rollout rules
 - `docs/TROUBLESHOOTING.md`: symptom-first recovery runbook
 
 When a manual disagrees with executable code or a formal spec, stop and reconcile the documentation; do not silently invent behavior.

@@ -36,10 +36,16 @@ ClearML owns the operational mechanics that are not the scientific meaning of th
 
 MLDB should not grow a second queue, retry scheduler, heartbeat service, worker registry, or resource scheduler beside ClearML.
 
-Stage-specific placement is still allowed at the adapter boundary. Production composition accepts an operational stage-route map; for example `onnx-cpu-latency` can be routed to a dedicated `latency-cpu` queue with `docker_gpu: null`, while every unlisted stage falls back to the normal `default` queue and global Docker GPU setting. This routing does not enter the Study or Evaluation Protocol YAML because queue names and worker topology are deployment concerns.
-For the validated deployment, one Linux agent process subscribes to `latency-cpu` before `default`. This preserves a single canonical CPU identity and prevents two MLDB Tasks from contending on that host through separate agent processes. Heterogeneous workers may join `default`, but they must not join `latency-cpu`.
+Stage-specific placement is still allowed at the adapter boundary. Production composition accepts an operational stage-route map; for example `onnx-cpu-latency` can be routed to a dedicated `latency-cpu` queue with `docker_gpu: null`, while every unlisted stage falls back to the normal `default` queue and global Docker GPU setting. This routing does not enter the Study or Evaluation Protocol YAML because queue names and worker topology are deployment concerns. The registry-reference worker additionally subscribes to queue `precision5820-gpu3060` so runtime-registry behavior can be verified without another `default` worker taking the Task.
+For the validated deployment, the old Linux compute host runs two ClearML Agent processes: `old-gpu3090` subscribes only to `default`, while the CPU-only `old-cpu` subscribes only to `latency-cpu`. This preserves a single canonical CPU identity without consuming the GPU worker slot during CPU latency evaluation. Because both Agents share one physical host, concurrent GPU work can still perturb CPU timing; runs affected by host contention are not directly comparable. Heterogeneous workers may join `default`, but they must not join `latency-cpu`.
 
 ## 3. What MLDB keeps
+
+MLDB also owns the runtime-version identity of a formal run. A fresh Study Result resolves the global runtime registry once and persists `runtime_registry_version`; all child StageInputs inherit that exact integer. Retry/resume retain it, and rerun reuses the source Study Result's version. A child Task must not resolve `latest` independently.
+
+The runtime registry is global deployment state, not experiment-schema state. Architecture, Train Protocol, Evaluation Protocol, and Study YAML do not declare packages, repositories, virtualenvs, or registry versions. The immutable registry snapshot is sufficient package provenance; canonical Training/Evaluation results do not duplicate a package inventory.
+
+Worker enforcement is currently active on `precision5820-gpu3060` and `old-gpu3090`. Each converges one reusable managed venv to the pinned version and re-execs the MLDB harness through that interpreter. The remaining workers have not yet copied this bootstrap. Therefore a pinned Study version is already canonical across MLDB, while package enforcement is guaranteed only on migrated workers until rollout completes.
 
 MLDB remains authoritative for Study/Plan identity, trial/stage semantics, source pinning, Protocol contracts, semantic dependency gates, accepted Model lineage, formal result acceptance, and canonical Training/Evaluation/Study Results.
 
@@ -99,7 +105,7 @@ The original child Task remains the unique logical ownership Task identified by 
 
 Canonical state is not changed back to `pending` while the retry is running. After terminal collection and normal MLDB result acceptance, the same Evaluation Result ID receives exactly one appended attempt and may remain `failed` or become `completed`. This first implementation is synchronous and supports failed Evaluations only; Training-stage retry is intentionally outside the v1 scope.
 
-ClearML step caching/reuse is disabled by default for formal execution. `mldb rerun` creates a fresh Study Result/Pipeline Run from the exact immutable source Plan; it does not silently reuse an old green Task.
+ClearML step caching/reuse is disabled by default for formal execution. `mldb rerun` creates a fresh Study Result/Pipeline Run from the exact immutable source Plan and the source Study Result's exact `runtime_registry_version`; it does not silently reuse an old green Task or move to a newer registry snapshot.
 
 ClearML UI actions that create an execution without first allocating a canonical MLDB Study Result are not a supported formal MLDB entrypoint.
 
@@ -117,8 +123,10 @@ If ClearML and canonical MLDB disagree, investigate and reconcile through the fo
 
 ## 9. Implementation status
 
-As of 2026-09-17, T011-02 through T011-04 are implemented and an actual two-trial RTX 3090 ClearML Study has completed through training acceptance, dependent evaluation release, recovery/resume, and terminal canonical Study closure. One Study Result creates/recovers one ClearML controller Task with native Pipeline DAG configuration; released child Tasks are bound to exact Pipeline nodes before enqueue, detailed telemetry remains on child Tasks, and bounded Study-summary values are projected to the controller without requiring the ClearML Fileserver.
+As of 2026-10-02, the W011 Pipeline mapping is implemented and the global runtime-registry pin is part of canonical Study execution. An actual two-trial RTX 3090 ClearML Study has completed through training acceptance, dependent evaluation release, recovery/resume, and terminal canonical Study closure. One Study Result creates/recovers one ClearML controller Task with native Pipeline DAG configuration; released child Tasks are bound to exact Pipeline nodes before enqueue, detailed telemetry remains on child Tasks, and bounded Study-summary values are projected to the controller without requiring the ClearML Fileserver.
 
 The controller Task is an operational/UI ownership container, not a second remote MLDB scheduler loop. MLDB reconciliation opens semantic gates; the ClearML backend performs Task creation/enqueue and ClearML queue/agent infrastructure owns worker/resource execution.
 
 Actual verification found that API-server-2.17+ ClearML UIs discover Pipelines through native hidden `.pipelines/<pipeline-name>` subprojects. Controllers created directly in the Namespace Project remained valid Tasks but were invisible in the Pipelines page. The adapter now uses the native subproject layout while retaining recovery compatibility with the earlier flat placement. Final T011-05 closure still requires human-visible Pipeline-page confirmation and the remaining actual cancellation check.
+
+Runtime-registry verification completed on both migrated GPU workers. `precision5820-gpu3060` proved the reusable managed-venv path without reinstalling unchanged base-visible PyTorch packages. `old-gpu3090` then completed `recognition-functional-video` at registry v2 through queue `recognition-functional` using `mldb-clearml-runner:recognition-functional-v1`; the MLDB harness executed as `/mldb-runtime-registry/venv/bin/python`, and the accepted Evaluation Result contained both a prediction trace and overlay MP4. This does not imply that the remaining workers are registry-managed.
