@@ -516,6 +516,7 @@ def _install_existing_model_repo(tmp_path: Path):
         "plan": plan["id"],
         "study": plan["study"],
         "source_commit": plan["source_commit"],
+        "runtime_registry_version": 1,
         "backend": "fake",
         "created_at": "2026-09-13T00:00:00Z",
         "status": "submitted",

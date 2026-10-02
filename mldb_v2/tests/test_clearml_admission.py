@@ -54,6 +54,7 @@ def _training_stage_input(
         "kind": "training",
         "coordinate": None,
         "source_commit": "2" * 40,
+        "runtime_registry_version": 1,
         "pins": [cast(object, _pin("study", study))],
         "stage": {
             "task": TaskId("demo/task"),
@@ -81,6 +82,7 @@ def _evaluation_stage_input(
         "kind": "evaluation",
         "coordinate": EvaluationCoordinateId(coordinate),
         "source_commit": "2" * 40,
+        "runtime_registry_version": 1,
         "pins": [cast(object, _pin("study", "demo/study-a"))],
         "stage": {
             "name": "final-holdout",
@@ -160,6 +162,7 @@ def test_training_admission_maps_namespace_metadata_and_public_parameters() -> N
         "mldb.task": "demo/task",
         "mldb.corpus": "demo/corpus",
         "mldb.source_commit": "2" * 40,
+        "mldb.runtime_registry_version": "1",
         "mldb.ownership_key": result.ownership_key,
         "mldb.architecture": "demo/architecture",
         "mldb.protocol": "demo/train-protocol",

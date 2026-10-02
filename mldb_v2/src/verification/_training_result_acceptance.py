@@ -48,13 +48,14 @@ class _TrainingAcceptanceResult(TypedDict):
     model: Model | None
 
 
-_STUDY_RESULT_FIELDS = {
+_LEGACY_STUDY_RESULT_FIELDS = {
     "schema", "id", "execution_key", "plan", "study", "source_commit", "backend",
     "created_at", "status", "diagnostic", "trials",
 }
+_STUDY_RESULT_FIELDS = _LEGACY_STUDY_RESULT_FIELDS | {"runtime_registry_version"}
 _STAGE_INPUT_FIELDS = {
     "schema", "study_result", "plan", "plan_sha256", "trial", "kind", "coordinate",
-    "source_commit", "pins", "stage", "runtime_model",
+    "source_commit", "runtime_registry_version", "pins", "stage", "runtime_model",
 }
 _TRAINING_STAGE_FIELDS = {
     "task", "corpus", "architecture", "train_protocol", "parameters", "seed",
@@ -92,7 +93,9 @@ def _parse_created_at(value: object) -> None:
 
 
 def _validate_study_result_anchor(value: object) -> dict[str, object]:
-    if type(value) is not dict or set(value) != _STUDY_RESULT_FIELDS:
+    if type(value) is not dict or set(value) not in (
+        _STUDY_RESULT_FIELDS, _LEGACY_STUDY_RESULT_FIELDS
+    ):
         raise ValueError("StudyResult fields do not match schema")
     if value["schema"] != _STUDY_RESULT_SCHEMA:
         raise ValueError("unsupported StudyResult schema")
@@ -115,6 +118,11 @@ def _validate_study_result_anchor(value: object) -> dict[str, object]:
     source_commit = value["source_commit"]
     if type(source_commit) is not str or _COMMIT_RE.fullmatch(source_commit) is None:
         raise ValueError("StudyResult source_commit must be a full Git object id")
+    runtime_registry_version = value.get("runtime_registry_version")
+    if runtime_registry_version is not None and (
+        type(runtime_registry_version) is not int or runtime_registry_version <= 0
+    ):
+        raise ValueError("StudyResult runtime_registry_version must be a positive integer")
     if type(value["backend"]) is not str or not value["backend"]:
         raise ValueError("StudyResult backend must be a non-empty string")
     _parse_created_at(value["created_at"])
@@ -225,6 +233,11 @@ def _validate_stage_input_lineage(
         raise ValueError("TrainingStageInput is not the exact training variant")
     if stage_input["source_commit"] != plan["source_commit"]:
         raise ValueError("TrainingStageInput source_commit mismatch")
+    runtime_registry_version = study_result.get("runtime_registry_version")
+    if type(runtime_registry_version) is not int or runtime_registry_version <= 0:
+        raise ValueError("StudyResult has no runtime registry version")
+    if stage_input["runtime_registry_version"] != runtime_registry_version:
+        raise ValueError("StageInput runtime registry version mismatch")
     if _canonical_json_bytes(stage_input["pins"]) != _canonical_json_bytes(plan["pins"]):
         raise ValueError("TrainingStageInput pins do not exactly match Plan")
     if stage_input["runtime_model"] is not None:

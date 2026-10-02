@@ -135,7 +135,7 @@ def _pipeline_topology(plan: StudyPlan, result: StudyResult) -> dict[str, object
 def _metadata(
     plan: StudyPlan, result: StudyResult, *, ownership_key: str
 ) -> dict[str, str]:
-    return {
+    metadata = {
         "mldb.namespace": _namespace(result["id"]),
         "mldb.study": str(plan["study"]),
         "mldb.plan": str(plan["id"]),
@@ -143,6 +143,10 @@ def _metadata(
         "mldb.source_commit": plan["source_commit"],
         "mldb.pipeline_ownership_key": ownership_key,
     }
+    runtime_registry_version = result.get("runtime_registry_version")
+    if runtime_registry_version is not None:
+        metadata["mldb.runtime_registry_version"] = str(runtime_registry_version)
+    return metadata
 
 
 def _configuration(
@@ -157,6 +161,8 @@ def _configuration(
         "backend": result["backend"],
         "created_at": result["created_at"],
     }
+    if "runtime_registry_version" in result:
+        immutable_result_identity["runtime_registry_version"] = result["runtime_registry_version"]
     return {
         "mldb.pipeline_ownership_key": ownership_key,
         "mldb.plan": json.loads(_canonical_json_bytes(plan).decode("utf-8")),

@@ -242,7 +242,7 @@ def _validate_study_result_record(
     *,
     entity_id: StudyResultId,
 ) -> dict[str, object]:
-    expected_fields = {
+    legacy_fields = {
         "schema",
         "id",
         "execution_key",
@@ -255,7 +255,8 @@ def _validate_study_result_record(
         "diagnostic",
         "trials",
     }
-    if set(record) != expected_fields:
+    expected_fields = legacy_fields | {"runtime_registry_version"}
+    if set(record) not in (expected_fields, legacy_fields):
         raise ValueError("StudyResult fields do not match schema")
     if record["schema"] != "mjtensu.mldb-v2/study-result/v1":
         raise ValueError("invalid StudyResult schema")
@@ -276,6 +277,11 @@ def _validate_study_result_record(
         raise ValueError("StudyResult, Study, and Plan namespaces must match")
     if type(record["source_commit"]) is not str or _COMMIT_RE.fullmatch(record["source_commit"]) is None:
         raise ValueError("source_commit must be a full Git object id")
+    runtime_registry_version = record.get("runtime_registry_version")
+    if runtime_registry_version is not None and (
+        type(runtime_registry_version) is not int or runtime_registry_version <= 0
+    ):
+        raise ValueError("runtime_registry_version must be a positive integer")
     if type(record["backend"]) is not str or not record["backend"]:
         raise ValueError("backend must be a non-empty generic backend name")
     _validate_created_at(record["created_at"])
@@ -393,6 +399,8 @@ def _validate_study_result_transition(
     for field in immutable_top:
         if current[field] != replacement[field]:
             raise ValueError(f"StudyResult immutable field changed: {field}")
+    if current.get("runtime_registry_version") != replacement.get("runtime_registry_version"):
+        raise ValueError("StudyResult immutable field changed: runtime_registry_version")
 
     current_status = current["status"]
     replacement_status = replacement["status"]
@@ -509,6 +517,8 @@ def _validate_study_result_retry_transition(
     for field in immutable_top:
         if not _documents_equal({field: current[field]}, {field: replacement[field]}):
             raise ValueError(f"StudyResult immutable field changed during retry: {field}")
+    if current.get("runtime_registry_version") != replacement.get("runtime_registry_version"):
+        raise ValueError("StudyResult runtime_registry_version changed during retry")
 
     if len(current["trials"]) != len(replacement["trials"]):  # type: ignore[arg-type]
         raise ValueError("StudyResult trial topology is immutable")

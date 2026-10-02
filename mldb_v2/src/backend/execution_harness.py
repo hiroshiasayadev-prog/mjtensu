@@ -66,6 +66,7 @@ _STAGE_INPUT_FIELDS = {
     "kind",
     "coordinate",
     "source_commit",
+    "runtime_registry_version",
     "pins",
     "stage",
     "runtime_model",
@@ -124,6 +125,9 @@ def _establish_stage_key(value: object) -> StageKey:
     plan = _validate_typed_reference(value["plan"])
     trial = str(_validate_trial_id(value["trial"]))
     source_commit = _validate_commit_id(value["source_commit"])
+    runtime_registry_version = value["runtime_registry_version"]
+    if type(runtime_registry_version) is not int or runtime_registry_version <= 0:
+        raise ValueError("StageInput runtime_registry_version must be a positive integer")
     kind = value["kind"]
     if kind == "training":
         if value["coordinate"] is not None:

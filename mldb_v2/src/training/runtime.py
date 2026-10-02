@@ -45,6 +45,7 @@ _STAGE_INPUT_FIELDS = {
     "kind",
     "coordinate",
     "source_commit",
+    "runtime_registry_version",
     "pins",
     "stage",
     "runtime_model",
@@ -80,6 +81,9 @@ def _validate_training_stage_input(value: object) -> TrainingStageInput:
     _validate_trial_id(value["trial"])
     if type(value["source_commit"]) is not str:
         raise ValueError("StageInput source_commit must be a string")
+    runtime_registry_version = value["runtime_registry_version"]
+    if type(runtime_registry_version) is not int or runtime_registry_version <= 0:
+        raise ValueError("StageInput runtime_registry_version must be a positive integer")
     if type(value["pins"]) is not list:
         raise ValueError("StageInput pins must be a list")
 

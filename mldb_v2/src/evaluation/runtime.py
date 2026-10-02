@@ -66,6 +66,7 @@ _STAGE_INPUT_FIELDS = {
     "kind",
     "coordinate",
     "source_commit",
+    "runtime_registry_version",
     "pins",
     "stage",
     "runtime_model",
@@ -103,6 +104,9 @@ def _validate_evaluation_stage_input(value: object) -> EvaluationStageInput:
     _validate_trial_id(value["trial"])
     if type(value["source_commit"]) is not str or _COMMIT_RE.fullmatch(value["source_commit"]) is None:
         raise ValueError("StageInput source_commit must be a full Git object id")
+    runtime_registry_version = value["runtime_registry_version"]
+    if type(runtime_registry_version) is not int or runtime_registry_version <= 0:
+        raise ValueError("StageInput runtime_registry_version must be a positive integer")
     if type(value["pins"]) is not list:
         raise ValueError("StageInput pins must be a list")
     if coordinate != value["coordinate"]:

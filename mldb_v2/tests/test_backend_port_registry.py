@@ -41,6 +41,7 @@ def _training_stage_input() -> TrainingStageInput:
         "kind": "training",
         "coordinate": None,
         "source_commit": "2" * 40,
+        "runtime_registry_version": 1,
         "pins": [],
         "stage": {
             "task": TaskId("demo/task"),
@@ -169,6 +170,7 @@ def test_registry_resolves_configured_backend_and_preserves_runtime_values() -> 
         "kind",
         "coordinate",
         "source_commit",
+        "runtime_registry_version",
         "pins",
         "stage",
         "runtime_model",

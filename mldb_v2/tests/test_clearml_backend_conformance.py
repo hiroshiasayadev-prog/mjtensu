@@ -81,6 +81,7 @@ def _training_stage_input() -> TrainingStageInput:
         "kind": "training",
         "coordinate": None,
         "source_commit": "2" * 40,
+        "runtime_registry_version": 1,
         "pins": [cast(object, _pin("study", "demo/study-a"))],
         "stage": {
             "task": TaskId("demo/task"),
@@ -104,6 +105,7 @@ def _evaluation_stage_input() -> EvaluationStageInput:
         "kind": "evaluation",
         "coordinate": EvaluationCoordinateId("eval-0001"),
         "source_commit": "2" * 40,
+        "runtime_registry_version": 1,
         "pins": [cast(object, _pin("study", "demo/study-a"))],
         "stage": {
             "name": "holdout",
@@ -599,6 +601,7 @@ def test_production_sdk_adapter_uses_lazy_credentials_searchable_metadata_and_qu
         "docker_arguments": [
             "--gpus", "all",
             "--shm-size", "2g",
+            "-e", "MLDB_RUNTIME_REGISTRY_VERSION=1",
             "-e", "AWS_ACCESS_KEY_ID",
             "-e", "AWS_SECRET_ACCESS_KEY",
             "-e", "AWS_SESSION_TOKEN",
@@ -651,6 +654,7 @@ def test_sdk_prebuilt_runtime_cpu_route_uses_system_python_without_gpu_flag() ->
         "docker_image": "mldb-clearml-runner:torch2.5.1-cu124-v1",
         "docker_arguments": [
             "--shm-size", "2g",
+            "-e", "MLDB_RUNTIME_REGISTRY_VERSION=1",
             "-e", "AWS_ACCESS_KEY_ID",
             "-e", "AWS_SECRET_ACCESS_KEY",
             "-e", "AWS_SESSION_TOKEN",

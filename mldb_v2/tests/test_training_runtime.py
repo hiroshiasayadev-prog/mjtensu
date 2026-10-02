@@ -211,6 +211,7 @@ def _stage_input(**stage_overrides: object) -> dict[str, object]:
         "kind": "training",
         "coordinate": None,
         "source_commit": "a" * 40,
+        "runtime_registry_version": 1,
         "pins": [],
         "stage": stage,
         "runtime_model": None,

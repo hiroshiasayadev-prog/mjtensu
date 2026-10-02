@@ -380,6 +380,9 @@ def _materialize_stage_input(
         if len(result_slots) != 1 or result_slots[0]["disposition"] != "pending":
             raise ValueError("StageInput materialization requires a pending evaluation slot")
 
+    runtime_registry_version = validated_result.get("runtime_registry_version")
+    if type(runtime_registry_version) is not int or runtime_registry_version <= 0:
+        raise ValueError("StudyResult has no valid runtime registry version")
     common = {
         "schema": "mjtensu.mldb-v2/stage-input/v1",
         "study_result": validated_result["id"],
@@ -387,6 +390,7 @@ def _materialize_stage_input(
         "plan_sha256": validated_plan["content_sha256"],
         "trial": plan_trial["trial"],
         "source_commit": validated_plan["source_commit"],
+        "runtime_registry_version": runtime_registry_version,
         "pins": copy.deepcopy(validated_plan["pins"]),
     }
 
@@ -491,6 +495,9 @@ def _materialize_evaluation_retry_stage_input(
     if runtime_model["task"] != planned["task"]:
         raise ValueError("runtime Model Task does not match planned Evaluation Task")
 
+    runtime_registry_version = validated_result.get("runtime_registry_version")
+    if type(runtime_registry_version) is not int or runtime_registry_version <= 0:
+        raise ValueError("StudyResult has no valid runtime registry version")
     return cast(
         EvaluationStageInput,
         {
@@ -502,6 +509,7 @@ def _materialize_evaluation_retry_stage_input(
             "kind": "evaluation",
             "coordinate": planned["coordinate"],
             "source_commit": validated_plan["source_commit"],
+            "runtime_registry_version": runtime_registry_version,
             "pins": copy.deepcopy(validated_plan["pins"]),
             "stage": {
                 "name": planned["stage"],

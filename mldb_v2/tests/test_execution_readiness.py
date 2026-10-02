@@ -151,6 +151,7 @@ def _study_result(plan: dict[str, object]) -> dict[str, object]:
         "plan": plan["id"],
         "study": plan["study"],
         "source_commit": SOURCE_COMMIT,
+        "runtime_registry_version": 1,
         "backend": "fake",
         "created_at": "2026-09-13T00:00:00Z",
         "status": "submitted",
@@ -463,6 +464,7 @@ def test_training_stage_input_is_exact_plan_materialization(tmp_path: Path) -> N
         "kind": "training",
         "coordinate": None,
         "source_commit": SOURCE_COMMIT,
+        "runtime_registry_version": 1,
         "pins": plan["pins"],
         "stage": {
             "task": "demo/task-v1",
@@ -527,7 +529,7 @@ def test_study_result_exact_shape_identity_topology_and_slot_combinations(tmp_pa
     validated = _validate_study_result(result)
     assert set(validated) == {
         "schema", "id", "execution_key", "plan", "study", "source_commit",
-        "backend", "created_at", "status", "diagnostic", "trials",
+        "runtime_registry_version", "backend", "created_at", "status", "diagnostic", "trials",
     }
 
     bad = copy.deepcopy(result)

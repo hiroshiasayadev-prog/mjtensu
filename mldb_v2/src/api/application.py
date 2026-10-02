@@ -256,6 +256,7 @@ class Application:
         mldb_tests_root: str | Path | None = None,
         diagnostic_probes: Sequence[Callable[[], DiagnosisCheck]] = (),
         wait: Callable[[], None] = lambda: None,
+        runtime_registry_version_resolver: Callable[[], int] | None = None,
     ) -> None:
         if not isinstance(object_bytes, _ObjectByteAccess):
             raise TypeError("object_bytes must be _ObjectByteAccess")
@@ -300,6 +301,7 @@ class Application:
             advance_one_pass=self._advance_one_pass,
             request_cancel=cancellation,
             wait=wait,
+            runtime_registry_version_resolver=runtime_registry_version_resolver,
         )
 
     def _advance_one_pass(self, *, study_result: StudyResultId) -> AdvanceStudyResponse:

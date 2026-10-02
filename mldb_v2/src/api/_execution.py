@@ -159,6 +159,7 @@ def _initial_study_result(
     backend: str,
     execution_key: ExecutionKey,
     created_at: str,
+    runtime_registry_version: int,
 ) -> StudyResult:
     result_id = _study_result_id(plan, execution_key)
     trials: list[dict[str, object]] = []
@@ -189,6 +190,7 @@ def _initial_study_result(
             "plan": plan["id"],
             "study": plan["study"],
             "source_commit": plan["source_commit"],
+            "runtime_registry_version": runtime_registry_version,
             "backend": backend,
             "created_at": created_at,
             "status": "submitted",
@@ -227,6 +229,7 @@ class _ExecutionCompositionShell:
         wait: Callable[[], None] = lambda: None,
         execution_key_factory: Callable[[], uuid.UUID] = uuid.uuid4,
         created_at_factory: Callable[[], str] = _utc_created_at,
+        runtime_registry_version_resolver: Callable[[], int] | None = None,
     ) -> None:
         self._repository_root = Path(repository_root)
         self._resolver = CanonicalRepositoryResolver(self._repository_root / "mldb_data")
@@ -240,6 +243,7 @@ class _ExecutionCompositionShell:
         self._wait = wait
         self._execution_key_factory = execution_key_factory
         self._created_at_factory = created_at_factory
+        self._runtime_registry_version_resolver = runtime_registry_version_resolver
 
     def _load_plan(self, plan_id: StudyPlanId | str) -> StudyPlan:
         validated_id = StudyPlanId(_validate_typed_reference(plan_id))
@@ -272,6 +276,7 @@ class _ExecutionCompositionShell:
         exact_plan: StudyPlan,
         backend_name: str,
         key: ExecutionKey,
+        runtime_registry_version: int | None = None,
     ) -> StudyResult:
         result_id = _study_result_id(exact_plan, key)
 
@@ -291,11 +296,20 @@ class _ExecutionCompositionShell:
                 )
             return existing
 
+        if runtime_registry_version is None:
+            resolver = self._runtime_registry_version_resolver
+            if resolver is None:
+                raise RuntimeError("runtime registry version resolver is not configured")
+            runtime_registry_version = resolver()
+        if type(runtime_registry_version) is not int or runtime_registry_version <= 0:
+            raise ValueError("runtime registry version resolver returned an invalid version")
+
         initial = _initial_study_result(
             plan=exact_plan,
             backend=backend_name,
             execution_key=key,
             created_at=self._created_at_factory(),
+            runtime_registry_version=runtime_registry_version,
         )
         try:
             stored = self._writer.create_study_result(
@@ -388,10 +402,14 @@ class _ExecutionCompositionShell:
         selected_backend = (
             source_result["backend"] if backend_override is None else backend_override
         )
+        runtime_registry_version = source_result.get("runtime_registry_version")
+        if type(runtime_registry_version) is not int or runtime_registry_version <= 0:
+            raise ValueError("source StudyResult has no runtime registry version to reproduce")
         started = self._start_study_validated(
             exact_plan=exact_plan,
             backend_name=selected_backend,
             key=self._fresh_execution_key(),
+            runtime_registry_version=runtime_registry_version,
         )
         return self._drive_to_terminal(started["id"])
 

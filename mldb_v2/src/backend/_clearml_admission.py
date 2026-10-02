@@ -29,6 +29,7 @@ _STAGE_INPUT_FIELDS = {
     "kind",
     "coordinate",
     "source_commit",
+    "runtime_registry_version",
     "pins",
     "stage",
     "runtime_model",
@@ -115,6 +116,9 @@ def _validate_stage_input_identity(stage_input: StageInput) -> tuple[str, str]:
     study_result = _validate_typed_reference(stage_input["study_result"])
     _validate_typed_reference(stage_input["plan"])
     _validate_trial_id(stage_input["trial"])
+    runtime_registry_version = stage_input["runtime_registry_version"]
+    if type(runtime_registry_version) is not int or runtime_registry_version <= 0:
+        raise ValueError("StageInput runtime_registry_version must be a positive integer")
     kind = stage_input["kind"]
     if kind == "training":
         if stage_input["coordinate"] is not None or stage_input["runtime_model"] is not None:
@@ -174,6 +178,7 @@ def _metadata(stage_input: StageInput, *, study_id: str, ownership_key: str) -> 
         "mldb.task": _validate_typed_reference(stage.get("task")),
         "mldb.corpus": _validate_typed_reference(stage.get("corpus")),
         "mldb.source_commit": str(stage_input["source_commit"]),
+        "mldb.runtime_registry_version": str(stage_input["runtime_registry_version"]),
         "mldb.ownership_key": ownership_key,
     }
     if stage_input["kind"] == "training":

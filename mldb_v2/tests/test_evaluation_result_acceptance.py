@@ -205,6 +205,7 @@ def _study_result(plan: dict[str, object]) -> dict[str, object]:
         "plan": plan["id"],
         "study": plan["study"],
         "source_commit": SOURCE_COMMIT,
+        "runtime_registry_version": 1,
         "backend": "fake",
         "created_at": "2026-09-13T00:00:00Z",
         "status": "submitted",
@@ -230,6 +231,7 @@ def _stage_input(plan: dict[str, object], weights: dict[str, object]) -> dict[st
         "kind": "evaluation",
         "coordinate": "eval-0001",
         "source_commit": SOURCE_COMMIT,
+        "runtime_registry_version": 1,
         "pins": copy.deepcopy(plan["pins"]),
         "stage": {
             "name": "holdout", "task": "demo/task-v1", "corpus": "demo/eval-corpus-v1",

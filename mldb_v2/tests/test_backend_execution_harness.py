@@ -309,6 +309,7 @@ def _training_input(fx: dict[str, object]) -> dict[str, object]:
         "kind": "training",
         "coordinate": None,
         "source_commit": plan["source_commit"],
+        "runtime_registry_version": 1,
         "pins": copy.deepcopy(plan["pins"]),
         "stage": {key: value for key, value in trial["source"].items() if key != "kind"},
         "runtime_model": None,
@@ -401,6 +402,7 @@ def _evaluation_input(fx: dict[str, object], runtime_model: dict[str, object]) -
         "kind": "evaluation",
         "coordinate": coordinate["coordinate"],
         "source_commit": plan["source_commit"],
+        "runtime_registry_version": 1,
         "pins": copy.deepcopy(plan["pins"]),
         "stage": {
             "name": coordinate["stage"],

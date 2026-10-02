@@ -147,6 +147,7 @@ def _shell(
     wait=lambda: None,
     execution_key_factory=lambda: FRESH_UUID_A,
     created_at_factory=lambda: "2026-09-13T12:00:00Z",
+    runtime_registry_version_resolver=lambda: 1,
 ):
     return execution._ExecutionCompositionShell(
         repository_root=tmp_path,
@@ -156,6 +157,7 @@ def _shell(
         wait=wait,
         execution_key_factory=execution_key_factory,
         created_at_factory=created_at_factory,
+        runtime_registry_version_resolver=runtime_registry_version_resolver,
     )
 
 
@@ -176,6 +178,7 @@ def test_start_persists_without_progression_and_mirrors_plan_topology(tmp_path: 
     assert result["status"] == "submitted"
     assert result["diagnostic"] is None
     assert result["backend"] == "fake"
+    assert result["runtime_registry_version"] == 1
     assert result["created_at"] == "2026-09-13T12:34:56Z"
     assert result["trials"][0]["training"] == {
         "disposition": "pending", "result": None, "reason": None
@@ -402,6 +405,7 @@ def _application(tmp_path: Path) -> Application:
         repository_root=tmp_path,
         backend_registry=BackendRegistry(),
         object_bytes=_ObjectByteAccess(_NullTransport()),
+        runtime_registry_version_resolver=lambda: 1,
     )
 
 
@@ -508,3 +512,42 @@ def test_execution_shell_contains_no_w006_progression_algorithm_dependencies() -
         and call.func.attr == "_advance_one_pass"
         for call in calls
     )
+
+
+def test_runtime_registry_pin_is_resolved_once_and_reused_for_recovery_and_rerun(tmp_path: Path) -> None:
+    _root, plan = _install_plan(tmp_path)
+    resolved: list[int] = []
+    versions = iter([1, 2])
+
+    def resolve_version() -> int:
+        value = next(versions)
+        resolved.append(value)
+        return value
+
+    shell = _shell(tmp_path, runtime_registry_version_resolver=resolve_version)
+    first = shell.start_study(
+        plan=plan["id"], backend="fake", execution_key=SOURCE_KEY
+    )
+    recovered = shell.start_study(
+        plan=plan["id"], backend="fake", execution_key=SOURCE_KEY
+    )
+    advanced_latest = shell.start_study(
+        plan=plan["id"], backend="fake", execution_key=FRESH_UUID_B.hex
+    )
+
+    assert first["runtime_registry_version"] == 1
+    assert recovered["runtime_registry_version"] == 1
+    assert advanced_latest["runtime_registry_version"] == 2
+    assert resolved == [1, 2]
+
+    driver = _FakeAdvance(tmp_path)
+    rerun_shell = _shell(
+        tmp_path,
+        advance_one_pass=driver,
+        execution_key_factory=lambda: FRESH_UUID_A,
+        runtime_registry_version_resolver=lambda: (_ for _ in ()).throw(
+            AssertionError("rerun must inherit the source runtime version")
+        ),
+    )
+    rerun = rerun_shell.rerun_study(source=first["id"])
+    assert rerun["runtime_registry_version"] == 1

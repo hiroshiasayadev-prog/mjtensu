@@ -243,6 +243,7 @@ def _application(tmp_path: Path, fx, backend: RetryBackend) -> Application:
         repository_root=tmp_path,
         backend_registry=registry,
         object_bytes=fx["object_bytes"],
+        runtime_registry_version_resolver=lambda: 1,
     )
 
 

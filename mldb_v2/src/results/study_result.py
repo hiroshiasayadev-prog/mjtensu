@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import uuid
 from datetime import datetime
-from typing import Literal, TypeAlias, TypedDict, cast
+from typing import Literal, NotRequired, TypeAlias, TypedDict, cast
 
 from mldb_v2.src.common.diagnostic import Diagnostic, _validate_diagnostic
 from mldb_v2.src.common.ids import (
@@ -73,6 +73,7 @@ class StudyResult(TypedDict):
     plan: StudyPlanId
     study: StudyId
     source_commit: str
+    runtime_registry_version: NotRequired[int]
     backend: str
     created_at: str
     status: StudyResultStatus
@@ -81,7 +82,7 @@ class StudyResult(TypedDict):
 
 
 _SCHEMA = "mjtensu.mldb-v2/study-result/v1"
-_TOP_LEVEL_FIELDS = {
+_LEGACY_TOP_LEVEL_FIELDS = {
     "schema",
     "id",
     "execution_key",
@@ -94,6 +95,7 @@ _TOP_LEVEL_FIELDS = {
     "diagnostic",
     "trials",
 }
+_TOP_LEVEL_FIELDS = _LEGACY_TOP_LEVEL_FIELDS | {"runtime_registry_version"}
 _TRIAL_FIELDS = {"trial", "training", "evaluations"}
 _TRAINING_SLOT_FIELDS = {"disposition", "result", "reason"}
 _EVALUATION_SLOT_FIELDS = {"coordinate", "stage", "disposition", "result", "reason"}
@@ -259,7 +261,7 @@ def _validate_closure(status: str, trials: list[StudyResultTrial]) -> None:
 
 def _validate_study_result(value: object) -> StudyResult:
     """Validate one exact schema-v1 StudyResult value without persistence or mutation."""
-    if type(value) is not dict or set(value) != _TOP_LEVEL_FIELDS:
+    if type(value) is not dict or set(value) not in (_TOP_LEVEL_FIELDS, _LEGACY_TOP_LEVEL_FIELDS):
         raise ValueError("StudyResult fields do not match schema")
     _validate_canonical_json_value(value)
     if value["schema"] != _SCHEMA:
@@ -279,6 +281,11 @@ def _validate_study_result(value: object) -> StudyResult:
     source_commit = value["source_commit"]
     if type(source_commit) is not str or _COMMIT_RE.fullmatch(source_commit) is None:
         raise ValueError("StudyResult source_commit must be a full Git object id")
+    runtime_registry_version = value.get("runtime_registry_version")
+    if runtime_registry_version is not None and (
+        type(runtime_registry_version) is not int or runtime_registry_version <= 0
+    ):
+        raise ValueError("StudyResult runtime_registry_version must be a positive integer")
     backend = value["backend"]
     if type(backend) is not str or not backend:
         raise ValueError("StudyResult backend must be a non-empty generic type name")
@@ -331,19 +338,19 @@ def _validate_study_result(value: object) -> StudyResult:
         )
 
     _validate_closure(status, trials)
-    return cast(
-        StudyResult,
-        {
-            "schema": _SCHEMA,
-            "id": StudyResultId(study_result_id),
-            "execution_key": execution_key,
-            "plan": StudyPlanId(plan),
-            "study": StudyId(study),
-            "source_commit": source_commit,
-            "backend": backend,
-            "created_at": created_at,
-            "status": status,
-            "diagnostic": diagnostic,
-            "trials": trials,
-        },
-    )
+    result: dict[str, object] = {
+        "schema": _SCHEMA,
+        "id": StudyResultId(study_result_id),
+        "execution_key": execution_key,
+        "plan": StudyPlanId(plan),
+        "study": StudyId(study),
+        "source_commit": source_commit,
+        "backend": backend,
+        "created_at": created_at,
+        "status": status,
+        "diagnostic": diagnostic,
+        "trials": trials,
+    }
+    if runtime_registry_version is not None:
+        result["runtime_registry_version"] = runtime_registry_version
+    return cast(StudyResult, result)

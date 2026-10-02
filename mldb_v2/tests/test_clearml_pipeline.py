@@ -89,6 +89,7 @@ def _result(plan: StudyPlan, *, status: str = "submitted") -> StudyResult:
         "plan": plan["id"],
         "study": plan["study"],
         "source_commit": plan["source_commit"],
+        "runtime_registry_version": 1,
         "backend": "clearml",
         "created_at": "2026-09-17T10:00:00Z",
         "status": status,

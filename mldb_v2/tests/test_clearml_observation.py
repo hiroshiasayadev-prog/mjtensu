@@ -62,6 +62,7 @@ def _training_stage_input() -> TrainingStageInput:
         "kind": "training",
         "coordinate": None,
         "source_commit": "2" * 40,
+        "runtime_registry_version": 1,
         "pins": [cast(object, _pin("study", "demo/study-a"))],
         "stage": {
             "task": TaskId("demo/task"),
@@ -85,6 +86,7 @@ def _evaluation_stage_input() -> EvaluationStageInput:
         "kind": "evaluation",
         "coordinate": EvaluationCoordinateId("eval-0001"),
         "source_commit": "2" * 40,
+        "runtime_registry_version": 1,
         "pins": [cast(object, _pin("study", "demo/study-a"))],
         "stage": {
             "name": "final-holdout",

@@ -12,6 +12,10 @@ from mldb_v2.src.backend._config import BackendConfig
 from mldb_v2.src.backend._registry import BackendRegistry
 from mldb_v2.src.backend.clearml_backend import register_clearml_backend
 from mldb_v2.src.storage.object_bytes import _ObjectByteAccess
+from mldb_v2.src.runtime_registry import (
+    DEFAULT_RUNTIME_REGISTRY_URL,
+    runtime_registry_version_resolver,
+)
 from mldb_v2.src.storage.s3_transport import (
     S3ObjectByteTransport,
     _S3TransportConfig,
@@ -205,6 +209,10 @@ def compose_application(
     """Compose the production Application without exposing lower-layer construction."""
 
     runtime_environment = os.environ if environment is None else environment
+    runtime_registry_url = (
+        _optional_environment_value(runtime_environment, "MLDB_V2_RUNTIME_REGISTRY_URL")
+        or DEFAULT_RUNTIME_REGISTRY_URL
+    )
     registry = BackendRegistry()
     register_clearml_backend(registry)
     application = Application(
@@ -219,6 +227,9 @@ def compose_application(
             )
         },
         mldb_tests_root=Path(repository_root) / "mldb_tests",
+        runtime_registry_version_resolver=runtime_registry_version_resolver(
+            runtime_registry_url
+        ),
     )
     return ApplicationComposition(
         application=application,

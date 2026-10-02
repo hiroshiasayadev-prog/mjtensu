@@ -90,6 +90,7 @@ def _application(tmp_path: Path, backend: FakeBackend) -> Application:
         repository_root=tmp_path,
         backend_registry=_registry(backend),
         object_bytes=_ObjectByteAccess(NullTransport()),
+        runtime_registry_version_resolver=lambda: 1,
     )
 
 
@@ -106,6 +107,7 @@ def test_application_wires_owned_object_bytes_into_authoring_verifier(tmp_path: 
         repository_root=tmp_path,
         backend_registry=_registry(backend),
         object_bytes=object_bytes,
+        runtime_registry_version_resolver=lambda: 1,
     )
 
     assert application._object_bytes is object_bytes
@@ -417,6 +419,7 @@ def test_unknown_backend_observation_maps_to_backend_unavailable(tmp_path: Path)
         repository_root=tmp_path,
         backend_registry=BackendRegistry(),
         object_bytes=_ObjectByteAccess(NullTransport()),
+        runtime_registry_version_resolver=lambda: 1,
     )
     result = app.start_study(
         plan=plan["id"], backend="missing", execution_key=execution_fx.SOURCE_KEY

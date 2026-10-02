@@ -14,6 +14,14 @@ from pathlib import Path
 from typing import Any, cast
 from urllib.parse import quote, urlsplit, urlunsplit
 
+# ClearML executes this file directly in remote Task containers.  Workers that
+# opt into the global runtime registry converge and re-exec before importing the
+# rest of MLDB so the stage actually runs under the managed environment.
+if __name__ == "__main__":
+    from mldb_v2.src.runtime_registry import maybe_reexec_managed_worker_runtime
+
+    maybe_reexec_managed_worker_runtime()
+
 from mldb_v2.src.backend._clearml_admission import (
     ClearMLCreateRequest,
     ClearMLTaskRecord,
@@ -2167,7 +2175,11 @@ class ClearMLSDKAdapter:
                 docker_arguments.extend(["--gpus", docker_gpu])
             if self._settings.docker_shm_size is not None:
                 docker_arguments.extend(["--shm-size", self._settings.docker_shm_size])
+            runtime_registry_version = stage_input.get("runtime_registry_version")
+            if type(runtime_registry_version) is not int or runtime_registry_version <= 0:
+                raise ClearMLSDKError("StageInput runtime registry version is invalid")
             docker_arguments.extend([
+                "-e", f"MLDB_RUNTIME_REGISTRY_VERSION={runtime_registry_version}",
                 "-e", "AWS_ACCESS_KEY_ID",
                 "-e", "AWS_SECRET_ACCESS_KEY",
                 "-e", "AWS_SESSION_TOKEN",

@@ -333,6 +333,7 @@ def _stage_input(
         "kind": "evaluation",
         "coordinate": "eval-0001",
         "source_commit": "a" * 40,
+        "runtime_registry_version": 1,
         "pins": [],
         "stage": stage,
         "runtime_model": _runtime_model(weight_data)

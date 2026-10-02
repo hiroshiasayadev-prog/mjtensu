@@ -56,6 +56,7 @@ class TrainingStageInput(TypedDict):
     kind: Literal["training"]
     coordinate: None
     source_commit: str
+    runtime_registry_version: int
     pins: list[PlanPin]
     stage: TrainingStage
     runtime_model: None
@@ -70,6 +71,7 @@ class EvaluationStageInput(TypedDict):
     kind: Literal["evaluation"]
     coordinate: EvaluationCoordinateId
     source_commit: str
+    runtime_registry_version: int
     pins: list[PlanPin]
     stage: EvaluationStage
     runtime_model: RuntimeModel

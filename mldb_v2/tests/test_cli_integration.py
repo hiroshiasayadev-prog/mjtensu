@@ -152,6 +152,7 @@ def _real_application(tmp_path: Path) -> tuple[Path, str, app_fx.FakeBackend, Ap
         repository_root=repository_root,
         backend_registry=app_fx._registry(backend),
         object_bytes=_ObjectByteAccess(_DictTransport(objects)),
+        runtime_registry_version_resolver=lambda: 1,
     )
     return repository_root, study_id, backend, application
 
