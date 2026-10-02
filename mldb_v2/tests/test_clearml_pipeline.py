@@ -1011,3 +1011,158 @@ def test_ready_child_is_bound_to_pipeline_before_queue_and_replay_is_idempotent(
     completed_summary["rows"][0]["result"] = "demo/training-result-v1"
     adapter.project_pipeline_summary(execution_id=pipeline_id, summary=completed_summary)
     assert controller.configs["Pipeline"]["arch-v1 | training"]["status"] == "completed"
+
+
+def test_pipeline_summary_groups_latency_metrics_by_stage_and_shows_model_legend() -> None:
+    FakeSDKTask.reset()
+    plan = _plan()
+    result = _result(plan)
+    adapter = ClearMLSDKAdapter(ClearMLSDKSettings(), task_class=FakeSDKTask)
+    pipeline_id = cast(str, adapter.create_pipeline_run(_pipeline_request(plan, result)))
+
+    metrics: list[str] = []
+    values_a: dict[str, float] = {}
+    values_b: dict[str, float] = {}
+    components = [
+        "latency",
+        "detector_preprocessing",
+        "detector_inference",
+        "detector_postprocessing",
+        "crop_extraction",
+        "base_classifier_preprocessing",
+        "base_classifier_inference",
+        "red_five_classifier_preprocessing",
+        "red_five_classifier_inference",
+        "pipeline_unattributed_overhead",
+    ]
+    for stat_index, stat in enumerate(("mean", "p50", "p95", "max"), start=1):
+        for component_index, component in enumerate(components, start=1):
+            name = f"{component}_{stat}_ms"
+            metrics.append(name)
+            values_a[name] = float(stat_index * 10 + component_index)
+            values_b[name] = float(stat_index * 20 + component_index)
+    for stat_index, stat in enumerate(("mean", "p50", "p95", "max"), start=1):
+        for prefix in ("candidate_count", "red_five_candidate_count"):
+            name = f"{prefix}_{stat}"
+            metrics.append(name)
+            values_a[name] = float(stat_index)
+            values_b[name] = float(stat_index + 1)
+    for name, a, b in (
+        ("cadence_fulfillment_rate", 0.7, 0.8),
+        ("cadence_skip_rate", 0.1, 0.05),
+        ("eval_gap_p95_ms", 220.0, 200.0),
+        ("eval_gap_max_ms", 300.0, 280.0),
+        ("effective_eval_hz", 6.7, 7.1),
+    ):
+        metrics.append(name)
+        values_a[name] = a
+        values_b[name] = b
+
+    summary = {
+        "schema": "mjtensu.mldb-v2/study-summary-projection/v4",
+        "study_result": result["id"],
+        "study": result["study"],
+        "status": "completed",
+        "rows": [],
+        "comparisons": [{
+            "stage": "recognition-iphone-latency",
+            "evaluation_protocol": "demo/latency-v2",
+            "evaluation_name": "Production recognition iPhone latency v2",
+            "evaluation_description": "Measures production recognition timing on the physical iPhone.",
+            "metrics": metrics,
+            "metric_preferences": {metric: "lower" for metric in metrics},
+            "metric_descriptions": {},
+            "rows": [
+                {"trial": "trial-0001", "trial_label": "Model A", "disposition": "completed", "metrics": values_a},
+                {"trial": "trial-0002", "trial_label": "Model B", "disposition": "completed", "metrics": values_b},
+            ],
+        }],
+    }
+
+    adapter.project_pipeline_summary(execution_id=pipeline_id, summary=summary)
+    controller = FakeSDKTask.get_task(task_id=pipeline_id)
+    assert controller is not None
+    reports = [
+        item for item in controller.plotly_reports
+        if item["title"] == "Model Comparison - recognition-iphone-latency"
+    ]
+    assert [item["series"] for item in reports] == [
+        "Latency breakdown - Mean",
+        "Latency breakdown - P50",
+        "Latency breakdown - P95",
+        "Latency breakdown - Max",
+        "Candidate counts",
+        "Cadence rates",
+        "Evaluation gaps",
+    ]
+    mean_figure = reports[0]["figure"]
+    assert [trace["name"] for trace in mean_figure["data"]] == ["Model A", "Model B"]
+    assert all(trace["showlegend"] is True for trace in mean_figure["data"])
+    assert mean_figure["layout"]["showlegend"] is True
+    assert mean_figure["layout"]["legend"]["orientation"] == "v"
+    assert mean_figure["layout"]["yaxis"]["title"]["text"] == "Time (ms)"
+    assert mean_figure["data"][0]["x"] == [
+        "Total pipeline",
+        "Detector preprocess",
+        "Detector inference",
+        "Detector postprocess",
+        "Crop extraction",
+        "Base classifier preprocess",
+        "Base classifier inference",
+        "Red-five preprocess",
+        "Red-five inference",
+        "Other pipeline overhead",
+    ]
+    assert "Measures production recognition timing on the physical iPhone." in mean_figure["layout"]["title"]["text"]
+    assert not any(item["series"] == "effective_eval_hz" for item in reports)
+
+
+def test_pipeline_summary_groups_functional_rates_into_one_plot() -> None:
+    FakeSDKTask.reset()
+    plan = _plan()
+    result = _result(plan)
+    adapter = ClearMLSDKAdapter(ClearMLSDKSettings(), task_class=FakeSDKTask)
+    pipeline_id = cast(str, adapter.create_pipeline_run(_pipeline_request(plan, result)))
+    metrics = [
+        "frame_semantic_exact_rate",
+        "completed_hand_exact_rate",
+        "dora_exact_rate",
+        "meld_exact_rate",
+        "eligible_frame_rate",
+        "take_gt_streak3_rate",
+        "take_product_confirmed_rate",
+        "take_product_confirmed_exact_rate",
+    ]
+    values = {metric: 0.5 for metric in metrics}
+    summary = {
+        "schema": "mjtensu.mldb-v2/study-summary-projection/v4",
+        "study_result": result["id"],
+        "study": result["study"],
+        "status": "completed",
+        "rows": [],
+        "comparisons": [{
+            "stage": "recognition-functional-video",
+            "evaluation_protocol": "demo/functional-v4",
+            "evaluation_name": "Production recognition functional video v4",
+            "evaluation_description": "Measures semantic correctness over the fixed five-video corpus.",
+            "metrics": metrics,
+            "metric_preferences": {metric: "higher" for metric in metrics},
+            "metric_descriptions": {},
+            "rows": [
+                {"trial": "trial-0001", "trial_label": "Model A", "disposition": "completed", "metrics": values},
+            ],
+        }],
+    }
+
+    adapter.project_pipeline_summary(execution_id=pipeline_id, summary=summary)
+    controller = FakeSDKTask.get_task(task_id=pipeline_id)
+    assert controller is not None
+    reports = [
+        item for item in controller.plotly_reports
+        if item["title"] == "Model Comparison - recognition-functional-video"
+    ]
+    assert [item["series"] for item in reports] == ["Rates"]
+    figure = reports[0]["figure"]
+    assert [trace["name"] for trace in figure["data"]] == ["Model A"]
+    assert figure["layout"]["showlegend"] is True
+    assert "Measures semantic correctness over the fixed five-video corpus." in figure["layout"]["title"]["text"]

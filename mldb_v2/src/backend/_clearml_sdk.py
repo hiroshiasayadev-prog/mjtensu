@@ -943,6 +943,203 @@ def _comparison_bar_figure(
     return {"data": [trace], "layout": layout}
 
 
+
+_TIMING_BREAKDOWN_COMPONENTS = (
+    ("latency", "Total pipeline"),
+    ("detector_preprocessing", "Detector preprocess"),
+    ("detector_inference", "Detector inference"),
+    ("detector_postprocessing", "Detector postprocess"),
+    ("crop_extraction", "Crop extraction"),
+    ("base_classifier_preprocessing", "Base classifier preprocess"),
+    ("base_classifier_inference", "Base classifier inference"),
+    ("red_five_classifier_preprocessing", "Red-five preprocess"),
+    ("red_five_classifier_inference", "Red-five inference"),
+    ("pipeline_unattributed_overhead", "Other pipeline overhead"),
+)
+_TIMING_STATS = (
+    ("mean", "Mean"),
+    ("p50", "P50"),
+    ("p95", "P95"),
+    ("max", "Max"),
+)
+
+
+def _human_metric_label(metric: str) -> str:
+    return metric.replace("_", " ").strip().capitalize()
+
+
+def _grouped_metric_figure(
+    *,
+    title: str,
+    description: str | None,
+    categories: Sequence[tuple[str, str]],
+    rows: Sequence[Mapping[str, object]],
+    y_axis_title: str,
+    value_suffix: str = "",
+) -> dict[str, object] | None:
+    labels = [label for _metric, label in categories]
+    traces: list[dict[str, object]] = []
+    for row in rows:
+        trial = row.get("trial_label") or row.get("trial")
+        raw_metrics = row.get("metrics")
+        if type(trial) is not str or not isinstance(raw_metrics, Mapping):
+            continue
+        values: list[float | None] = []
+        for metric, _label in categories:
+            raw = raw_metrics.get(metric)
+            numeric: float | None = None
+            if type(raw) in {int, float}:
+                candidate = float(raw)
+                if math.isfinite(candidate):
+                    numeric = candidate
+            values.append(numeric)
+        if not any(value is not None for value in values):
+            continue
+        traces.append({
+            "type": "bar",
+            "name": trial,
+            "x": labels,
+            "y": values,
+            "showlegend": True,
+            "hovertemplate": (
+                "%{x}<br>%{y:.6g}" + value_suffix + "<extra>%{fullData.name}</extra>"
+            ),
+        })
+    if not traces:
+        return None
+    title_text = title
+    if type(description) is str and description:
+        title_text += f"<br><sup>{description}</sup>"
+    return {
+        "data": traces,
+        "layout": {
+            "title": {"text": title_text},
+            "showlegend": True,
+            "barmode": "group",
+            "height": 430,
+            "margin": {"l": 75, "r": 150, "t": 110, "b": 120},
+            "hovermode": "closest",
+            "legend": {
+                "orientation": "v",
+                "x": 1.0,
+                "y": 1.0,
+                "xanchor": "left",
+                "yanchor": "top",
+                "bgcolor": "rgba(38,42,49,0.85)",
+                "bordercolor": "#8D9199",
+                "borderwidth": 1,
+                "font": {"color": "#E3E2E6"},
+            },
+            "xaxis": {"automargin": True, "tickangle": -25},
+            "yaxis": {"title": {"text": y_axis_title}, "automargin": True, "rangemode": "tozero"},
+        },
+    }
+
+
+def _comparison_grouped_metric_figures(
+    *,
+    evaluation_name: str | None,
+    evaluation_description: str | None,
+    metrics: Sequence[str],
+    rows: Sequence[Mapping[str, object]],
+) -> tuple[list[tuple[str, dict[str, object]]], set[str]]:
+    figures: list[tuple[str, dict[str, object]]] = []
+    consumed: set[str] = set()
+    metric_set = set(metrics)
+    prefix = evaluation_name or "Evaluation"
+
+    for stat, stat_label in _TIMING_STATS:
+        categories = [
+            (f"{component}_{stat}_ms", label)
+            for component, label in _TIMING_BREAKDOWN_COMPONENTS
+            if f"{component}_{stat}_ms" in metric_set
+        ]
+        if len(categories) >= 2:
+            figure = _grouped_metric_figure(
+                title=f"{prefix} - {stat_label} latency by stage",
+                description=evaluation_description,
+                categories=categories,
+                rows=rows,
+                y_axis_title="Time (ms)",
+                value_suffix=" ms",
+            )
+            if figure is not None:
+                figures.append((f"Latency breakdown - {stat_label}", figure))
+                consumed.update(metric for metric, _label in categories)
+
+    count_categories = [
+        (metric, label)
+        for stat, stat_label in _TIMING_STATS
+        for metric, label in (
+            (f"candidate_count_{stat}", f"All candidates {stat_label}"),
+            (f"red_five_candidate_count_{stat}", f"Red-five candidates {stat_label}"),
+        )
+        if metric in metric_set
+    ]
+    if len(count_categories) >= 2:
+        figure = _grouped_metric_figure(
+            title=f"{prefix} - Candidate counts",
+            description=evaluation_description,
+            categories=count_categories,
+            rows=rows,
+            y_axis_title="Tiles per evaluation",
+        )
+        if figure is not None:
+            figures.append(("Candidate counts", figure))
+            consumed.update(metric for metric, _label in count_categories)
+
+    cadence_rate_metrics = [
+        ("cadence_fulfillment_rate", "Cadence fulfillment"),
+        ("cadence_skip_rate", "Skipped in-flight ticks"),
+    ]
+    cadence_rate_metrics = [item for item in cadence_rate_metrics if item[0] in metric_set]
+    if len(cadence_rate_metrics) >= 2:
+        figure = _grouped_metric_figure(
+            title=f"{prefix} - Cadence rates",
+            description=evaluation_description,
+            categories=cadence_rate_metrics,
+            rows=rows,
+            y_axis_title="Rate",
+        )
+        if figure is not None:
+            figures.append(("Cadence rates", figure))
+            consumed.update(metric for metric, _label in cadence_rate_metrics)
+
+    gap_metrics = [
+        ("eval_gap_p95_ms", "Evaluation gap P95"),
+        ("eval_gap_max_ms", "Evaluation gap max"),
+    ]
+    gap_metrics = [item for item in gap_metrics if item[0] in metric_set]
+    if len(gap_metrics) >= 2:
+        figure = _grouped_metric_figure(
+            title=f"{prefix} - Evaluation gaps",
+            description=evaluation_description,
+            categories=gap_metrics,
+            rows=rows,
+            y_axis_title="Time (ms)",
+            value_suffix=" ms",
+        )
+        if figure is not None:
+            figures.append(("Evaluation gaps", figure))
+            consumed.update(metric for metric, _label in gap_metrics)
+
+    rate_metrics = [metric for metric in metrics if metric.endswith("_rate") and metric not in consumed]
+    if len(rate_metrics) >= 2:
+        categories = [(metric, _human_metric_label(metric.removesuffix("_rate"))) for metric in rate_metrics]
+        figure = _grouped_metric_figure(
+            title=f"{prefix} - Rates",
+            description=evaluation_description,
+            categories=categories,
+            rows=rows,
+            y_axis_title="Rate",
+        )
+        if figure is not None:
+            figures.append(("Rates", figure))
+            consumed.update(rate_metrics)
+
+    return figures, consumed
+
+
 def _study_artifact_local_path(task: object, name: str) -> Path | None:
     artifacts = getattr(task, "artifacts", None)
     if not isinstance(artifacts, Mapping):
@@ -1766,7 +1963,37 @@ class ClearMLSDKAdapter:
                     pass
 
             if callable(report_plotly):
-                for metric in metrics:
+                evaluation_description = comparison.get("evaluation_description")
+                grouped, consumed = _comparison_grouped_metric_figures(
+                    evaluation_name=(
+                        evaluation_name if type(evaluation_name) is str else None
+                    ),
+                    evaluation_description=(
+                        evaluation_description
+                        if type(evaluation_description) is str
+                        else None
+                    ),
+                    metrics=metrics,
+                    rows=normalized_rows,
+                )
+                for series_name, figure in grouped:
+                    try:
+                        report_plotly(
+                            title=f"Model Comparison - {stage}",
+                            series=series_name,
+                            iteration=0,
+                            figure=figure,
+                        )
+                    except Exception:
+                        pass
+
+                remaining = [metric for metric in metrics if metric not in consumed]
+                if len(remaining) == 1 and grouped:
+                    # A grouped evaluation often has one scalar with a different
+                    # unit (for example effective_eval_hz). Keep it in the
+                    # comparison table instead of creating a one-item chart.
+                    remaining = []
+                for metric in remaining:
                     preference = preferences.get(metric, "neutral")
                     figure = _comparison_bar_figure(
                         stage=stage,
