@@ -24,6 +24,9 @@ from typing import Callable, Mapping, Sequence
 DEFAULT_RUNTIME_REGISTRY_URL = "https://mjtensu-dev.home.arpa/mldb-runtime-registry/"
 _NAME_RE = re.compile(r"[-_.]+")
 _EXACT_REQUIREMENT_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==([^;\s]+)$")
+_DIRECT_URL_REQUIREMENT_RE = re.compile(
+    r"^([A-Za-z0-9][A-Za-z0-9._-]*)\s*@\s*(https?://\S+)$"
+)
 
 
 class RuntimeRegistryError(RuntimeError):
@@ -58,7 +61,8 @@ class RuntimeRegistrySnapshot:
 class RuntimePackage:
     name: str
     version: str
-    index_url: str
+    index_url: str | None = None
+    source_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -257,14 +261,23 @@ def _runtime_packages(snapshot: RuntimeRegistrySnapshot) -> dict[str, RuntimePac
         name = raw.get("name")
         version = raw.get("version")
         index_url = source.get("registry") if type(source) is dict else None
+        source_url = source.get("url") if type(source) is dict else None
         if (
             type(name) is not str
             or type(version) is not str
-            or type(index_url) is not str
-            or not index_url
+            or (
+                (type(index_url) is not str or not index_url)
+                and (type(source_url) is not str or not source_url)
+            )
+            or (
+                type(index_url) is str
+                and index_url
+                and type(source_url) is str
+                and source_url
+            )
         ):
             raise RuntimeRegistryError(
-                "runtime registry currently supports only versioned registry packages"
+                "runtime registry lock package source is unsupported"
             )
         canonical = _canonical_name(name)
         if canonical in packages:
@@ -272,7 +285,8 @@ def _runtime_packages(snapshot: RuntimeRegistrySnapshot) -> dict[str, RuntimePac
         packages[canonical] = RuntimePackage(
             name=name,
             version=version,
-            index_url=index_url,
+            index_url=index_url if type(index_url) is str else None,
+            source_url=source_url if type(source_url) is str else None,
         )
 
     project_table = project.get("project")
@@ -283,16 +297,30 @@ def _runtime_packages(snapshot: RuntimeRegistrySnapshot) -> dict[str, RuntimePac
         if type(requirement) is not str:
             raise RuntimeRegistryError("runtime registry dependency is not a string")
         match = _EXACT_REQUIREMENT_RE.fullmatch(requirement)
-        if match is None:
-            raise RuntimeRegistryError(
-                "runtime registry direct dependencies must use exact == pins"
-            )
-        name, version = match.groups()
-        package = packages.get(_canonical_name(name))
-        if package is None or package.version != version:
-            raise RuntimeRegistryError(
-                "runtime registry direct pin does not match resolved lock metadata"
-            )
+        if match is not None:
+            name, version = match.groups()
+            package = packages.get(_canonical_name(name))
+            if (
+                package is None
+                or package.version != version
+                or package.index_url is None
+            ):
+                raise RuntimeRegistryError(
+                    "runtime registry exact pin does not match resolved lock metadata"
+                )
+            continue
+        direct = _DIRECT_URL_REQUIREMENT_RE.fullmatch(requirement)
+        if direct is not None:
+            name, source_url = direct.groups()
+            package = packages.get(_canonical_name(name))
+            if package is None or package.source_url != source_url:
+                raise RuntimeRegistryError(
+                    "runtime registry direct URL pin does not match resolved lock metadata"
+                )
+            continue
+        raise RuntimeRegistryError(
+            "runtime registry direct dependencies must use exact == pins or direct HTTPS URLs"
+        )
     return packages
 
 
@@ -535,8 +563,16 @@ class ManagedRuntimeMaterializer:
             if installed.get(name, {}).get("version") != package.version
         ]
         by_index: dict[str, list[RuntimePackage]] = {}
+        direct_packages: list[RuntimePackage] = []
         for package in needed:
-            by_index.setdefault(package.index_url, []).append(package)
+            if package.source_url is not None:
+                direct_packages.append(package)
+            elif package.index_url is not None:
+                by_index.setdefault(package.index_url, []).append(package)
+            else:
+                raise RuntimeRegistryError(
+                    f"runtime package {package.name!r} has no install source"
+                )
         installed_requirements: list[str] = []
         for index_url in sorted(by_index):
             requirements = [
@@ -557,6 +593,22 @@ class ManagedRuntimeMaterializer:
                 ]
             )
             installed_requirements.extend(requirements)
+        for package in direct_packages:
+            assert package.source_url is not None
+            self._uv(
+                [
+                    "pip",
+                    "install",
+                    "--python",
+                    str(self.managed_python),
+                    "--no-deps",
+                    "--no-python-downloads",
+                    package.source_url,
+                ]
+            )
+            installed_requirements.append(
+                f"{package.name} @ {package.source_url}"
+            )
 
         self._verify(target, removed=removed)
         self._write_atomic_json(
