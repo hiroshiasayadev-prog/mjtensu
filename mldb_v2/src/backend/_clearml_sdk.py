@@ -2669,10 +2669,7 @@ class ClearMLSDKAdapter:
             )
         if status not in _TERMINAL_STATUSES:
             raise ClearMLSDKError(f"unsupported ClearML Task status: {status}")
-        if status not in {"failed", "stopped"}:
-            raise ClearMLSDKError(
-                "ClearML Task reached successful terminal state without harness projection"
-            )
+        successful_without_projection = status in {"completed", "published", "closed"}
 
         config = _configuration(task, _MLDB_CONFIG) or {}
         transport = config.get("mldb.stage_input")
@@ -2680,8 +2677,17 @@ class ClearMLSDKAdapter:
         stage_key = _stage_key_from_input(stage_input)
         candidate_status = "cancelled" if status == "stopped" else "failed"
         diagnostic = {
-            "code": f"clearml_task_{candidate_status}",
-            "message": "ClearML Task terminated before a harness candidate was recorded.",
+            "code": (
+                "clearml_task_completed_without_projection"
+                if successful_without_projection
+                else f"clearml_task_{candidate_status}"
+            ),
+            "message": (
+                "ClearML Task reported successful terminal status but did not record "
+                "the authoritative MLDB harness projection."
+                if successful_without_projection
+                else "ClearML Task terminated before a harness candidate was recorded."
+            ),
         }
         candidate = {
             "state": "terminal",

@@ -720,15 +720,20 @@ def test_sdk_terminal_failure_without_harness_payload_is_safe_failure_not_succes
     assert candidate["result"] is None
 
 
-def test_sdk_success_without_common_harness_projection_is_rejected() -> None:
+def test_sdk_success_without_common_harness_projection_is_safe_failure() -> None:
     FakeSDKTask.reset()
     adapter = ClearMLSDKAdapter(task_class=FakeSDKTask)
     task_id = cast(str, adapter.create_task(_sdk_request(_training_stage_input())))
     task = FakeSDKTask.get_task(task_id=task_id)
     assert task is not None
     task.status = "completed"
-    with pytest.raises(RuntimeError, match="without harness projection"):
-        adapter.read_runtime_projection(task_id=task_id)
+    projection = adapter.read_runtime_projection(task_id=task_id)
+    assert projection.state == "terminal"
+    candidate = cast(dict[str, object], projection.terminal_candidates[0])
+    assert candidate["status"] == "failed"
+    assert candidate["result"] is None
+    diagnostic = cast(dict[str, object], candidate["diagnostic"])
+    assert diagnostic["code"] == "clearml_task_completed_without_projection"
 
 
 
