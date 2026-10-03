@@ -44,6 +44,7 @@ from mldb_v2.src.backend._config import BackendConfig
 from mldb_v2.src.common.ids import EntityKind
 from mldb_v2.src.common.telemetry import _AcceptedScalarEvent
 from mldb_v2.src.repository.resolution import CanonicalRepositoryResolver
+from mldb_v2.src.runtime_registry import RuntimeRegistryClient, RuntimeRegistryError
 from mldb_v2.src.study._plan_build import _validate_study_plan
 from mldb_v2.src.training.model import _validate_model
 from mldb_v2.src.training.training_result import _validate_training_result
@@ -248,6 +249,10 @@ class ClearMLSDKSettings:
     docker_env_file: str | None = None
     docker_gpu: str | None = None
     docker_shm_size: str | None = None
+    runtime_registry_url: str | None = None
+    runtime_registry_ca_bundle: str | None = None
+    runtime_image_profile: str | None = None
+    runtime_image_wait_seconds: int = 1800
     s3_endpoint_url: str | None = None
     s3_region: str | None = None
     script: str = "mldb_v2/src/backend/_clearml_sdk.py"
@@ -265,8 +270,9 @@ class ClearMLSDKSettings:
     def __post_init__(self) -> None:
         for name in (
             "api_host", "web_host", "files_host", "repository", "local_repository_root",
-            "docker_image", "docker_env_file", "docker_gpu", "docker_shm_size", "s3_endpoint_url", "s3_region",
-            "runtime_data_root", "artifact_uri_prefix", "step_queue",
+            "docker_image", "docker_env_file", "docker_gpu", "docker_shm_size",
+            "runtime_registry_url", "runtime_registry_ca_bundle", "runtime_image_profile",
+            "s3_endpoint_url", "s3_region", "runtime_data_root", "artifact_uri_prefix", "step_queue",
         ):
             value = getattr(self, name)
             if value is not None and (type(value) is not str or not value or value.strip() != value):
@@ -279,10 +285,14 @@ class ClearMLSDKSettings:
             raise ValueError("ClearML access_key and secret_key must be supplied together")
         if type(self.prebuilt_runtime) is not bool:
             raise ValueError("prebuilt_runtime must be boolean")
+        if type(self.runtime_image_wait_seconds) is not int or self.runtime_image_wait_seconds < 0:
+            raise ValueError("runtime_image_wait_seconds must be a non-negative integer")
+        if self.runtime_image_profile is not None and self.runtime_registry_url is None:
+            raise ValueError("runtime image profile requires runtime_registry_url")
         for stage, route in self.stage_routes.items():
             if type(stage) is not str or not stage or stage.strip() != stage or not isinstance(route, Mapping):
                 raise ValueError("stage_routes entries must use non-empty stage names and mappings")
-            unknown = set(route) - {"queue", "docker_gpu"}
+            unknown = set(route) - {"queue", "docker_gpu", "runtime_image_profile"}
             if unknown:
                 raise ValueError(f"stage route {stage!r} has unknown fields: {sorted(unknown)!r}")
             if "queue" in route:
@@ -295,6 +305,17 @@ class ClearMLSDKSettings:
                     type(docker_gpu) is not str or not docker_gpu or docker_gpu.strip() != docker_gpu
                 ):
                     raise ValueError(f"stage route {stage!r} docker_gpu must be null or a non-empty trimmed string")
+            if "runtime_image_profile" in route:
+                runtime_image_profile = route["runtime_image_profile"]
+                if runtime_image_profile is not None and (
+                    type(runtime_image_profile) is not str
+                    or not runtime_image_profile
+                    or runtime_image_profile.strip() != runtime_image_profile
+                ):
+                    raise ValueError(
+                        f"stage route {stage!r} runtime_image_profile must be null "
+                        "or a non-empty trimmed string"
+                    )
         if type(self.log_reports) is not int or self.log_reports < 1:
             raise ValueError("log_reports must be a positive integer")
 
@@ -1413,6 +1434,9 @@ class ClearMLSDKAdapter:
         prebuilt_runtime = options.get("prebuilt_runtime", False)
         if type(prebuilt_runtime) is not bool:
             raise ClearMLSDKError("ClearML prebuilt_runtime must be boolean")
+        runtime_image_wait_seconds = options.get("runtime_image_wait_seconds", 1800)
+        if type(runtime_image_wait_seconds) is not int or runtime_image_wait_seconds < 0:
+            raise ClearMLSDKError("ClearML runtime_image_wait_seconds must be a non-negative integer")
         settings = ClearMLSDKSettings(
             api_host=_optional_string(options, "api_host"),
             web_host=_optional_string(options, "web_host"),
@@ -1425,6 +1449,10 @@ class ClearMLSDKAdapter:
             docker_env_file=_optional_string(options, "docker_env_file"),
             docker_gpu=_optional_string(options, "docker_gpu"),
             docker_shm_size=_optional_string(options, "docker_shm_size"),
+            runtime_registry_url=_optional_string(options, "runtime_registry_url"),
+            runtime_registry_ca_bundle=_optional_string(options, "runtime_registry_ca_bundle"),
+            runtime_image_profile=_optional_string(options, "runtime_image_profile"),
+            runtime_image_wait_seconds=runtime_image_wait_seconds,
             s3_endpoint_url=_optional_string(options, "s3_endpoint_url"),
             s3_region=_optional_string(options, "s3_region"),
             script=_string_option(options, "script", "mldb_v2/src/backend/_clearml_sdk.py"),
@@ -2411,15 +2439,39 @@ class ClearMLSDKAdapter:
             if routed_gpu is not None and type(routed_gpu) is not str:
                 raise ClearMLSDKError("ClearML stage route docker_gpu is malformed")
             docker_gpu = cast(str | None, routed_gpu)
-        if self._settings.docker_image is not None:
+        runtime_registry_version = stage_input.get("runtime_registry_version")
+        if type(runtime_registry_version) is not int or runtime_registry_version <= 0:
+            raise ClearMLSDKError("StageInput runtime registry version is invalid")
+        runtime_image_profile = self._settings.runtime_image_profile
+        if "runtime_image_profile" in route:
+            routed_profile = route["runtime_image_profile"]
+            if routed_profile is not None and type(routed_profile) is not str:
+                raise ClearMLSDKError("ClearML stage route runtime_image_profile is malformed")
+            runtime_image_profile = cast(str | None, routed_profile)
+        docker_image = self._settings.docker_image
+        if runtime_image_profile is not None:
+            assert self._settings.runtime_registry_url is not None
+            try:
+                runtime_image = RuntimeRegistryClient(
+                    self._settings.runtime_registry_url,
+                    ca_bundle=self._settings.runtime_registry_ca_bundle,
+                ).runtime_image(
+                    runtime_registry_version,
+                    runtime_image_profile,
+                    wait_seconds=self._settings.runtime_image_wait_seconds,
+                )
+            except RuntimeRegistryError as error:
+                raise ClearMLSDKError(
+                    f"runtime image resolution failed for registry version "
+                    f"{runtime_registry_version}"
+                ) from error
+            docker_image = runtime_image.image_ref
+        if docker_image is not None:
             docker_arguments: list[str] = []
             if docker_gpu is not None:
                 docker_arguments.extend(["--gpus", docker_gpu])
             if self._settings.docker_shm_size is not None:
                 docker_arguments.extend(["--shm-size", self._settings.docker_shm_size])
-            runtime_registry_version = stage_input.get("runtime_registry_version")
-            if type(runtime_registry_version) is not int or runtime_registry_version <= 0:
-                raise ClearMLSDKError("StageInput runtime registry version is invalid")
             docker_arguments.extend([
                 "-e", f"MLDB_RUNTIME_REGISTRY_VERSION={runtime_registry_version}",
                 "-e", "AWS_ACCESS_KEY_ID",
@@ -2435,7 +2487,7 @@ class ClearMLSDKAdapter:
             if self._settings.docker_env_file is not None:
                 docker_arguments.append(f"--env-file={self._settings.docker_env_file}")
             task.set_base_docker(
-                docker_image=self._settings.docker_image,
+                docker_image=docker_image,
                 docker_arguments=docker_arguments,
             )
         task.set_packages(list(_REMOTE_PACKAGES))

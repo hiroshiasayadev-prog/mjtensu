@@ -1,4 +1,4 @@
-"""Global runtime-registry client and precision5820 managed-runtime materialization."""
+"""Global runtime-registry client plus legacy managed-runtime compatibility helpers."""
 from __future__ import annotations
 
 import contextlib
@@ -10,7 +10,9 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import tomllib
+import urllib.error
 import urllib.parse
 import urllib.request
 import ssl
@@ -57,6 +59,16 @@ class RuntimePackage:
     name: str
     version: str
     index_url: str
+
+
+@dataclass(frozen=True)
+class RuntimeImageArtifact:
+    version: int
+    profile: str
+    repository: str
+    tag: str
+    digest: str
+    image_ref: str
 
 
 @dataclass(frozen=True)
@@ -141,6 +153,88 @@ class RuntimeRegistryClient:
 
     def latest_version(self) -> int:
         return self.get().version
+
+    def runtime_image(
+        self,
+        version: int,
+        profile: str,
+        *,
+        wait_seconds: int = 1800,
+        poll_seconds: float = 2.0,
+    ) -> RuntimeImageArtifact:
+        if type(version) is not int or version <= 0:
+            raise ValueError("runtime registry version must be a positive integer")
+        if type(profile) is not str or not profile.strip():
+            raise ValueError("runtime image profile must be a non-empty string")
+        if type(wait_seconds) is not int or wait_seconds < 0:
+            raise ValueError("runtime image wait_seconds must be a non-negative integer")
+        deadline = time.monotonic() + wait_seconds
+        url = self._base_url + "image?" + urllib.parse.urlencode(
+            {"version": version, "profile": profile}
+        )
+        while True:
+            status = 0
+            try:
+                if self._opener is not None:
+                    response = self._opener(url, timeout=self._timeout_seconds)
+                else:
+                    response = urllib.request.urlopen(
+                        url, timeout=self._timeout_seconds, context=self._ssl_context
+                    )
+                with contextlib.closing(response):
+                    status = int(getattr(response, "status", 200))
+                    payload = json.loads(response.read())
+            except urllib.error.HTTPError as error:
+                status = error.code
+                try:
+                    payload = json.loads(error.read())
+                except Exception as decode_error:
+                    raise RuntimeRegistryError(
+                        f"runtime image request failed with HTTP {error.code}"
+                    ) from decode_error
+            except Exception as error:
+                raise RuntimeRegistryError(
+                    f"runtime image request failed for version {version}, profile {profile!r}"
+                ) from error
+
+            if type(payload) is not dict:
+                raise RuntimeRegistryError("runtime image response must be an object")
+            state = payload.get("state")
+            if state == "READY":
+                try:
+                    artifact = RuntimeImageArtifact(
+                        version=payload["version"],
+                        profile=payload["profile"],
+                        repository=payload["repository"],
+                        tag=payload["tag"],
+                        digest=payload["digest"],
+                        image_ref=payload["image_ref"],
+                    )
+                except (KeyError, TypeError) as error:
+                    raise RuntimeRegistryError("runtime image response is incomplete") from error
+                if (
+                    artifact.version != version
+                    or artifact.profile != profile
+                    or not artifact.digest.startswith("sha256:")
+                    or artifact.image_ref != f"{artifact.repository}@{artifact.digest}"
+                ):
+                    raise RuntimeRegistryError("runtime image response identity is invalid")
+                return artifact
+            if state == "FAILED" or status == 424:
+                detail = payload.get("error")
+                raise RuntimeRegistryError(
+                    f"runtime image build failed for version {version}, profile {profile!r}: "
+                    f"{detail or 'unknown failure'}"
+                )
+            if state != "BUILDING":
+                raise RuntimeRegistryError(
+                    f"runtime image has unexpected state {state!r} for version {version}"
+                )
+            if time.monotonic() >= deadline:
+                raise RuntimeRegistryError(
+                    f"runtime image is not ready for version {version}, profile {profile!r}"
+                )
+            time.sleep(poll_seconds)
 
 
 def _runtime_packages(snapshot: RuntimeRegistrySnapshot) -> dict[str, RuntimePackage]:
