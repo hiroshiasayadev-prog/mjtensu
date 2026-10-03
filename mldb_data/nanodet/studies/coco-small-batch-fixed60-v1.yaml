@@ -1,0 +1,44 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "nanodet/coco-small-batch-fixed60-v1",
+  "status": "sealed",
+  "name": "NanoDet corrected COCO small batch fixed-60 sweep v1",
+  "description": "Corrected jp_v2 COCO-only practical recipe sweep at physical/effective batch 6 and 12 for 60 epochs. Existing batch24/60 result from coco-batch-sweep-v1 is the shared reference.",
+  "model": {
+    "train": {
+      "corpus": "nanodet/mahjong-training-baseline-v1",
+      "protocol": "nanodet/nanodet-aabb-source-baseline-gpu-v2",
+      "architectures": ["nanodet/nanodet-plus-m320-ghostpan-baseline-v1"],
+      "parameters": {
+        "epochs": {"values": [60]},
+        "batch_size": {"values": [6, 12]},
+        "workers": {"values": [10]},
+        "learning_rate": {"values": [0.001]},
+        "weight_decay": {"values": [0.05]},
+        "eta_min": {"values": [0.00005]},
+        "warmup_steps": {"values": [500]},
+        "warmup_ratio": {"values": [0.0001]},
+        "validation_interval": {"values": [5]},
+        "grad_clip": {"values": [35.0]},
+        "amp": {"values": [true]},
+        "log_interval": {"values": [50]}
+      },
+      "seeds": [42]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "bbox-pathology",
+      "corpus": "nanodet/mahjong-composite-pathology-320-v1",
+      "protocol": "nanodet/bbox-pathology-v2",
+      "parameters": {
+        "split": {"values": ["val"]},
+        "score_threshold": {"values": [0.35]},
+        "nms_iou_threshold": {"values": [0.6]},
+        "max_detections": {"values": [200]},
+        "pathology_overlap_threshold": {"values": [0.25]},
+        "duplicate_overlap_threshold": {"values": [0.8]}
+      }
+    }
+  ]
+}
