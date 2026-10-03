@@ -492,10 +492,25 @@ def _pipeline_trial_labels(
     counts: dict[str, int] = {}
     for label in base_labels.values():
         counts[label] = counts.get(label, 0) + 1
-    return {
-        trial: label if counts[label] == 1 else f"{label} | {trial}"
-        for trial, label in base_labels.items()
+    labels: dict[str, str] = {}
+    trial_sources = {
+        str(raw_trial["trial"]): raw_trial.get("source")
+        for raw_trial in raw_trials
+        if type(raw_trial) is dict and type(raw_trial.get("trial")) is str
     }
+    for trial, label in base_labels.items():
+        if counts[label] == 1:
+            labels[trial] = label
+            continue
+        source = trial_sources.get(trial)
+        parameters = source.get("parameters") if isinstance(source, Mapping) else None
+        batch_size = parameters.get("batch_size") if isinstance(parameters, Mapping) else None
+        labels[trial] = (
+            f"{label} | bs{batch_size}"
+            if type(batch_size) is int
+            else f"{label} | {trial}"
+        )
+    return labels
 
 
 def _build_runtime_snapshots(
