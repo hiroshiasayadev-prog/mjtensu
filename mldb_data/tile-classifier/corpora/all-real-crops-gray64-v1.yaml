@@ -1,0 +1,37 @@
+{
+  "schema": "mjtensu.mldb-v2/corpus/v1",
+  "id": "tile-classifier/all-real-crops-gray64-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "description": "Exhaustive real-crop classifier diagnostic population: every persisted coco_mahjong_jp_v2 train/valid/test tile crop plus every authored manual capture crop. JP labels apply the 2026-10-03 reviewed correction set (46 relabels and one removed non-tile annotation), red fives fold to base five classes, and each crop is frozen after the same grayscale 64x64 aspect-preserving Lanczos resize plus border-median letterbox preprocessing used by the classifier training corpus. This Corpus is for coverage/failure inventory and intentionally contains train-source samples.",
+  "storage": {
+    "root_uri": "s3://mldb-corpora/tile-classifier/all-real-crops-gray64-v1"
+  },
+  "manifest": {
+    "file": "all-real-crops-gray64-v1.manifest.jsonl",
+    "sha256": "3a9e7c07731543511e17bafcec864ef9c0bad2619d6dcfb21ecbc066e8bc06cd",
+    "entries": 265
+  },
+  "representation": {
+    "kind": "sharded-npz-image-classification",
+    "index_file": "index.json",
+    "image_glob": "shard-*.npz",
+    "metadata_glob": "shard-*.jsonl.gz",
+    "image_key": "images",
+    "label_key": "labels",
+    "dtype": "uint8",
+    "shape": [
+      1,
+      64,
+      64
+    ],
+    "preprocess": "grayscale_aspect_preserving_letterbox_border_median_lanczos_u8",
+    "label_semantics": "34 valid base tile classes; red5m/red5p/red5s fold to 5m/5p/5s; invalid remains prediction-only"
+  },
+  "splits": {
+    "jp_train": 1207280,
+    "jp_valid": 71745,
+    "jp_test": 36925,
+    "manual_capture": 2192
+  }
+}

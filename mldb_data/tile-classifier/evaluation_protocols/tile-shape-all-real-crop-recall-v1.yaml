@@ -1,0 +1,141 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-all-real-crop-recall-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Tile shape all-real-crop recall and failure inventory",
+  "description": "Run the classifier once on every immutable real tile crop in the dedicated all-real-crop Corpus. Report overall/macro/worst-class recall, valid-tile predictions to invalid, source-partition accuracy, class-by-crop-orientation recall, complete per-sample predictions, and every misclassification. This is intentionally a coverage/failure-inventory diagnostic rather than an independent holdout estimate because train-source crops are included. Red fives are folded to their base five class. Per-shard running accuracy telemetry is zero-based by shard index.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "937812392e56187591ac3436c722727e0abf28001588cd56a19041f87b85c326"
+  },
+  "parameters": {
+    "batch_size": {
+      "default": 1024,
+      "type": "integer",
+      "minimum": 1,
+      "description": "GPU inference batch size over immutable 64x64 grayscale crop shards."
+    },
+    "slice_min_samples": {
+      "default": 10,
+      "type": "integer",
+      "minimum": 1,
+      "description": "Minimum samples for a class-by-orientation cell to participate in the scalar worst-slice recall; all cells remain in artifacts."
+    }
+  },
+  "metrics": {
+    "accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Top-1 accuracy across every valid real crop."
+    },
+    "macro_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Unweighted mean recall over the 34 valid base tile classes."
+    },
+    "worst_class_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Minimum recall over the 34 valid base tile classes."
+    },
+    "worst_class_orientation_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Minimum class-by-crop-orientation recall among cells meeting slice_min_samples."
+    },
+    "class_recall_below_0p90_count": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower",
+      "description": "Number of valid tile classes with recall below 0.90."
+    },
+    "class_recall_below_0p95_count": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower",
+      "description": "Number of valid tile classes with recall below 0.95."
+    },
+    "invalid_prediction_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Fraction of valid real crops predicted as the invalid class."
+    },
+    "jp_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Top-1 accuracy over all JP-source train/valid/test crops."
+    },
+    "manual_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Top-1 accuracy over all authored manual capture crops."
+    }
+  },
+  "artifacts": {
+    "class_recall_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/tile-all-real-crop-class-recall/v1",
+      "required": true,
+      "description": "Per-class counts, recall, and dominant wrong destination."
+    },
+    "source_recall_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/tile-all-real-crop-source-recall/v1",
+      "required": true,
+      "description": "Accuracy by source and source partition."
+    },
+    "class_orientation_recall_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/tile-all-real-crop-class-orientation-recall/v1",
+      "required": true,
+      "description": "Recall for every valid class crossed with portrait/square/landscape crop aspect bucket."
+    },
+    "confusion_matrix": {
+      "format": "plotly-json",
+      "schema": "mjtensu.recognition/tile-all-real-crop-confusion/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "34-by-35 confusion-count heatmap including invalid as a prediction destination."
+    },
+    "class_orientation_recall_heatmap": {
+      "format": "plotly-json",
+      "schema": "mjtensu.recognition/tile-all-real-crop-orientation-heatmap/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "Class-by-orientation recall heatmap."
+    },
+    "high_confidence_error_contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.recognition/tile-all-real-crop-high-confidence-errors/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "Up to two highest-confidence misclassified crops per true class."
+    },
+    "error_inventory": {
+      "format": "jsonl.gz",
+      "schema": "mjtensu.recognition/tile-all-real-crop-errors/v1",
+      "required": true,
+      "description": "Every misclassified crop with stable crop identity, prediction, confidence, margin, source and crop geometry."
+    },
+    "per_sample_predictions": {
+      "format": "jsonl.gz",
+      "schema": "mjtensu.recognition/tile-all-real-crop-predictions/v1",
+      "required": true,
+      "description": "Prediction record for every crop, enabling exact cross-model failure-set intersection after the Study completes."
+    },
+    "report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/tile-all-real-crop-report/v1",
+      "required": true,
+      "description": "Population, normalization, metric, slicing, correction and interpretation contract."
+    }
+  }
+}
