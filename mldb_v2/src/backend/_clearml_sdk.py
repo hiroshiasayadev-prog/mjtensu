@@ -444,7 +444,7 @@ def _pipeline_trial_labels(
     for label in base_labels.values():
         counts[label] = counts.get(label, 0) + 1
     return {
-        trial: label if counts[label] == 1 else f"{label} ・ゑｽｷ {trial}"
+        trial: label if counts[label] == 1 else f"{label} | {trial}"
         for trial, label in base_labels.items()
     }
 
