@@ -76,11 +76,39 @@ class ClearMLSDKError(RuntimeError):
 
 
 class _ClearMLScalarSink:
-    """Lazy per-Task scalar projection; caller owns best-effort isolation."""
+    """Lazy child scalar projection with optional best-effort Pipeline mirroring."""
 
-    def __init__(self, task: object) -> None:
+    def __init__(
+        self,
+        task: object,
+        *,
+        pipeline_task_id: str | None = None,
+        pipeline_series: str | None = None,
+    ) -> None:
         self._task = task
         self._logger: object | None = None
+        self._pipeline_task_id = pipeline_task_id
+        self._pipeline_series = pipeline_series
+        self._pipeline_logger: object | None = None
+
+    def _parent_logger(self) -> object | None:
+        if self._pipeline_task_id is None or self._pipeline_series is None:
+            return None
+        if self._pipeline_logger is not None:
+            return self._pipeline_logger
+        get_task = getattr(type(self._task), "get_task", None)
+        if not callable(get_task):
+            return None
+        try:
+            parent = get_task(task_id=self._pipeline_task_id)
+            get_logger = getattr(parent, "get_logger", None)
+            if not callable(get_logger):
+                return None
+            logger = get_logger()
+        except Exception:
+            return None
+        self._pipeline_logger = logger
+        return logger
 
     def __call__(self, event: _AcceptedScalarEvent) -> None:
         logger = self._logger
@@ -101,6 +129,27 @@ class _ClearMLScalarSink:
             value=event.value,
             iteration=event.step,
         )
+
+        parent_logger = self._parent_logger()
+        parent_report = getattr(parent_logger, "report_scalar", None)
+        if not callable(parent_report):
+            return
+        series = (
+            self._pipeline_series
+            if event.series in {"Train", "Val"}
+            else f"{self._pipeline_series} | {event.series}"
+        )
+        try:
+            parent_report(
+                title=event.group,
+                series=series,
+                value=event.value,
+                iteration=event.step,
+            )
+        except Exception:
+            # Pipeline mirroring is observational and must never affect the
+            # authoritative child telemetry or training execution.
+            pass
 
 
 _ARTIFACT_EXTENSIONS = {
@@ -2926,7 +2975,24 @@ def _run_remote_harness() -> None:
         backend="clearml",
         execution_id=task_id,
         started_at=None,
-        telemetry_sink=_ClearMLScalarSink(task),
+        telemetry_sink=_ClearMLScalarSink(
+            task,
+            pipeline_task_id=(
+                cast(str, mldb_config.get("mldb.pipeline_execution"))
+                if stage_input["kind"] == "training"
+                and type(mldb_config.get("mldb.pipeline_execution")) is str
+                else None
+            ),
+            pipeline_series=(
+                (
+                    f"bs{stage_input['stage']['parameters']['batch_size']}"
+                    if type(stage_input["stage"]["parameters"].get("batch_size")) is int
+                    else str(stage_input["trial"])
+                )
+                if stage_input["kind"] == "training"
+                else None
+            ),
+        ),
     )
     candidate = harness(stage_input)
     if stage_input["kind"] == "evaluation":
