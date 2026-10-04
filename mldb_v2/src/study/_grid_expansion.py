@@ -143,6 +143,12 @@ def _training_trial_count(model: _TrainingPlanningInput) -> int:
     if not architecture_ids:
         raise _GridExpansionError("missing_architecture")
     _validate_unique_strings(architecture_ids, code="duplicate_architecture")
+    if model.cases is not None:
+        if not model.cases:
+            raise _GridExpansionError("missing_training_case")
+        for case in model.cases:
+            _validate_training_seed(case.seed)
+        return len(model.cases)
     if not model.seeds:
         raise _GridExpansionError("missing_seed")
     validated_seeds = tuple(_validate_training_seed(seed) for seed in model.seeds)
@@ -221,6 +227,32 @@ def _expand_training_trials(
     task_id = TaskId(str(planning.task["id"]))
     corpus_id = CorpusId(str(model.corpus["id"]))
     protocol_id = TrainProtocolId(str(model.protocol["id"]))
+
+    if model.cases is not None:
+        for case in model.cases:
+            resolved = _resolve_public_parameters(
+                model.parameter_declarations, case.parameter_overrides
+            )
+            validated_seed = _validate_training_seed(case.seed)
+            trial_id = _validate_trial_id(f"trial-{sequence:04d}")
+            trials.append(
+                _ExpandedTrial(
+                    trial=trial_id,
+                    source=_ExpandedTrainingSource(
+                        kind="training",
+                        task=task_id,
+                        corpus=corpus_id,
+                        architecture=ArchitectureId(str(case.architecture["id"])),
+                        train_protocol=protocol_id,
+                        parameters=_freeze_parameters(resolved),
+                        seed=validated_seed,
+                    ),
+                    evaluations=_expand_evaluations(planning),
+                )
+            )
+            sequence += 1
+        return tuple(trials)
+
     for architecture in model.architectures:
         architecture_id = ArchitectureId(str(architecture["id"]))
         for overrides in _axis_selections(model.parameter_axes):

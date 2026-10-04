@@ -20,6 +20,7 @@ from mldb_v2.src.study._planning_preflight import (
     _ExistingModelPlanningInput,
     _StudyPlanningInput,
     _StudyPlanningPreflight,
+    _TrainingCasePlanningInput,
     _TrainingPlanningInput,
 )
 
@@ -393,3 +394,43 @@ def test_preflight_to_expansion_integration_is_read_only(tmp_path: Path) -> None
         "stage-a",
     ]
     assert _tree_bytes(root) == before
+
+
+def test_explicit_training_cases_preserve_authored_combinations() -> None:
+    planning = _training_planning()
+    model = _TrainingPlanningInput(
+        corpus=planning.model.corpus,
+        protocol=planning.model.protocol,
+        architectures=(
+            {"id": "demo/arch-a-v1"},
+            {"id": "demo/arch-b-v1"},
+        ),
+        parameter_axes={},
+        seeds=(),
+        cases=(
+            _TrainingCasePlanningInput(
+                architecture={"id": "demo/arch-a-v1"},
+                parameter_overrides={"batch_size": 128, "alpha": 4},
+                seed=42,
+            ),
+            _TrainingCasePlanningInput(
+                architecture={"id": "demo/arch-b-v1"},
+                parameter_overrides={"batch_size": 512, "zeta": 7},
+                seed=3,
+            ),
+        ),
+    )
+    planning = _StudyPlanningInput(
+        study=planning.study,
+        task=planning.task,
+        model=model,
+        evaluations=planning.evaluations,
+    )
+    result = _expand_study_grid(planning)
+    assert len(result) == 2
+    assert result[0].source.architecture == "demo/arch-a-v1"
+    assert result[0].source.parameters == {"zeta": 9, "alpha": 4, "batch_size": 128}
+    assert result[0].source.seed == 42
+    assert result[1].source.architecture == "demo/arch-b-v1"
+    assert result[1].source.parameters == {"zeta": 7, "alpha": 1, "batch_size": 512}
+    assert result[1].source.seed == 3

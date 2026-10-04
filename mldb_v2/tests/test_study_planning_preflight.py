@@ -518,6 +518,7 @@ def test_private_boundary_contains_no_plan_or_runtime_materialization(tmp_path: 
         "architectures",
         "parameter_axes",
         "seeds",
+        "cases",
     }
     source = (
         Path(__file__).resolve().parents[1]

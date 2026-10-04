@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import random
+
+import numpy as np
+import torch
 from pathlib import Path
 from typing import cast
 
@@ -60,6 +64,15 @@ _TRAINING_STAGE_FIELDS = {
 }
 _STAGE_INPUT_SCHEMA = "mjtensu.mldb-v2/stage-input/v1"
 _CANONICAL_WEIGHTS_FORMAT = "pytorch-state-dict/v1"
+
+
+def _seed_model_construction(seed: int) -> None:
+    """Seed all supported RNGs immediately before Architecture construction."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 def _validate_training_stage_input(value: object) -> TrainingStageInput:
@@ -174,6 +187,7 @@ def _execute_training_stage(
     if materialized_definition != corpus:
         raise ValueError("materialized Corpus does not match resolved Corpus")
 
+    _seed_model_construction(seed)
     model = _build_fresh_architecture_module(root, stage["architecture"])
     telemetry = _RecordingTelemetryReporter(sink=telemetry_sink)
     context = TrainContext(
