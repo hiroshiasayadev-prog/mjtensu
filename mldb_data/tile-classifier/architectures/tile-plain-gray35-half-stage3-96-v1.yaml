@@ -1,0 +1,37 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/tile-plain-gray35-half-stage3-96-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Plain half-channel stage3-96 gray35 classifier",
+  "family": "plain-cnn",
+  "description": "Pure 0.5x Plain gray35 classifier stage3-width screen candidate. Keeps the existing 16/32 early widths, three MaxPool2d downsampling stages, final 96-channel spatial stage, GAP, and 256-unit classifier head; changes only the 16x16 stage3 output width.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sha256": "6ed764f19fd1c04509dec14cc8889584cd37d722d98bab019e471a54c8d965ea"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        1,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "Conv16-32-96-96 with three max-pools and 256-unit head",
+    "traits": [
+      "grayscale",
+      "shallow",
+      "half-channel",
+      "stage3-width-96",
+      "maxpool"
+    ]
+  }
+}
