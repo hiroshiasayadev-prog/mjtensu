@@ -1,0 +1,38 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/tile-plain-gray35-half-stage1-24-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Plain half-channel stage1-24 gray35 classifier",
+  "family": "plain-cnn",
+  "description": "Pure 0.5x Plain gray35 early-channel screen candidate. Keeps the original Plain Conv+BN+SiLU blocks, three MaxPool2d downsampling stages, 64/96 later widths where applicable, GAP, and 256-unit classifier head; changes only stage1-24.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sha256": "f7bf903a9e7d17332176e064339587996bc9c9bbfdd94d1e780a7f5bbb93ff35"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        1,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "Conv24-32-64-96 with three max-pools and 256-unit head",
+    "traits": [
+      "grayscale",
+      "shallow",
+      "half-channel",
+      "early-width-screen",
+      "stage1-24",
+      "maxpool"
+    ]
+  }
+}
