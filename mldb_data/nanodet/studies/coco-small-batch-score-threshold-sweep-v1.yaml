@@ -1,0 +1,29 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "nanodet/coco-small-batch-score-threshold-sweep-v1",
+  "status": "sealed",
+  "name": "NanoDet small-batch score-threshold sweep v1",
+  "description": "Evaluation-only score-threshold sweep over the existing corrected-COCO-only NanoDet batch6, batch12, and batch24 60-epoch models. Reuses canonical Models without retraining to test whether lower score thresholds recover the batch6/12 recall deficit while preserving their lower duplicate rates.",
+  "model": {
+    "existing": [
+      "nanodet/run-be68d960c5fe4ef8914f2e6bb2fd35cd-trial-0001-model",
+      "nanodet/run-be68d960c5fe4ef8914f2e6bb2fd35cd-trial-0002-model",
+      "nanodet/run-7eeac0f4e5df4950a43d302ad10a1820-trial-0001-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "bbox-pathology-score-sweep",
+      "corpus": "nanodet/mahjong-composite-pathology-320-v1",
+      "protocol": "nanodet/bbox-pathology-v2",
+      "parameters": {
+        "split": {"values": ["val"]},
+        "score_threshold": {"values": [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40]},
+        "nms_iou_threshold": {"values": [0.6]},
+        "max_detections": {"values": [200]},
+        "pathology_overlap_threshold": {"values": [0.25]},
+        "duplicate_overlap_threshold": {"values": [0.8]}
+      }
+    }
+  ]
+}
