@@ -1,0 +1,5 @@
+{
+  "schema": "mjtensu.mldb-v2/model/v1",
+  "id": "tile-classifier/run-ac1a2514af214cb69977972c0278ab39-trial-0001-model",
+  "training_result": "tile-classifier/run-ac1a2514af214cb69977972c0278ab39-trial-0001-train"
+}
