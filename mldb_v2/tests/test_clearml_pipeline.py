@@ -24,6 +24,7 @@ from mldb_v2.src.backend._clearml_sdk import (
     _comparison_bar_figure,
     _selectable_image_figure,
     _selectable_plotly_figure,
+    _study_artifact_url,
 )
 from mldb_v2.src.backend._config import BackendConfig
 from mldb_v2.src.backend.clearml_backend import clearml_backend_factory
@@ -215,6 +216,7 @@ class FakeSDKTask:
         self.runtime_properties: dict[str, object] = {}
         self.parent: str | None = None
         self.uploads: list[dict[str, object]] = []
+        self.artifacts: dict[str, object] = {}
         self.single_values: dict[str, float] = {}
         self.plotly_reports: list[dict[str, object]] = []
         self.table_reports: list[dict[str, object]] = []
@@ -789,8 +791,8 @@ def test_selectable_robustness_plot_reserves_card_edges() -> None:
 
 def test_selectable_image_figure_uses_zoomable_data_coordinates() -> None:
     figure = _selectable_image_figure([
-        ("Tile C8", b"first-png"),
-        ("Tile Plain", b"second-png"),
+        ("Tile C8", "https://web.example.test/files/first.png"),
+        ("Tile Plain", "https://web.example.test/files/second.png"),
     ])
 
     assert figure is not None
@@ -800,11 +802,41 @@ def test_selectable_image_figure_uses_zoomable_data_coordinates() -> None:
     assert layout["yaxis"]["fixedrange"] is False
     assert layout["images"][0]["xref"] == "x"
     assert layout["images"][0]["yref"] == "y"
+    assert layout["images"][0]["source"] == "https://web.example.test/files/first.png"
 
     buttons = layout["updatemenus"][0]["buttons"]
     replacement_image = buttons[1]["args"][0]["images"][0]
     assert replacement_image["xref"] == "x"
     assert replacement_image["yref"] == "y"
+    assert replacement_image["source"] == "https://web.example.test/files/second.png"
+    assert "data:image" not in json.dumps(figure)
+
+
+def test_study_artifact_url_uses_clearml_web_files_proxy(monkeypatch) -> None:
+    monkeypatch.setenv("CLEARML_WEB_HOST", "https://web.example.test")
+    monkeypatch.setenv("CLEARML_FILES_HOST", "https://files.example.test")
+    task = FakeSDKTask(project="mldb/demo", task_id="child-image")
+    artifact = type("Artifact", (), {})()
+    artifact.url = "https://files.example.test/mldb/task/artifacts/contact.png"
+    task.artifacts["evaluation/contact_sheet"] = artifact
+
+    assert _study_artifact_url(task, "contact_sheet") == (
+        "https://web.example.test/files/mldb/task/artifacts/contact.png"
+    )
+
+
+def test_selectable_image_figure_keeps_large_study_projection_small() -> None:
+    items = [
+        (f"trial-{index:04d}", f"https://web.example.test/files/contact-{index:04d}.png")
+        for index in range(1, 43)
+    ]
+
+    figure = _selectable_image_figure(items)
+
+    assert figure is not None
+    payload = json.dumps(figure)
+    assert len(payload.encode("utf-8")) < 50_000
+    assert payload.count("https://web.example.test/files/contact-") == 43
 
 
 def test_pipeline_summary_table_failure_is_observational() -> None:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import csv
 import hashlib
 import json
@@ -1225,11 +1224,25 @@ def _comparison_grouped_metric_figures(
     return figures, consumed
 
 
-def _study_artifact_local_path(task: object, name: str) -> Path | None:
+def _study_artifact(task: object, name: str) -> object | None:
     artifacts = getattr(task, "artifacts", None)
     if not isinstance(artifacts, Mapping):
         return None
-    artifact = artifacts.get(f"evaluation/{name}") or artifacts.get(name)
+    return artifacts.get(f"evaluation/{name}") or artifacts.get(name)
+
+
+def _study_artifact_url(task: object, name: str) -> str | None:
+    artifact = _study_artifact(task, name)
+    if artifact is None:
+        return None
+    url = getattr(artifact, "url", None)
+    if type(url) is not str or not url:
+        return None
+    return _clearml_files_proxy_url(url)
+
+
+def _study_artifact_local_path(task: object, name: str) -> Path | None:
+    artifact = _study_artifact(task, name)
     if artifact is None:
         return None
     getter = getattr(artifact, "get_local_copy", None)
@@ -1396,22 +1409,23 @@ def _selectable_plotly_figure(
     return {"data": data, "layout": layout}
 
 
-def _selectable_image_figure(items: Sequence[tuple[str, bytes]]) -> dict[str, object] | None:
+def _selectable_image_figure(items: Sequence[tuple[str, str]]) -> dict[str, object] | None:
     if not items:
         return None
-    display_labels = _selector_labels([label for label, _data in items])
-    def image_layout(data: bytes) -> list[dict[str, object]]:
-        source = "data:image/png;base64," + base64.b64encode(data).decode("ascii")
+    display_labels = _selector_labels([label for label, _source in items])
+
+    def image_layout(source: str) -> list[dict[str, object]]:
         return [{
             "source": source, "xref": "x", "yref": "y",
             "x": 0.0, "y": 1.0, "sizex": 1.0, "sizey": 1.0,
             "xanchor": "left", "yanchor": "top", "sizing": "contain", "layer": "above",
         }]
+
     buttons = [{
         "label": display_labels[index],
         "method": "relayout",
-        "args": [{"images": image_layout(data)}],
-    } for index, (_label, data) in enumerate(items)]
+        "args": [{"images": image_layout(source)}],
+    } for index, (_label, source) in enumerate(items)]
     return {
         "data": [{
             "type": "scatter", "x": [0, 1], "y": [0, 1], "mode": "markers",
@@ -2189,15 +2203,11 @@ class ClearMLSDKAdapter:
                         ]
                         figure = _selectable_plotly_figure(figures, artifact_name=artifact_name)
                     elif artifact_format == "png":
-                        images: list[tuple[str, bytes]] = []
+                        images: list[tuple[str, str]] = []
                         for label, child, _ref in loaded:
-                            path = _study_artifact_local_path(child, artifact_name)
-                            if path is None:
-                                continue
-                            try:
-                                images.append((label, path.read_bytes()))
-                            except OSError:
-                                continue
+                            source = _study_artifact_url(child, artifact_name)
+                            if source is not None:
+                                images.append((label, source))
                         figure = _selectable_image_figure(images)
                     elif artifact_format == "csv":
                         figures = []
