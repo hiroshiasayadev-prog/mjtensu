@@ -2,6 +2,7 @@ import {
   createProductionRecognitionPipeline,
   type RecognitionEvaluationTrace,
 } from '@/recognition/production-pipeline';
+import { createNanoDetPostprocessor } from '@/recognition/detector/detection-postprocessor';
 import { createRecognitionModelRuntime, type RecognitionInferenceSessionFactory } from '@/recognition/model-runtime/runtime';
 import type {
   RecognitionModelAssetResolver,
@@ -87,6 +88,7 @@ interface RuntimeModelConfig {
   readonly url: string;
   readonly sha256: string;
   readonly runtimeSpec: RecognitionModelRuntimeSpec;
+  readonly inlineBase64?: string;
 }
 
 interface E2ETakeConfig {
@@ -101,6 +103,7 @@ interface BrowserConfig {
   readonly mode: 'iphone-latency' | 'functional';
   readonly resultUrl?: string;
   readonly sampleIntervalMs?: number;
+  readonly detectorScoreThreshold?: number;
   readonly baseClassifierBase64: string;
   readonly baseClassifierSha256: string;
   readonly baseClassifierRuntimeSpec: RecognitionModelRuntimeSpec;
@@ -145,6 +148,8 @@ class EvaluationAssetResolver implements RecognitionModelAssetResolver {
     if (bytes === undefined) {
       if (role === 'tile-classifier') {
         bytes = bytesFromBase64(this.config.baseClassifierBase64);
+      } else if (role === 'detector' && this.config.detector.inlineBase64 !== undefined) {
+        bytes = bytesFromBase64(this.config.detector.inlineBase64);
       } else {
         const url = role === 'detector' ? this.config.detector.url : this.config.redFive.url;
         const response = await fetch(url, { cache: 'no-store' });
@@ -624,12 +629,33 @@ async function main(): Promise<void> {
   let pipeline: ReturnType<typeof createProductionRecognitionPipeline> | null = null;
   try {
     await modelRuntime.initialize();
+    const detectorPostprocessor = config.detectorScoreThreshold === undefined
+      ? undefined
+      : (() => {
+          if (config.detector.runtimeSpec !== 'nanodet-plus-m-320-v1') {
+            throw new Error('detectorScoreThreshold is only valid for NanoDet runtime');
+          }
+          if (
+            !Number.isFinite(config.detectorScoreThreshold)
+            || config.detectorScoreThreshold < 0
+            || config.detectorScoreThreshold > 1
+          ) {
+            throw new Error('detectorScoreThreshold must be within [0, 1]');
+          }
+          return createNanoDetPostprocessor({
+            confidenceThreshold: config.detectorScoreThreshold,
+            nmsIouThreshold: 0.6,
+            maximumDetections: 200,
+            duplicateOverlapThreshold: 0.8,
+          });
+        })();
     pipeline = createProductionRecognitionPipeline({
       modelRuntime,
       classifierNormalizationOverride: {
         base: config.baseNormalization,
         redFive: config.redFive.normalization,
       },
+      detectorPostprocessor,
       onEvaluationTiming: config.mode === 'iphone-latency' ? (timing) => timings.push(timing) : undefined,
       onEvaluationTrace: config.mode === 'functional' ? (trace) => { latestTrace = trace; } : undefined,
       modelSetVersion: manifest.modelSetVersion,

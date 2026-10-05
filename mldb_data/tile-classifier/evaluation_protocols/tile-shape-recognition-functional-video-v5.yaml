@@ -1,0 +1,104 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-recognition-functional-video-v5",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Production recognition functional video v5",
+  "description": "Evaluate the sealed five-video corpus at deterministic 100 ms source-video intervals on a normal worker. Run the production TypeScript detector/classifier/semantic pipeline and production three-consecutive stabilizer, compare against fixed GT, emit per-evaluation bbox/OBB/classification trace, and render an overlay MP4. v5 adds an evaluation-only NanoDet detector_score_threshold override and permits a canonical MLDB detector Model to be exported to ONNX for browser replay, without mutating production configuration.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "8a904dc40ec11a9bcab5ac5541f30006685b0f5f6588db3675c82884cf5045d6"
+  },
+  "parameters": {
+    "detector_model": {
+      "default": null,
+      "description": "Auxiliary detector Model ID. May be a canonical MLDB Model or immutable browser-deployable Runtime Model."
+    },
+    "red_five_model": {
+      "default": null,
+      "description": "Auxiliary red-five classifier Runtime Model ID."
+    },
+    "detector_score_threshold": {
+      "default": 0.35,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Evaluation-only NanoDet score threshold override; production default remains unchanged."
+    }
+  },
+  "model_parameters": {
+    "detector": "detector_model",
+    "red-five-classifier": "red_five_model"
+  },
+  "metrics": {
+    "frame_semantic_exact_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "completed_hand_exact_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "dora_exact_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "meld_exact_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "eligible_frame_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "take_gt_streak3_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Fraction of takes that produce three consecutive GT-exact eligible evaluations."
+    },
+    "take_product_confirmed_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Fraction of takes for which the production stabilizer reaches confirmed."
+    },
+    "take_product_confirmed_exact_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Fraction of takes whose first production confirmation exactly matches GT."
+    }
+  },
+  "artifacts": {
+    "onnx_model": {
+      "format": "onnx",
+      "schema": "mjtensu.recognition/base-classifier-onnx/v1",
+      "required": true,
+      "description": "Tensor-only ONNX export of the primary base classifier."
+    },
+    "functional_report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/functional-video/v1",
+      "required": true,
+      "description": "Per-take GT streak/product confirmation summary and exact model identity."
+    },
+    "prediction_trace": {
+      "format": "jsonl",
+      "schema": "mjtensu.recognition/prediction-trace/v1",
+      "required": true,
+      "description": "Per-evaluation bbox/OBB, detector confidence, tile classification, snapshot, GT, and stabilizer trace."
+    },
+    "overlay_video": {
+      "format": "mp4",
+      "schema": "mjtensu.recognition/overlay-video/v1",
+      "required": true,
+      "description": "Combined t1-t5 canonical landscape video with bbox/OBB, tile labels, GT streak, and product stabilizer state."
+    }
+  }
+}
