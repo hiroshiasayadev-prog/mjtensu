@@ -1,0 +1,42 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/tile-c4-gray35-c8n-width-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "C4 width-matched gray35 classifier",
+  "family": "c4-equivariant-cnn",
+  "description": "C4 equivariance screen width-matched to the C8-narrow candidate: regular fields 8/16/32/64 give the same equivariant tensor channels 32/64/128/256. Topology otherwise matches the C8 family: 5/3/3/3 equivariant convolutions, inter-stage pointwise max pooling, GroupPooling, global spatial average pooling, and a 35-logit head.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sources": [
+      {
+        "path": "mldb_data/tile-classifier/lib/cyclic_equivariant_tile_shape_classifier_v1.py",
+        "sha256": "50a885cb1891e213993ad136536a65f26ea9d7af0e81ebcaa97033d1f0017150"
+      }
+    ],
+    "sha256": "6fe283f64efb74b195a667d2eb3103aedd706ee6789458d80f055004573c2129"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        1,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "escnn C4 regular fields 8/16/32/64 -> tensor channels 32/64/128/256 -> GroupPooling -> AdaptiveAvgPool2d(1) -> hidden >=128 -> 35 logits",
+    "traits": [
+      "grayscale",
+      "c4-rotation-equivariant",
+      "group-pooled",
+      "width-screen"
+    ]
+  }
+}
