@@ -1,0 +1,36 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "nanodet/source-training-baselines-v1",
+  "status": "sealed",
+  "name": "NanoDet source-training baselines v1",
+  "description": "Baseline GhostPAN training-source comparison: corrected jp_v2 only versus corrected jp_v2 plus an untuned one-pass addition of mjtensu fixed-layout three-region composite images. Fine-tuning is intentionally a dependent follow-up from the COCO-only best checkpoint.",
+  "model": {
+    "train": {
+      "corpus": "nanodet/mahjong-training-baseline-v1",
+      "protocol": "nanodet/nanodet-aabb-source-baseline-gpu-v1",
+      "architectures": ["nanodet/nanodet-plus-m320-ghostpan-baseline-v1"],
+      "parameters": {
+        "recipe": {"values": ["coco-only-v1", "joint-naive-v1"]},
+        "epochs": {"values": [40]},
+        "batch_size": {"values": [96]},
+        "validation_interval": {"values": [5]}
+      },
+      "seeds": [42]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "bbox-pathology",
+      "corpus": "nanodet/mahjong-composite-pathology-320-v1",
+      "protocol": "nanodet/bbox-pathology-v2",
+      "parameters": {
+        "split": {"values": ["val"]},
+        "score_threshold": {"values": [0.35]},
+        "nms_iou_threshold": {"values": [0.6]},
+        "max_detections": {"values": [200]},
+        "pathology_overlap_threshold": {"values": [0.25]},
+        "duplicate_overlap_threshold": {"values": [0.8]}
+      }
+    }
+  ]
+}

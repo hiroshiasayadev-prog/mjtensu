@@ -1,0 +1,34 @@
+{
+  "schema": "mjtensu.mldb-v2/corpus/v1",
+  "id": "nanodet/mahjong-training-baseline-v1",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "description": "Frozen detector-training source corpus: human-reviewed corrected coco_mahjong_jp_v2 plus fixed-layout 320x320 mjtensu three-region composites. Legacy coco_mahjong is intentionally excluded because its audit disagreements were not human-corrected.",
+  "storage": {
+    "root_uri": "s3://mldb-corpora/nanodet/mahjong-training-baseline-v1"
+  },
+  "manifest": {
+    "file": "mahjong-training-baseline-v1.manifest.jsonl",
+    "sha256": "426a35cf16002ef6420b7d5810f2eef50319a8254c674f023e54eb2aece4272e",
+    "entries": 1
+  },
+  "representation": {
+    "kind": "tar-coco-axis-aligned-object-detection",
+    "archive": "nanodet-training-baseline-v1.tar",
+    "detector_class": "mahjong_tile",
+    "geometry": "x-y-width-height",
+    "input_size": [
+      320,
+      320
+    ],
+    "base_source": "corrected-coco-mahjong-jp-v2",
+    "target_source": "mjtensu-fixed-three-region-composite"
+  },
+  "splits": {
+    "jp_train": 12144,
+    "jp_valid": 722,
+    "jp_test": 370,
+    "composite_train": 286,
+    "composite_val": 71
+  }
+}

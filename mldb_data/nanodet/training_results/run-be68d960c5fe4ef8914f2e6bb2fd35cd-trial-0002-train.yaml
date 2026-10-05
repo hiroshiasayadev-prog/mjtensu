@@ -1,0 +1,48 @@
+{
+  "schema": "mjtensu.mldb-v2/training-result/v1",
+  "id": "nanodet/run-be68d960c5fe4ef8914f2e6bb2fd35cd-trial-0002-train",
+  "study_result": "nanodet/run-be68d960c5fe4ef8914f2e6bb2fd35cd",
+  "plan": "nanodet/coco-small-batch-fixed60-v1-plan-bc2838d844b1c989",
+  "trial": "trial-0002",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "architecture": "nanodet/nanodet-plus-m320-ghostpan-baseline-v1",
+  "corpus": "nanodet/mahjong-training-baseline-v1",
+  "train_protocol": "nanodet/nanodet-aabb-source-baseline-gpu-v2",
+  "parameters": {
+    "epochs": 60,
+    "batch_size": 12,
+    "workers": 10,
+    "learning_rate": 0.001,
+    "weight_decay": 0.05,
+    "eta_min": 5e-05,
+    "warmup_steps": 500,
+    "warmup_ratio": 0.0001,
+    "validation_interval": 5,
+    "grad_clip": 35.0,
+    "amp": true,
+    "log_interval": 50
+  },
+  "seed": 42,
+  "source_commit": "b54dad53e9d6ff61de0cc98bc323033bb02da8b9",
+  "attempts": [
+    {
+      "backend": "clearml",
+      "execution_id": "0c28bb729f1046bcb6b5518ba11bc56c",
+      "status": "completed",
+      "started_at": null,
+      "ended_at": "2026-10-04T03:31:29.171176Z",
+      "diagnostic": null
+    }
+  ],
+  "status": "completed",
+  "diagnostic": null,
+  "result": {
+    "weights": {
+      "uri": "s3://mldb-w004-smoke/mldb-v2/86affeeb16030d39691865c8d12cc4e2a2555324038f0426b2eeddeb7cd56700/weights.pt",
+      "bytes": 17045956,
+      "sha256": "cc3a92049108126d93610d8e3df75a379ac58acd98dd72a71eaea82475d26726",
+      "format": "pytorch-state-dict/v1"
+    },
+    "model": "nanodet/run-be68d960c5fe4ef8914f2e6bb2fd35cd-trial-0002-model"
+  }
+}

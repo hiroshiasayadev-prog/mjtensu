@@ -1,0 +1,83 @@
+{
+  "schema": "mjtensu.mldb-v2/train-protocol/v1",
+  "id": "nanodet/nanodet-aabb-source-baseline-gpu-v1",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "name": "NanoDet AABB source-training baseline",
+  "description": "Production-like 40-epoch NanoDet Plus training from the official pretrained M320 weights. Compares corrected jp_v2-only training against a deliberately naive joint mix that adds each mjtensu fixed-layout three-region composite once, with no ratio tuning.",
+  "implementation": {
+    "entrypoint": "train",
+    "sha256": "c10445e2d38fd295fb611a81a0d6a52f9279dd20ee038f2737c5eed7c0540589"
+  },
+  "parameters": {
+    "recipe": {
+      "default": "coco-only-v1",
+      "type": "string",
+      "enum": [
+        "coco-only-v1",
+        "joint-naive-v1"
+      ]
+    },
+    "epochs": {
+      "default": 40,
+      "type": "integer",
+      "minimum": 1
+    },
+    "batch_size": {
+      "default": 96,
+      "type": "integer",
+      "minimum": 1
+    },
+    "workers": {
+      "default": 10,
+      "type": "integer",
+      "minimum": 0
+    },
+    "learning_rate": {
+      "default": 0.001,
+      "type": "number",
+      "minimum": 1e-07
+    },
+    "weight_decay": {
+      "default": 0.05,
+      "type": "number",
+      "minimum": 0.0
+    },
+    "eta_min": {
+      "default": 5e-05,
+      "type": "number",
+      "minimum": 0.0
+    },
+    "warmup_steps": {
+      "default": 500,
+      "type": "integer",
+      "minimum": 0
+    },
+    "warmup_ratio": {
+      "default": 0.0001,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "validation_interval": {
+      "default": 5,
+      "type": "integer",
+      "minimum": 1
+    },
+    "grad_clip": {
+      "default": 35.0,
+      "type": "number",
+      "minimum": 0.0
+    },
+    "ema_decay": {
+      "default": 0.9998,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 0.999999
+    },
+    "amp": {
+      "default": true,
+      "type": "boolean"
+    }
+  }
+}

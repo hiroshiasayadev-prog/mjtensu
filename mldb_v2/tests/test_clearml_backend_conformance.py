@@ -720,15 +720,20 @@ def test_sdk_terminal_failure_without_harness_payload_is_safe_failure_not_succes
     assert candidate["result"] is None
 
 
-def test_sdk_success_without_common_harness_projection_is_rejected() -> None:
+def test_sdk_success_without_common_harness_projection_is_safe_failure() -> None:
     FakeSDKTask.reset()
     adapter = ClearMLSDKAdapter(task_class=FakeSDKTask)
     task_id = cast(str, adapter.create_task(_sdk_request(_training_stage_input())))
     task = FakeSDKTask.get_task(task_id=task_id)
     assert task is not None
     task.status = "completed"
-    with pytest.raises(RuntimeError, match="without harness projection"):
-        adapter.read_runtime_projection(task_id=task_id)
+    projection = adapter.read_runtime_projection(task_id=task_id)
+    assert projection.state == "terminal"
+    candidate = cast(dict[str, object], projection.terminal_candidates[0])
+    assert candidate["status"] == "failed"
+    assert candidate["result"] is None
+    diagnostic = cast(dict[str, object], candidate["diagnostic"])
+    assert diagnostic["code"] == "clearml_task_completed_without_projection"
 
 
 
@@ -791,3 +796,75 @@ def test_sdk_search_recovers_owned_task_after_clearml_project_relocation() -> No
     ownership = request.metadata["mldb.ownership_key"]
     found = adapter.search_tasks(project="mldb/demo", ownership_key=ownership)
     assert [item.task_id for item in found] == [task_id]
+
+
+class FakeMirroredScalarTask(FakeScalarTask):
+    registry: dict[str, "FakeMirroredScalarTask"] = {}
+
+    def __init__(self, task_id: str, logger: FakeScalarLogger) -> None:
+        super().__init__(logger)
+        self.id = task_id
+        self.registry[task_id] = self
+
+    @classmethod
+    def get_task(cls, *, task_id: str):
+        return cls.registry[task_id]
+
+
+def test_clearml_scalar_sink_mirrors_training_series_to_pipeline() -> None:
+    child_logger = FakeScalarLogger()
+    parent_logger = FakeScalarLogger()
+    child = FakeMirroredScalarTask("child", child_logger)
+    parent = FakeMirroredScalarTask("pipeline", parent_logger)
+    sink = _ClearMLScalarSink(
+        child,
+        pipeline_task_id="pipeline",
+        pipeline_series="bs24",
+    )
+
+    sink(
+        _AcceptedScalarEvent(
+            group="Train_loss_total",
+            series="Train",
+            value=1.25,
+            step=3,
+        )
+    )
+    sink(
+        _AcceptedScalarEvent(
+            group="Val_metrics",
+            series="mAP",
+            value=0.7,
+            step=5,
+        )
+    )
+
+    assert child_logger.calls == [
+        {
+            "title": "Train_loss_total",
+            "series": "Train",
+            "value": 1.25,
+            "iteration": 3,
+        },
+        {
+            "title": "Val_metrics",
+            "series": "mAP",
+            "value": 0.7,
+            "iteration": 5,
+        },
+    ]
+    assert parent_logger.calls == [
+        {
+            "title": "Train_loss_total",
+            "series": "bs24",
+            "value": 1.25,
+            "iteration": 3,
+        },
+        {
+            "title": "Val_metrics",
+            "series": "bs24 | mAP",
+            "value": 0.7,
+            "iteration": 5,
+        },
+    ]
+    assert parent.get_logger_calls == 1

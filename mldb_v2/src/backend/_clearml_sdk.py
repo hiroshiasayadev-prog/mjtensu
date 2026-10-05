@@ -44,6 +44,7 @@ from mldb_v2.src.backend._config import BackendConfig
 from mldb_v2.src.common.ids import EntityKind
 from mldb_v2.src.common.telemetry import _AcceptedScalarEvent
 from mldb_v2.src.repository.resolution import CanonicalRepositoryResolver
+from mldb_v2.src.runtime_registry import RuntimeRegistryClient, RuntimeRegistryError
 from mldb_v2.src.study._plan_build import _validate_study_plan
 from mldb_v2.src.training.model import _validate_model
 from mldb_v2.src.training.training_result import _validate_training_result
@@ -75,11 +76,39 @@ class ClearMLSDKError(RuntimeError):
 
 
 class _ClearMLScalarSink:
-    """Lazy per-Task scalar projection; caller owns best-effort isolation."""
+    """Lazy child scalar projection with optional best-effort Pipeline mirroring."""
 
-    def __init__(self, task: object) -> None:
+    def __init__(
+        self,
+        task: object,
+        *,
+        pipeline_task_id: str | None = None,
+        pipeline_series: str | None = None,
+    ) -> None:
         self._task = task
         self._logger: object | None = None
+        self._pipeline_task_id = pipeline_task_id
+        self._pipeline_series = pipeline_series
+        self._pipeline_logger: object | None = None
+
+    def _parent_logger(self) -> object | None:
+        if self._pipeline_task_id is None or self._pipeline_series is None:
+            return None
+        if self._pipeline_logger is not None:
+            return self._pipeline_logger
+        get_task = getattr(type(self._task), "get_task", None)
+        if not callable(get_task):
+            return None
+        try:
+            parent = get_task(task_id=self._pipeline_task_id)
+            get_logger = getattr(parent, "get_logger", None)
+            if not callable(get_logger):
+                return None
+            logger = get_logger()
+        except Exception:
+            return None
+        self._pipeline_logger = logger
+        return logger
 
     def __call__(self, event: _AcceptedScalarEvent) -> None:
         logger = self._logger
@@ -100,6 +129,27 @@ class _ClearMLScalarSink:
             value=event.value,
             iteration=event.step,
         )
+
+        parent_logger = self._parent_logger()
+        parent_report = getattr(parent_logger, "report_scalar", None)
+        if not callable(parent_report):
+            return
+        series = (
+            self._pipeline_series
+            if event.series in {"Train", "Val"}
+            else f"{self._pipeline_series} | {event.series}"
+        )
+        try:
+            parent_report(
+                title=event.group,
+                series=series,
+                value=event.value,
+                iteration=event.step,
+            )
+        except Exception:
+            # Pipeline mirroring is observational and must never affect the
+            # authoritative child telemetry or training execution.
+            pass
 
 
 _ARTIFACT_EXTENSIONS = {
@@ -248,6 +298,10 @@ class ClearMLSDKSettings:
     docker_env_file: str | None = None
     docker_gpu: str | None = None
     docker_shm_size: str | None = None
+    runtime_registry_url: str | None = None
+    runtime_registry_ca_bundle: str | None = None
+    runtime_image_profile: str | None = None
+    runtime_image_wait_seconds: int = 1800
     s3_endpoint_url: str | None = None
     s3_region: str | None = None
     script: str = "mldb_v2/src/backend/_clearml_sdk.py"
@@ -265,8 +319,9 @@ class ClearMLSDKSettings:
     def __post_init__(self) -> None:
         for name in (
             "api_host", "web_host", "files_host", "repository", "local_repository_root",
-            "docker_image", "docker_env_file", "docker_gpu", "docker_shm_size", "s3_endpoint_url", "s3_region",
-            "runtime_data_root", "artifact_uri_prefix", "step_queue",
+            "docker_image", "docker_env_file", "docker_gpu", "docker_shm_size",
+            "runtime_registry_url", "runtime_registry_ca_bundle", "runtime_image_profile",
+            "s3_endpoint_url", "s3_region", "runtime_data_root", "artifact_uri_prefix", "step_queue",
         ):
             value = getattr(self, name)
             if value is not None and (type(value) is not str or not value or value.strip() != value):
@@ -279,10 +334,14 @@ class ClearMLSDKSettings:
             raise ValueError("ClearML access_key and secret_key must be supplied together")
         if type(self.prebuilt_runtime) is not bool:
             raise ValueError("prebuilt_runtime must be boolean")
+        if type(self.runtime_image_wait_seconds) is not int or self.runtime_image_wait_seconds < 0:
+            raise ValueError("runtime_image_wait_seconds must be a non-negative integer")
+        if self.runtime_image_profile is not None and self.runtime_registry_url is None:
+            raise ValueError("runtime image profile requires runtime_registry_url")
         for stage, route in self.stage_routes.items():
             if type(stage) is not str or not stage or stage.strip() != stage or not isinstance(route, Mapping):
                 raise ValueError("stage_routes entries must use non-empty stage names and mappings")
-            unknown = set(route) - {"queue", "docker_gpu"}
+            unknown = set(route) - {"queue", "docker_gpu", "runtime_image_profile"}
             if unknown:
                 raise ValueError(f"stage route {stage!r} has unknown fields: {sorted(unknown)!r}")
             if "queue" in route:
@@ -295,6 +354,17 @@ class ClearMLSDKSettings:
                     type(docker_gpu) is not str or not docker_gpu or docker_gpu.strip() != docker_gpu
                 ):
                     raise ValueError(f"stage route {stage!r} docker_gpu must be null or a non-empty trimmed string")
+            if "runtime_image_profile" in route:
+                runtime_image_profile = route["runtime_image_profile"]
+                if runtime_image_profile is not None and (
+                    type(runtime_image_profile) is not str
+                    or not runtime_image_profile
+                    or runtime_image_profile.strip() != runtime_image_profile
+                ):
+                    raise ValueError(
+                        f"stage route {stage!r} runtime_image_profile must be null "
+                        "or a non-empty trimmed string"
+                    )
         if type(self.log_reports) is not int or self.log_reports < 1:
             raise ValueError("log_reports must be a positive integer")
 
@@ -422,10 +492,25 @@ def _pipeline_trial_labels(
     counts: dict[str, int] = {}
     for label in base_labels.values():
         counts[label] = counts.get(label, 0) + 1
-    return {
-        trial: label if counts[label] == 1 else f"{label} ・ゑｽｷ {trial}"
-        for trial, label in base_labels.items()
+    labels: dict[str, str] = {}
+    trial_sources = {
+        str(raw_trial["trial"]): raw_trial.get("source")
+        for raw_trial in raw_trials
+        if type(raw_trial) is dict and type(raw_trial.get("trial")) is str
     }
+    for trial, label in base_labels.items():
+        if counts[label] == 1:
+            labels[trial] = label
+            continue
+        source = trial_sources.get(trial)
+        parameters = source.get("parameters") if isinstance(source, Mapping) else None
+        batch_size = parameters.get("batch_size") if isinstance(parameters, Mapping) else None
+        labels[trial] = (
+            f"{label} | bs{batch_size}"
+            if type(batch_size) is int
+            else f"{label} | {trial}"
+        )
+    return labels
 
 
 def _build_runtime_snapshots(
@@ -1413,6 +1498,9 @@ class ClearMLSDKAdapter:
         prebuilt_runtime = options.get("prebuilt_runtime", False)
         if type(prebuilt_runtime) is not bool:
             raise ClearMLSDKError("ClearML prebuilt_runtime must be boolean")
+        runtime_image_wait_seconds = options.get("runtime_image_wait_seconds", 1800)
+        if type(runtime_image_wait_seconds) is not int or runtime_image_wait_seconds < 0:
+            raise ClearMLSDKError("ClearML runtime_image_wait_seconds must be a non-negative integer")
         settings = ClearMLSDKSettings(
             api_host=_optional_string(options, "api_host"),
             web_host=_optional_string(options, "web_host"),
@@ -1425,6 +1513,10 @@ class ClearMLSDKAdapter:
             docker_env_file=_optional_string(options, "docker_env_file"),
             docker_gpu=_optional_string(options, "docker_gpu"),
             docker_shm_size=_optional_string(options, "docker_shm_size"),
+            runtime_registry_url=_optional_string(options, "runtime_registry_url"),
+            runtime_registry_ca_bundle=_optional_string(options, "runtime_registry_ca_bundle"),
+            runtime_image_profile=_optional_string(options, "runtime_image_profile"),
+            runtime_image_wait_seconds=runtime_image_wait_seconds,
             s3_endpoint_url=_optional_string(options, "s3_endpoint_url"),
             s3_region=_optional_string(options, "s3_region"),
             script=_string_option(options, "script", "mldb_v2/src/backend/_clearml_sdk.py"),
@@ -2267,6 +2359,16 @@ class ClearMLSDKAdapter:
     ) -> None:
         child = self._get_task(task_id)
         pipeline = self._get_task(pipeline_execution_id)
+        if _status(pipeline) == "stopped":
+            mark_started = getattr(pipeline, "mark_started", None)
+            if not callable(mark_started):
+                raise ClearMLSDKError(
+                    "stopped ClearML Pipeline cannot be reopened for MLDB resume"
+                )
+            mark_started(
+                force=True,
+                status_message="MLDB Study resumed after controller interruption",
+            )
         child_meta = _metadata(child)
         pipeline_meta = _metadata(pipeline)
         if child_meta.get("mldb.study_result") != pipeline_meta.get("mldb.study_result"):
@@ -2411,15 +2513,39 @@ class ClearMLSDKAdapter:
             if routed_gpu is not None and type(routed_gpu) is not str:
                 raise ClearMLSDKError("ClearML stage route docker_gpu is malformed")
             docker_gpu = cast(str | None, routed_gpu)
-        if self._settings.docker_image is not None:
+        runtime_registry_version = stage_input.get("runtime_registry_version")
+        if type(runtime_registry_version) is not int or runtime_registry_version <= 0:
+            raise ClearMLSDKError("StageInput runtime registry version is invalid")
+        runtime_image_profile = self._settings.runtime_image_profile
+        if "runtime_image_profile" in route:
+            routed_profile = route["runtime_image_profile"]
+            if routed_profile is not None and type(routed_profile) is not str:
+                raise ClearMLSDKError("ClearML stage route runtime_image_profile is malformed")
+            runtime_image_profile = cast(str | None, routed_profile)
+        docker_image = self._settings.docker_image
+        if runtime_image_profile is not None:
+            assert self._settings.runtime_registry_url is not None
+            try:
+                runtime_image = RuntimeRegistryClient(
+                    self._settings.runtime_registry_url,
+                    ca_bundle=self._settings.runtime_registry_ca_bundle,
+                ).runtime_image(
+                    runtime_registry_version,
+                    runtime_image_profile,
+                    wait_seconds=self._settings.runtime_image_wait_seconds,
+                )
+            except RuntimeRegistryError as error:
+                raise ClearMLSDKError(
+                    f"runtime image resolution failed for registry version "
+                    f"{runtime_registry_version}"
+                ) from error
+            docker_image = runtime_image.image_ref
+        if docker_image is not None:
             docker_arguments: list[str] = []
             if docker_gpu is not None:
                 docker_arguments.extend(["--gpus", docker_gpu])
             if self._settings.docker_shm_size is not None:
                 docker_arguments.extend(["--shm-size", self._settings.docker_shm_size])
-            runtime_registry_version = stage_input.get("runtime_registry_version")
-            if type(runtime_registry_version) is not int or runtime_registry_version <= 0:
-                raise ClearMLSDKError("StageInput runtime registry version is invalid")
             docker_arguments.extend([
                 "-e", f"MLDB_RUNTIME_REGISTRY_VERSION={runtime_registry_version}",
                 "-e", "AWS_ACCESS_KEY_ID",
@@ -2435,7 +2561,7 @@ class ClearMLSDKAdapter:
             if self._settings.docker_env_file is not None:
                 docker_arguments.append(f"--env-file={self._settings.docker_env_file}")
             task.set_base_docker(
-                docker_image=self._settings.docker_image,
+                docker_image=docker_image,
                 docker_arguments=docker_arguments,
             )
         task.set_packages(list(_REMOTE_PACKAGES))
@@ -2553,10 +2679,7 @@ class ClearMLSDKAdapter:
             )
         if status not in _TERMINAL_STATUSES:
             raise ClearMLSDKError(f"unsupported ClearML Task status: {status}")
-        if status not in {"failed", "stopped"}:
-            raise ClearMLSDKError(
-                "ClearML Task reached successful terminal state without harness projection"
-            )
+        successful_without_projection = status in {"completed", "published", "closed"}
 
         config = _configuration(task, _MLDB_CONFIG) or {}
         transport = config.get("mldb.stage_input")
@@ -2564,8 +2687,17 @@ class ClearMLSDKAdapter:
         stage_key = _stage_key_from_input(stage_input)
         candidate_status = "cancelled" if status == "stopped" else "failed"
         diagnostic = {
-            "code": f"clearml_task_{candidate_status}",
-            "message": "ClearML Task terminated before a harness candidate was recorded.",
+            "code": (
+                "clearml_task_completed_without_projection"
+                if successful_without_projection
+                else f"clearml_task_{candidate_status}"
+            ),
+            "message": (
+                "ClearML Task reported successful terminal status but did not record "
+                "the authoritative MLDB harness projection."
+                if successful_without_projection
+                else "ClearML Task terminated before a harness candidate was recorded."
+            ),
         }
         candidate = {
             "state": "terminal",
@@ -2874,7 +3006,24 @@ def _run_remote_harness() -> None:
         backend="clearml",
         execution_id=task_id,
         started_at=None,
-        telemetry_sink=_ClearMLScalarSink(task),
+        telemetry_sink=_ClearMLScalarSink(
+            task,
+            pipeline_task_id=(
+                cast(str, mldb_config.get("mldb.pipeline_execution"))
+                if stage_input["kind"] == "training"
+                and type(mldb_config.get("mldb.pipeline_execution")) is str
+                else None
+            ),
+            pipeline_series=(
+                (
+                    f"bs{stage_input['stage']['parameters']['batch_size']}"
+                    if type(stage_input["stage"]["parameters"].get("batch_size")) is int
+                    else str(stage_input["trial"])
+                )
+                if stage_input["kind"] == "training"
+                else None
+            ),
+        ),
     )
     candidate = harness(stage_input)
     if stage_input["kind"] == "evaluation":

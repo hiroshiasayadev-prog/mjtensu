@@ -77,7 +77,7 @@ def _clearml_stage_routes(environment: Mapping[str, str]) -> dict[str, dict[str,
             raise ValueError("ClearML stage route names must be non-empty trimmed strings")
         if type(route) is not dict or not route:
             raise ValueError(f"ClearML stage route {stage!r} must be a non-empty object")
-        unknown = set(route) - {"queue", "docker_gpu"}
+        unknown = set(route) - {"queue", "docker_gpu", "runtime_image_profile"}
         if unknown:
             raise ValueError(f"ClearML stage route {stage!r} has unknown fields: {sorted(unknown)!r}")
         parsed: dict[str, object] = {}
@@ -93,6 +93,18 @@ def _clearml_stage_routes(environment: Mapping[str, str]) -> dict[str, dict[str,
             ):
                 raise ValueError(f"ClearML stage route {stage!r} docker_gpu must be null or a non-empty trimmed string")
             parsed["docker_gpu"] = docker_gpu
+        if "runtime_image_profile" in route:
+            runtime_image_profile = route["runtime_image_profile"]
+            if runtime_image_profile is not None and (
+                type(runtime_image_profile) is not str
+                or not runtime_image_profile
+                or runtime_image_profile.strip() != runtime_image_profile
+            ):
+                raise ValueError(
+                    f"ClearML stage route {stage!r} runtime_image_profile must be null "
+                    "or a non-empty trimmed string"
+                )
+            parsed["runtime_image_profile"] = runtime_image_profile
         routes[stage] = parsed
     return routes
 
@@ -130,6 +142,9 @@ def _clearml_backend_config(
         ("MLDB_V2_CLEARML_DOCKER_ENV_FILE", "docker_env_file"),
         ("MLDB_V2_CLEARML_DOCKER_GPU", "docker_gpu"),
         ("MLDB_V2_CLEARML_DOCKER_SHM_SIZE", "docker_shm_size"),
+        ("MLDB_V2_RUNTIME_REGISTRY_URL", "runtime_registry_url"),
+        ("MLDB_RUNTIME_REGISTRY_CA_BUNDLE", "runtime_registry_ca_bundle"),
+        ("MLDB_V2_CLEARML_RUNTIME_IMAGE_PROFILE", "runtime_image_profile"),
         ("MLDB_S3_ENDPOINT_URL", "s3_endpoint_url"),
         ("MLDB_S3_REGION", "s3_region"),
     ):
@@ -146,6 +161,22 @@ def _clearml_backend_config(
     )
     if prebuilt_runtime is not None:
         options["prebuilt_runtime"] = prebuilt_runtime
+
+    runtime_image_wait = _optional_environment_value(
+        environment, "MLDB_V2_CLEARML_RUNTIME_IMAGE_WAIT_SECONDS"
+    )
+    if runtime_image_wait is not None:
+        try:
+            runtime_image_wait_seconds = int(runtime_image_wait)
+        except ValueError as error:
+            raise ValueError(
+                "MLDB_V2_CLEARML_RUNTIME_IMAGE_WAIT_SECONDS must be an integer"
+            ) from error
+        if runtime_image_wait_seconds < 0:
+            raise ValueError(
+                "MLDB_V2_CLEARML_RUNTIME_IMAGE_WAIT_SECONDS must be non-negative"
+            )
+        options["runtime_image_wait_seconds"] = runtime_image_wait_seconds
 
     runtime_data_root = _optional_environment_value(
         environment, "MLDB_V2_RUNTIME_DATA_ROOT"

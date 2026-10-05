@@ -1,4 +1,4 @@
-"""Global runtime-registry client and precision5820 managed-runtime materialization."""
+"""Global runtime-registry client plus legacy managed-runtime compatibility helpers."""
 from __future__ import annotations
 
 import contextlib
@@ -10,7 +10,9 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import tomllib
+import urllib.error
 import urllib.parse
 import urllib.request
 import ssl
@@ -22,6 +24,9 @@ from typing import Callable, Mapping, Sequence
 DEFAULT_RUNTIME_REGISTRY_URL = "https://mjtensu-dev.home.arpa/mldb-runtime-registry/"
 _NAME_RE = re.compile(r"[-_.]+")
 _EXACT_REQUIREMENT_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==([^;\s]+)$")
+_DIRECT_URL_REQUIREMENT_RE = re.compile(
+    r"^([A-Za-z0-9][A-Za-z0-9._-]*)\s*@\s*(https?://\S+)$"
+)
 
 
 class RuntimeRegistryError(RuntimeError):
@@ -56,7 +61,18 @@ class RuntimeRegistrySnapshot:
 class RuntimePackage:
     name: str
     version: str
-    index_url: str
+    index_url: str | None = None
+    source_url: str | None = None
+
+
+@dataclass(frozen=True)
+class RuntimeImageArtifact:
+    version: int
+    profile: str
+    repository: str
+    tag: str
+    digest: str
+    image_ref: str
 
 
 @dataclass(frozen=True)
@@ -142,6 +158,88 @@ class RuntimeRegistryClient:
     def latest_version(self) -> int:
         return self.get().version
 
+    def runtime_image(
+        self,
+        version: int,
+        profile: str,
+        *,
+        wait_seconds: int = 1800,
+        poll_seconds: float = 2.0,
+    ) -> RuntimeImageArtifact:
+        if type(version) is not int or version <= 0:
+            raise ValueError("runtime registry version must be a positive integer")
+        if type(profile) is not str or not profile.strip():
+            raise ValueError("runtime image profile must be a non-empty string")
+        if type(wait_seconds) is not int or wait_seconds < 0:
+            raise ValueError("runtime image wait_seconds must be a non-negative integer")
+        deadline = time.monotonic() + wait_seconds
+        url = self._base_url + "image?" + urllib.parse.urlencode(
+            {"version": version, "profile": profile}
+        )
+        while True:
+            status = 0
+            try:
+                if self._opener is not None:
+                    response = self._opener(url, timeout=self._timeout_seconds)
+                else:
+                    response = urllib.request.urlopen(
+                        url, timeout=self._timeout_seconds, context=self._ssl_context
+                    )
+                with contextlib.closing(response):
+                    status = int(getattr(response, "status", 200))
+                    payload = json.loads(response.read())
+            except urllib.error.HTTPError as error:
+                status = error.code
+                try:
+                    payload = json.loads(error.read())
+                except Exception as decode_error:
+                    raise RuntimeRegistryError(
+                        f"runtime image request failed with HTTP {error.code}"
+                    ) from decode_error
+            except Exception as error:
+                raise RuntimeRegistryError(
+                    f"runtime image request failed for version {version}, profile {profile!r}"
+                ) from error
+
+            if type(payload) is not dict:
+                raise RuntimeRegistryError("runtime image response must be an object")
+            state = payload.get("state")
+            if state == "READY":
+                try:
+                    artifact = RuntimeImageArtifact(
+                        version=payload["version"],
+                        profile=payload["profile"],
+                        repository=payload["repository"],
+                        tag=payload["tag"],
+                        digest=payload["digest"],
+                        image_ref=payload["image_ref"],
+                    )
+                except (KeyError, TypeError) as error:
+                    raise RuntimeRegistryError("runtime image response is incomplete") from error
+                if (
+                    artifact.version != version
+                    or artifact.profile != profile
+                    or not artifact.digest.startswith("sha256:")
+                    or artifact.image_ref != f"{artifact.repository}@{artifact.digest}"
+                ):
+                    raise RuntimeRegistryError("runtime image response identity is invalid")
+                return artifact
+            if state == "FAILED" or status == 424:
+                detail = payload.get("error")
+                raise RuntimeRegistryError(
+                    f"runtime image build failed for version {version}, profile {profile!r}: "
+                    f"{detail or 'unknown failure'}"
+                )
+            if state != "BUILDING":
+                raise RuntimeRegistryError(
+                    f"runtime image has unexpected state {state!r} for version {version}"
+                )
+            if time.monotonic() >= deadline:
+                raise RuntimeRegistryError(
+                    f"runtime image is not ready for version {version}, profile {profile!r}"
+                )
+            time.sleep(poll_seconds)
+
 
 def _runtime_packages(snapshot: RuntimeRegistrySnapshot) -> dict[str, RuntimePackage]:
     try:
@@ -163,14 +261,23 @@ def _runtime_packages(snapshot: RuntimeRegistrySnapshot) -> dict[str, RuntimePac
         name = raw.get("name")
         version = raw.get("version")
         index_url = source.get("registry") if type(source) is dict else None
+        source_url = source.get("url") if type(source) is dict else None
         if (
             type(name) is not str
             or type(version) is not str
-            or type(index_url) is not str
-            or not index_url
+            or (
+                (type(index_url) is not str or not index_url)
+                and (type(source_url) is not str or not source_url)
+            )
+            or (
+                type(index_url) is str
+                and index_url
+                and type(source_url) is str
+                and source_url
+            )
         ):
             raise RuntimeRegistryError(
-                "runtime registry currently supports only versioned registry packages"
+                "runtime registry lock package source is unsupported"
             )
         canonical = _canonical_name(name)
         if canonical in packages:
@@ -178,7 +285,8 @@ def _runtime_packages(snapshot: RuntimeRegistrySnapshot) -> dict[str, RuntimePac
         packages[canonical] = RuntimePackage(
             name=name,
             version=version,
-            index_url=index_url,
+            index_url=index_url if type(index_url) is str else None,
+            source_url=source_url if type(source_url) is str else None,
         )
 
     project_table = project.get("project")
@@ -189,16 +297,30 @@ def _runtime_packages(snapshot: RuntimeRegistrySnapshot) -> dict[str, RuntimePac
         if type(requirement) is not str:
             raise RuntimeRegistryError("runtime registry dependency is not a string")
         match = _EXACT_REQUIREMENT_RE.fullmatch(requirement)
-        if match is None:
-            raise RuntimeRegistryError(
-                "runtime registry direct dependencies must use exact == pins"
-            )
-        name, version = match.groups()
-        package = packages.get(_canonical_name(name))
-        if package is None or package.version != version:
-            raise RuntimeRegistryError(
-                "runtime registry direct pin does not match resolved lock metadata"
-            )
+        if match is not None:
+            name, version = match.groups()
+            package = packages.get(_canonical_name(name))
+            if (
+                package is None
+                or package.version != version
+                or package.index_url is None
+            ):
+                raise RuntimeRegistryError(
+                    "runtime registry exact pin does not match resolved lock metadata"
+                )
+            continue
+        direct = _DIRECT_URL_REQUIREMENT_RE.fullmatch(requirement)
+        if direct is not None:
+            name, source_url = direct.groups()
+            package = packages.get(_canonical_name(name))
+            if package is None or package.source_url != source_url:
+                raise RuntimeRegistryError(
+                    "runtime registry direct URL pin does not match resolved lock metadata"
+                )
+            continue
+        raise RuntimeRegistryError(
+            "runtime registry direct dependencies must use exact == pins or direct HTTPS URLs"
+        )
     return packages
 
 
@@ -441,8 +563,16 @@ class ManagedRuntimeMaterializer:
             if installed.get(name, {}).get("version") != package.version
         ]
         by_index: dict[str, list[RuntimePackage]] = {}
+        direct_packages: list[RuntimePackage] = []
         for package in needed:
-            by_index.setdefault(package.index_url, []).append(package)
+            if package.source_url is not None:
+                direct_packages.append(package)
+            elif package.index_url is not None:
+                by_index.setdefault(package.index_url, []).append(package)
+            else:
+                raise RuntimeRegistryError(
+                    f"runtime package {package.name!r} has no install source"
+                )
         installed_requirements: list[str] = []
         for index_url in sorted(by_index):
             requirements = [
@@ -463,6 +593,22 @@ class ManagedRuntimeMaterializer:
                 ]
             )
             installed_requirements.extend(requirements)
+        for package in direct_packages:
+            assert package.source_url is not None
+            self._uv(
+                [
+                    "pip",
+                    "install",
+                    "--python",
+                    str(self.managed_python),
+                    "--no-deps",
+                    "--no-python-downloads",
+                    package.source_url,
+                ]
+            )
+            installed_requirements.append(
+                f"{package.name} @ {package.source_url}"
+            )
 
         self._verify(target, removed=removed)
         self._write_atomic_json(
