@@ -1,0 +1,21 @@
+{
+  "schema": "mjtensu.mldb-v2/corpus/v1",
+  "id": "mldb-smoke/tile-shape-runtime-no-data-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "description": "Empty corpus for tile-shape runtime/export/device smoke evaluations whose procedures intentionally consume no sample bytes. It exists only to satisfy the Study Evaluation corpus contract without inventing synthetic data.",
+  "storage": {
+    "root_uri": "s3://mldb-corpora/mldb-smoke/tile-shape-runtime-no-data-v1"
+  },
+  "manifest": {
+    "file": "tile-shape-runtime-no-data-v1.manifest.jsonl",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "entries": 0
+  },
+  "representation": {
+    "kind": "no-data-runtime-smoke"
+  },
+  "splits": {
+    "eval": 0
+  }
+}

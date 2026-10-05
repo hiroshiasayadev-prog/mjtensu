@@ -1,0 +1,89 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "mldb-smoke/c8-narrow-late2-fieldwise-dw-pw-onnx-cpu-smoke-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "C8 narrow late2 field-wise DW3x3 + equivariant PW1x1 ONNX CPU smoke v1",
+  "description": "NO-TRAINING feasibility smoke for the C8 narrow 4/8/16/32-field topology with both late stages made separable. Stages 1-2 remain normal equivariant convolutions. Stage 3 uses a grouped 8-field -> 8-field equivariant 3x3 (groups=8) followed by an equivariant 1x1 8-field -> 16-field mixer; stage 4 uses grouped 16-field -> 16-field equivariant 3x3 (groups=16) followed by equivariant 1x1 16-field -> 32-field mixing. Export through the tensor-only escnn backbone path, verify Torch/export and ONNX Runtime parity, require both grouped 3x3 Conv nodes to survive ONNX export, and measure CPUExecutionProvider session.run latency. Runtime feasibility only; no accuracy claim.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "4a32e05cdf484696a7d2cb9142b3975bef34461ab3b7b23e7db50dfd21dc7f3a",
+    "sources": [
+      {
+        "path": "mldb_data/mldb-smoke/lib/c8_narrow_late2_fieldwise_dw_pw_smoke_v1.py",
+        "sha256": "6218f8d30afc3c1a8bb25673f475408ed3c247eb6b00736ff78429317c7e2798"
+      }
+    ]
+  },
+  "parameters": {
+    "batch_size": {
+      "default": 1,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64,
+      "description": "ONNX Runtime inference batch size."
+    },
+    "warmup_runs": {
+      "default": 25,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000,
+      "description": "Untimed ONNX Runtime session.run warmup calls."
+    },
+    "measure_runs": {
+      "default": 200,
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 10000,
+      "description": "Timed ONNX Runtime session.run calls."
+    },
+    "intra_op_threads": {
+      "default": 1,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 128,
+      "description": "ONNX Runtime intra-op CPU thread count."
+    },
+    "inter_op_threads": {
+      "default": 1,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 128,
+      "description": "ONNX Runtime inter-op CPU thread count; execution remains sequential."
+    }
+  },
+  "metrics": {
+    "latency_p50_ms": {
+      "type": "number",
+      "required": true,
+      "description": "Median ONNX Runtime session.run latency in milliseconds.",
+      "preference": "neutral"
+    },
+    "latency_p95_ms": {
+      "type": "number",
+      "required": true,
+      "description": "Nearest-rank p95 ONNX Runtime session.run latency in milliseconds.",
+      "preference": "neutral"
+    },
+    "latency_mean_ms": {
+      "type": "number",
+      "required": true,
+      "description": "Arithmetic mean ONNX Runtime session.run latency in milliseconds.",
+      "preference": "neutral"
+    }
+  },
+  "artifacts": {
+    "onnx_model": {
+      "format": "onnx",
+      "schema": "mjtensu.smoke/c8-narrow-fieldwise-dw-pw-onnx-model/v1",
+      "required": true,
+      "description": "Exact untrained prototype ONNX graph used by the smoke."
+    },
+    "smoke_report": {
+      "format": "json",
+      "schema": "mjtensu.smoke/c8-narrow-fieldwise-dw-pw-onnx-cpu/v1",
+      "required": true,
+      "description": "Prototype topology, exact exported Conv groups, parity evidence, raw timing samples, runtime environment, and summary latency metrics."
+    }
+  }
+}

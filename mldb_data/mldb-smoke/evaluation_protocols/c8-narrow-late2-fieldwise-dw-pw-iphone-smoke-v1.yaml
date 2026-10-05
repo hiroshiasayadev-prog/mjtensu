@@ -1,0 +1,82 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "mldb-smoke/c8-narrow-late2-fieldwise-dw-pw-iphone-smoke-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "C8 narrow late2 field-wise DW3x3 + equivariant PW1x1 iPhone smoke v1",
+  "description": "NO-TRAINING physical-device feasibility smoke for the same C8 narrow late2 separable prototype as the CPU smoke. Stages 1-2 remain normal equivariant convolutions; stage 3 is field-wise grouped DW3x3 groups=8 plus equivariant PW1x1, and stage 4 is field-wise grouped DW3x3 groups=16 plus equivariant PW1x1. Assert both grouped Conv nodes survive ONNX export, then use the existing physical iPhone runner with the tile-shape-ort-web-iphone-latency-v3 timing contract: ONNX Runtime Web 1.27.0, wasm-simd, one WASM thread, proxy off, sequential execution, block-averaged awaited session.run timing. Runtime/device feasibility only; no accuracy claim.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "fa7aec694be432e62feb330857b41b776e84fdd15e5127a184d72c0bdc3b9bf6",
+    "sources": [
+      {
+        "path": "mldb_data/mldb-smoke/lib/c8_narrow_late2_fieldwise_dw_pw_smoke_v1.py",
+        "sha256": "6218f8d30afc3c1a8bb25673f475408ed3c247eb6b00736ff78429317c7e2798"
+      }
+    ]
+  },
+  "parameters": {
+    "batch_size": {
+      "default": 1,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64,
+      "description": "ORT Web inference batch size."
+    },
+    "warmup_runs": {
+      "default": 25,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000,
+      "description": "Untimed Safari ORT Web session.run calls."
+    },
+    "runs_per_block": {
+      "default": 100,
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 1000,
+      "description": "Sequential awaited ORT Web session.run calls timed together per measurement block."
+    },
+    "measure_blocks": {
+      "default": 40,
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 1000,
+      "description": "Independent timing blocks used to compute p50/p95/mean per-run block-average latency."
+    }
+  },
+  "metrics": {
+    "latency_p50_ms": {
+      "type": "number",
+      "required": true,
+      "description": "Median per-run block-average Safari ORT Web latency in milliseconds.",
+      "preference": "neutral"
+    },
+    "latency_p95_ms": {
+      "type": "number",
+      "required": true,
+      "description": "Nearest-rank p95 per-run block-average Safari ORT Web latency in milliseconds.",
+      "preference": "neutral"
+    },
+    "latency_mean_ms": {
+      "type": "number",
+      "required": true,
+      "description": "Arithmetic mean per-run block-average Safari ORT Web latency in milliseconds.",
+      "preference": "neutral"
+    }
+  },
+  "artifacts": {
+    "onnx_model": {
+      "format": "onnx",
+      "schema": "mjtensu.smoke/c8-narrow-fieldwise-dw-pw-onnx-model/v1",
+      "required": true,
+      "description": "Exact untrained prototype ONNX graph executed by Safari ORT Web."
+    },
+    "smoke_report": {
+      "format": "json",
+      "schema": "mjtensu.smoke/c8-narrow-fieldwise-dw-pw-ort-web-iphone/v1",
+      "required": true,
+      "description": "Prototype topology, exported Conv groups, browser parity, raw timing blocks, runtime/device environment, and summary latency metrics."
+    }
+  }
+}
