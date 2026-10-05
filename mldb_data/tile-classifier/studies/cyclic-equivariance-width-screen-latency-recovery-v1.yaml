@@ -1,0 +1,75 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/cyclic-equivariance-width-screen-latency-recovery-v1",
+  "status": "sealed",
+  "name": "Cyclic equivariance width screen latency recovery",
+  "description": "Re-evaluate the three completed models from run-ac1a2514af214cb69977972c0278ab39 without retraining after the v2 tensor-export path was found to assume C8 group size. CPU ONNX and iPhone ORT Web latency use v3 protocols that derive cyclic group size from the actual GroupPooling tensor widths, preserving the v2 measurement and telemetry semantics while supporting both C8 and C4 models.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-ac1a2514af214cb69977972c0278ab39-trial-0001-model",
+      "tile-classifier/run-ac1a2514af214cb69977972c0278ab39-trial-0002-model",
+      "tile-classifier/run-ac1a2514af214cb69977972c0278ab39-trial-0003-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "onnx-cpu-latency",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-onnx-cpu-latency-v3",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "measure_runs": {
+          "values": [
+            200
+          ]
+        },
+        "intra_op_threads": {
+          "values": [
+            1
+          ]
+        },
+        "inter_op_threads": {
+          "values": [
+            1
+          ]
+        }
+      }
+    },
+    {
+      "stage": "ort-web-iphone-latency",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-ort-web-iphone-latency-v3",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "runs_per_block": {
+          "values": [
+            100
+          ]
+        },
+        "measure_blocks": {
+          "values": [
+            40
+          ]
+        }
+      }
+    }
+  ]
+}
