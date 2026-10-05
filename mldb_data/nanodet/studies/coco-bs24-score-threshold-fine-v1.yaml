@@ -1,0 +1,27 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "nanodet/coco-bs24-score-threshold-fine-v1",
+  "status": "sealed",
+  "name": "NanoDet bs24 score-threshold fine sweep v1",
+  "description": "Evaluation-only fine score-threshold sweep from 0.400 through 0.600 in 0.025 increments on the existing corrected-COCO-only NanoDet batch24 60-epoch model. Reuses the canonical Model without retraining.",
+  "model": {
+    "existing": [
+      "nanodet/run-7eeac0f4e5df4950a43d302ad10a1820-trial-0001-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "bbox-pathology-score-fine",
+      "corpus": "nanodet/mahjong-composite-pathology-320-v1",
+      "protocol": "nanodet/bbox-pathology-v2",
+      "parameters": {
+        "split": {"values": ["val"]},
+        "score_threshold": {"values": [0.400, 0.425, 0.450, 0.475, 0.500, 0.525, 0.550, 0.575, 0.600]},
+        "nms_iou_threshold": {"values": [0.6]},
+        "max_detections": {"values": [200]},
+        "pathology_overlap_threshold": {"values": [0.25]},
+        "duplicate_overlap_threshold": {"values": [0.8]}
+      }
+    }
+  ]
+}
