@@ -1,0 +1,73 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/cyclic-equivariance-width-screen-c4-latency-rerun-v1",
+  "status": "sealed",
+  "name": "Cyclic equivariance width screen C4 latency rerun",
+  "description": "Re-evaluate only the completed C4 model from run-ac1a2514af214cb69977972c0278ab39 without retraining. CPU ONNX and iPhone ORT Web latency use the v3 protocols that support the model's actual cyclic group size instead of the v2 C8-only export assumption.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-ac1a2514af214cb69977972c0278ab39-trial-0003-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "onnx-cpu-latency",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-onnx-cpu-latency-v3",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "measure_runs": {
+          "values": [
+            200
+          ]
+        },
+        "intra_op_threads": {
+          "values": [
+            1
+          ]
+        },
+        "inter_op_threads": {
+          "values": [
+            1
+          ]
+        }
+      }
+    },
+    {
+      "stage": "ort-web-iphone-latency",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-ort-web-iphone-latency-v3",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "runs_per_block": {
+          "values": [
+            100
+          ]
+        },
+        "measure_blocks": {
+          "values": [
+            40
+          ]
+        }
+      }
+    }
+  ]
+}
