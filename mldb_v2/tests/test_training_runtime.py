@@ -627,3 +627,30 @@ def test_runtime_source_contains_no_specialization_or_persistence_dependencies()
         "importlib",
     ):
         assert forbidden not in source
+
+
+def test_runtime_seeds_architecture_construction_from_stage_seed(tmp_path: Path) -> None:
+    root, corpus_bytes = _install_repo(tmp_path)
+
+    torch.manual_seed(111)
+    first_result, first_transport = _run(
+        tmp_path / "first",
+        root,
+        corpus_bytes,
+        _stage_input(seed=42),
+        weights_uri="s3://bucket/candidates/first.pt",
+    )
+
+    torch.manual_seed(999)
+    second_result, second_transport = _run(
+        tmp_path / "second",
+        root,
+        corpus_bytes,
+        _stage_input(seed=42),
+        weights_uri="s3://bucket/candidates/second.pt",
+    )
+
+    first_bytes = first_transport.objects[first_result["weights"]["uri"]]
+    second_bytes = second_transport.objects[second_result["weights"]["uri"]]
+    assert first_result["weights"]["sha256"] == second_result["weights"]["sha256"]
+    assert first_bytes == second_bytes

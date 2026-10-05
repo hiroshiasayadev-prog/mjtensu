@@ -1,0 +1,39 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/tile-plain-gray35-w500-late256-late-dw3-pw1-down3-dw-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Plain 0.5x late refinement with learned third depthwise downsampling",
+  "family": "plain-cnn",
+  "description": "Replace only the third 2x2 MaxPool of the selected fast Plain 0.5x late DW3x3+PW1x1 architecture with a learned depthwise 3x3 stride-2 64->64 downsampler. Preserve the 16/32/64/96 spatial channel schedule, later 96-channel refinement, late 96->256 expansion, GAP, and classifier head.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sha256": "b5a632ba96c8320be4b1bd2fccefc52605625661c4b39a22bbec03c00c40b2c2"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        1,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "Conv16/32/64/96 baseline; third MaxPool replaced by DW3x3 stride2 64->64; late DW3x3 96->96 + PW1x1 96->256; GAP; 256-unit head",
+    "traits": [
+      "grayscale",
+      "shallow",
+      "spatial-width-0.5x",
+      "learned-third-downsample",
+      "depthwise-stride2",
+      "late-depthwise-refine",
+      "late-1x1-256"
+    ]
+  }
+}

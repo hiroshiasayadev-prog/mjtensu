@@ -64,12 +64,20 @@ class _EvaluationPlanningInput:
 
 
 @dataclass(frozen=True)
+class _TrainingCasePlanningInput:
+    architecture: Architecture
+    parameter_overrides: Mapping[str, object]
+    seed: int
+
+
+@dataclass(frozen=True)
 class _TrainingPlanningInput:
     corpus: Corpus
     protocol: TrainProtocol
     architectures: tuple[Architecture, ...]
     parameter_axes: TrainingParameterGrid
     seeds: tuple[int, ...]
+    cases: tuple[_TrainingCasePlanningInput, ...] | None = None
 
     @property
     def parameter_declarations(self):
@@ -155,11 +163,42 @@ class _StudyPlanningPreflight:
         protocol = _load_train_protocol_definition(
             self._root, TrainProtocolId(str(source["protocol"]))
         )
+        task = _load_task(self._resolver, TaskId(str(corpus["task"])))
+
+        if "cases" in source:
+            architecture_by_id: dict[str, Architecture] = {}
+            case_inputs: list[_TrainingCasePlanningInput] = []
+            for raw_case in source["cases"]:
+                architecture_id = str(raw_case["architecture"])
+                architecture = architecture_by_id.get(architecture_id)
+                if architecture is None:
+                    architecture = _load_architecture_definition(
+                        self._root, ArchitectureId(architecture_id)
+                    )
+                    architecture_by_id[architecture_id] = architecture
+                case_inputs.append(
+                    _TrainingCasePlanningInput(
+                        architecture=architecture,
+                        parameter_overrides=raw_case["parameters"],
+                        seed=int(raw_case["seed"]),
+                    )
+                )
+            return (
+                _TrainingPlanningInput(
+                    corpus=corpus,
+                    protocol=protocol,
+                    architectures=tuple(architecture_by_id.values()),
+                    parameter_axes={},
+                    seeds=(),
+                    cases=tuple(case_inputs),
+                ),
+                task,
+            )
+
         architectures = tuple(
             _load_architecture_definition(self._root, ArchitectureId(str(architecture_id)))
             for architecture_id in source["architectures"]
         )
-        task = _load_task(self._resolver, TaskId(str(corpus["task"])))
         return (
             _TrainingPlanningInput(
                 corpus=corpus,

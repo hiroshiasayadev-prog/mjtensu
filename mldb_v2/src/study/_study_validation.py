@@ -35,7 +35,9 @@ from .study import Study
 
 _SCHEMA = "mjtensu.mldb-v2/study/v1"
 _TOP_LEVEL_FIELDS = {"schema", "id", "status", "name", "description", "model", "evaluations"}
-_TRAIN_FIELDS = {"corpus", "protocol", "architectures", "parameters", "seeds"}
+_TRAIN_GRID_FIELDS = {"corpus", "protocol", "architectures", "parameters", "seeds"}
+_TRAIN_CASES_FIELDS = {"corpus", "protocol", "cases"}
+_TRAIN_CASE_FIELDS = {"architecture", "parameters", "seed"}
 _EVALUATION_FIELDS = {"stage", "corpus", "protocol", "parameters"}
 _STAGE_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*", re.ASCII)
 
@@ -58,11 +60,46 @@ def _validate_parameter_grid(value: object, *, label: str) -> dict[str, object]:
     return grid
 
 
+def _validate_parameter_overrides(value: object, *, label: str) -> dict[str, object]:
+    overrides = _require_exact_mapping(value, label=label)
+    for key, item in overrides.items():
+        if type(key) is not str:
+            raise ValueError(f"{label} keys must be strings")
+        _validate_public_parameter_value(item)
+    return overrides
+
+
 def _validate_training_source(value: object) -> None:
     source = _require_exact_mapping(value, label="Study model.train")
-    _require_exact_fields(source, _TRAIN_FIELDS, label="Study model.train")
+    fields = set(source)
+    if fields not in (_TRAIN_GRID_FIELDS, _TRAIN_CASES_FIELDS):
+        raise ValueError("Study model.train must use either grid fields or explicit cases")
     _validate_versioned_entity_id(source["corpus"])
     _validate_versioned_entity_id(source["protocol"])
+
+    if fields == _TRAIN_CASES_FIELDS:
+        cases = source["cases"]
+        if type(cases) is not list or not cases:
+            raise ValueError("Study model.train.cases must be a non-empty list")
+        seen: list[tuple[str, int, dict[str, object]]] = []
+        for index, raw_case in enumerate(cases):
+            case = _require_exact_mapping(raw_case, label=f"Study model.train.cases[{index}]")
+            _require_exact_fields(case, _TRAIN_CASE_FIELDS, label=f"Study model.train.cases[{index}]")
+            architecture = _validate_versioned_entity_id(case["architecture"])
+            parameters = _validate_parameter_overrides(
+                case["parameters"], label=f"Study model.train.cases[{index}].parameters"
+            )
+            seed = _validate_training_seed(case["seed"])
+            for prior_architecture, prior_seed, prior_parameters in seen:
+                if architecture != prior_architecture or seed != prior_seed or set(parameters) != set(prior_parameters):
+                    continue
+                if all(
+                    _public_parameter_values_equal(parameters[key], prior_parameters[key])
+                    for key in parameters
+                ):
+                    raise ValueError("Study model.train.cases must be unique")
+            seen.append((architecture, seed, parameters))
+        return
 
     architectures = source["architectures"]
     if type(architectures) is not list or not architectures:

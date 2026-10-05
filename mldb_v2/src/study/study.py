@@ -1,5 +1,3 @@
-"""MLDB v2 declarative Study public shapes."""
-
 from typing import Literal, Mapping, TypeAlias, TypedDict
 
 from mldb_v2.src.common.ids import (
@@ -29,11 +27,24 @@ class TrainingModelSource(TypedDict):
     seeds: list[int]
 
 
+class TrainingCase(TypedDict):
+    architecture: ArchitectureId
+    parameters: Mapping[str, PublicParameterValue]
+    seed: int
+
+
+class ExplicitTrainingModelSource(TypedDict):
+    corpus: CorpusId
+    protocol: TrainProtocolId
+    cases: list[TrainingCase]
+
+
+TrainingSource: TypeAlias = TrainingModelSource | ExplicitTrainingModelSource
 ExistingModelSource: TypeAlias = list[ModelId]
 
 
 class TrainingStudyModelSource(TypedDict):
-    train: TrainingModelSource
+    train: TrainingSource
 
 
 class ExistingStudyModelSource(TypedDict):

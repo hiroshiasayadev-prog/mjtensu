@@ -390,6 +390,17 @@ class _RepositoryDefinitionVerifier:
             ]
         return []
 
+    def _validate_parameter_values(self, values: object, declarations: object) -> list[Diagnostic]:
+        assert type(values) is dict and type(declarations) is dict
+        for key, value in values.items():
+            if key not in declarations:
+                return [_diagnostic("parameter_key_unknown", "Study parameter value uses an unpublished protocol key")]
+            try:
+                _validate_value_against_declaration(value, declarations[key])
+            except (TypeError, ValueError):
+                return [_diagnostic("parameter_value_invalid", "Study parameter value violates its protocol declaration")]
+        return []
+
     def _validate_axes(self, axes: object, declarations: object) -> list[Diagnostic]:
         assert type(axes) is dict and type(declarations) is dict
         for key, axis in axes.items():
@@ -478,7 +489,11 @@ class _RepositoryDefinitionVerifier:
             if diagnostics or protocol is None:
                 return diagnostics
             architectures: list[Architecture] = []
-            for architecture_id in source["architectures"]:
+            if "cases" in source:
+                architecture_ids = [case["architecture"] for case in source["cases"]]
+            else:
+                architecture_ids = source["architectures"]
+            for architecture_id in architecture_ids:
                 architecture, diagnostics = self._study_reference(
                     cache, DefinitionKind.ARCHITECTURE, str(architecture_id)
                 )
@@ -491,9 +506,17 @@ class _RepositoryDefinitionVerifier:
             _task, diagnostics = self._study_reference(cache, DefinitionKind.TASK, model_task)
             if diagnostics:
                 return diagnostics
-            diagnostics = self._validate_axes(source["parameters"], protocol["parameters"])  # type: ignore[typeddict-item]
-            if diagnostics:
-                return diagnostics
+            if "cases" in source:
+                for case in source["cases"]:
+                    diagnostics = self._validate_parameter_values(
+                        case["parameters"], protocol["parameters"]
+                    )  # type: ignore[typeddict-item]
+                    if diagnostics:
+                        return diagnostics
+            else:
+                diagnostics = self._validate_axes(source["parameters"], protocol["parameters"])  # type: ignore[typeddict-item]
+                if diagnostics:
+                    return diagnostics
         else:
             lineages: list[_ModelLineage] = []
             for model_id in model["existing"]:

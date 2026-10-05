@@ -205,3 +205,45 @@ def test_public_study_shape_is_exact_skeleton_mirror() -> None:
     assert ExistingStudyModelSource.__required_keys__ == frozenset({"existing"})
     assert EvaluationStage.__required_keys__ == frozenset({"stage", "corpus", "protocol", "parameters"})
     assert Study.__required_keys__ == frozenset({"schema", "id", "status", "name", "description", "model", "evaluations"})
+
+
+def test_training_source_accepts_explicit_cases() -> None:
+    value = _study()
+    value["model"] = {
+        "train": {
+            "corpus": "demo/train-corpus-v1",
+            "protocol": "demo/train-v1",
+            "cases": [
+                {
+                    "architecture": "demo/arch-a-v1",
+                    "parameters": {"batch_size": 128, "epochs": 150},
+                    "seed": 42,
+                },
+                {
+                    "architecture": "demo/arch-b-v2",
+                    "parameters": {"batch_size": 512, "epochs": 100},
+                    "seed": 42,
+                },
+            ],
+        }
+    }
+    parsed = _validate_study(value)
+    assert parsed["model"]["train"]["cases"][0]["parameters"]["batch_size"] == 128
+
+
+def test_training_source_rejects_duplicate_explicit_cases() -> None:
+    value = _study()
+    case = {
+        "architecture": "demo/arch-a-v1",
+        "parameters": {"batch_size": 128},
+        "seed": 42,
+    }
+    value["model"] = {
+        "train": {
+            "corpus": "demo/train-corpus-v1",
+            "protocol": "demo/train-v1",
+            "cases": [copy.deepcopy(case), copy.deepcopy(case)],
+        }
+    }
+    with pytest.raises(ValueError, match="cases must be unique"):
+        _validate_study(value)
