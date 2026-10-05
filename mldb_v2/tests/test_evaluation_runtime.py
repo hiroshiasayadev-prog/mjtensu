@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -758,6 +759,44 @@ def test_exact_loaded_model_and_evaluation_context(
     assert torch.equal(context.model.module.weight, source.weight)
     assert torch.equal(context.model.module.bias, source.bias)
     assert transport.reads == [CORPUS_URI, WEIGHTS_URI]
+
+
+def test_canonical_model_parameter_does_not_require_runtime_model_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    weight_data = _serialize_canonical_state_dict(nn.Linear(3, 2).state_dict())
+    access, _transport = _access(b"unused", weight_data)
+    lineage = SimpleNamespace(
+        model={"schema": "mjtensu.mldb-v2/model/v1", "id": MODEL_ID, "training_result": TRAINING_RESULT_ID},
+        training_result={"id": TRAINING_RESULT_ID},
+        architecture={"id": "demo/arch-v1"},
+        weights=_weight_ref(weight_data),
+    )
+    monkeypatch.setattr(
+        evaluation_runtime,
+        "_resolve_model_lineage",
+        lambda *_args, **_kwargs: lineage,
+    )
+
+    def runtime_loader_must_not_run(*_args, **_kwargs):
+        raise AssertionError("canonical Model ids must not be forced through RuntimeModel id validation")
+
+    monkeypatch.setattr(evaluation_runtime, "_load_runtime_model", runtime_loader_must_not_run)
+    module = nn.Linear(3, 2)
+    monkeypatch.setattr(
+        evaluation_runtime,
+        "_load_state_into_fresh_architecture",
+        lambda *_args, **_kwargs: module,
+    )
+    loaded = evaluation_runtime._load_auxiliary_models(
+        protocol={"model_parameters": {"detector": "detector_model"}},
+        parameters={"detector_model": MODEL_ID},
+        pinned_root=tmp_path,
+        object_bytes=access,
+    )
+    detector = loaded["detector"]
+    assert detector.definition["id"] == MODEL_ID
+    assert detector.module is module
 
 
 def test_runtime_model_parameter_is_resolved_to_verified_onnx_bytes(

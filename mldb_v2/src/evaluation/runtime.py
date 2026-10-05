@@ -18,6 +18,7 @@ from mldb_v2.src.catalog.architecture import _load_architecture_definition
 from mldb_v2.src.catalog.corpus import _load_corpus
 from mldb_v2.src.catalog.task import _load_task
 from mldb_v2.src.catalog.runtime_model import _load_runtime_model
+from mldb_v2.src.catalog._core_definition_validation import _validate_versioned_entity_id
 from mldb_v2.src.common.ids import (
     _validate_evaluation_coordinate_id,
     _validate_trial_id,
@@ -329,10 +330,17 @@ def _load_auxiliary_models(
             canonical_lineage = _resolve_model_lineage(pinned_root, model_id)
         except FileNotFoundError:
             pass
+
+        runtime_id_is_valid = True
         try:
-            runtime_definition = _load_runtime_model(pinned_root, model_id)
-        except FileNotFoundError:
-            pass
+            _validate_versioned_entity_id(model_id)
+        except ValueError:
+            runtime_id_is_valid = False
+        if runtime_id_is_valid:
+            try:
+                runtime_definition = _load_runtime_model(pinned_root, model_id)
+            except FileNotFoundError:
+                pass
 
         if canonical_lineage is not None and runtime_definition is not None:
             raise ValueError(f"model parameter {parameter_name} is ambiguous")
