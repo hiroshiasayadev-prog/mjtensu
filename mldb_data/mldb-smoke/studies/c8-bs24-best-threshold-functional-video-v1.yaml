@@ -1,0 +1,36 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "mldb-smoke/c8-bs24-best-threshold-functional-video-v1",
+  "status": "sealed",
+  "name": "C8 + NanoDet bs24 best-threshold functional video v1",
+  "description": "End-to-end five-video functional replay of the current candidate combination: C8 gray35 random360 classifier (e150 bs128), corrected-COCO-only NanoDet Plus-m 320 detector trained 60 epochs at effective batch 24, detector score threshold 0.575 selected by the completed fine threshold sweep, and the existing red-five classifier. Reuses the prior 10 Hz source-video replay, production semantic grouping, three-consecutive confirmation logic, prediction trace, and overlay video.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-05410d8f6a104ee09b35d1386fbcdd08-trial-0001-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "recognition-functional-video-best",
+      "corpus": "tile-classifier/recognition-e2e-night-iphone13-v1",
+      "protocol": "tile-classifier/tile-shape-recognition-functional-video-v5",
+      "parameters": {
+        "detector_model": {
+          "values": [
+            "nanodet/run-7eeac0f4e5df4950a43d302ad10a1820-trial-0001-model"
+          ]
+        },
+        "red_five_model": {
+          "values": [
+            "recognition-runtime/red-five-c8-rgb-warmaug-v1"
+          ]
+        },
+        "detector_score_threshold": {
+          "values": [
+            0.575
+          ]
+        }
+      }
+    }
+  ]
+}

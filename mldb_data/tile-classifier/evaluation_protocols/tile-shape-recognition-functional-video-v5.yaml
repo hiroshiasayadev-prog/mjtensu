@@ -1,0 +1,110 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-recognition-functional-video-v5",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Canonical-model recognition functional video v5",
+  "description": "Replay the sealed five-video corpus at deterministic 100 ms source-video intervals using the production TypeScript recognition pipeline and production three-consecutive stabilizer. v5 accepts the detector as a canonical MLDB Model, exports and parity-validates its NanoDet ONNX graph inside the Evaluation, and exposes an evaluation-only detector_score_threshold so candidate detector operating points can be tested end-to-end without mutating the production default. GT scoring, trace semantics, and overlay rendering remain aligned with functional-video-v4.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "1d09a71c272ba788d07fc71be73a7d822d1be9d5191155ca3f02ccdf2951a930"
+  },
+  "parameters": {
+    "detector_model": {
+      "default": null,
+      "description": "Auxiliary detector canonical MLDB Model ID. v5 requires the NanoDet Plus-m 320 GhostPAN baseline architecture."
+    },
+    "red_five_model": {
+      "default": null,
+      "description": "Auxiliary red-five classifier Runtime Model ID."
+    },
+    "detector_score_threshold": {
+      "default": 0.35,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Evaluation-only NanoDet confidence threshold used before NMS; production default is not modified."
+    }
+  },
+  "model_parameters": {
+    "detector": "detector_model",
+    "red-five-classifier": "red_five_model"
+  },
+  "metrics": {
+    "frame_semantic_exact_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "completed_hand_exact_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "dora_exact_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "meld_exact_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "eligible_frame_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "take_gt_streak3_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Fraction of takes that produce three consecutive GT-exact eligible evaluations."
+    },
+    "take_product_confirmed_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Fraction of takes for which the production stabilizer reaches confirmed."
+    },
+    "take_product_confirmed_exact_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Fraction of takes whose first production confirmation exactly matches GT."
+    }
+  },
+  "artifacts": {
+    "onnx_model": {
+      "format": "onnx",
+      "schema": "mjtensu.recognition/base-classifier-onnx/v1",
+      "required": true,
+      "description": "Tensor-only ONNX export of the primary base classifier."
+    },
+    "detector_onnx": {
+      "format": "onnx",
+      "schema": "mjtensu.recognition/detector-onnx/v1",
+      "required": true,
+      "description": "ONNX export of the selected canonical NanoDet detector after export-path parity validation."
+    },
+    "functional_report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/functional-video/v1",
+      "required": true,
+      "description": "Per-take GT streak/product confirmation summary and exact model identity."
+    },
+    "prediction_trace": {
+      "format": "jsonl",
+      "schema": "mjtensu.recognition/prediction-trace/v1",
+      "required": true,
+      "description": "Per-evaluation bbox/OBB, detector confidence, tile classification, snapshot, GT, and stabilizer trace."
+    },
+    "overlay_video": {
+      "format": "mp4",
+      "schema": "mjtensu.recognition/overlay-video/v1",
+      "required": true,
+      "description": "Combined t1-t5 canonical landscape video with bbox/OBB, tile labels, GT streak, and product stabilizer state."
+    }
+  }
+}
