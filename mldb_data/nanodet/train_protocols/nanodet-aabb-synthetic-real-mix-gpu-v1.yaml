@@ -1,0 +1,93 @@
+{
+  "schema": "mjtensu.mldb-v2/train-protocol/v1",
+  "id": "nanodet/nanodet-aabb-synthetic-real-mix-gpu-v1",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "name": "NanoDet AABB synthetic-real fixed-budget source mix",
+  "description": "Native NanoDet Plus training from the official pretrained M320 checkpoint on the latest Blender product-layout synthetic corpus plus repeated annotated real iPhone composites. A fixed source_budget is divided between synthetic and corrected jp_v2 by jp_fraction, while real_repeat is fixed, so source-mix comparisons keep per-epoch sample/update budget constant. Native validation/model selection uses the held-out synthetic validation split; layout-001/layout-002 remain untouched for external real-pathology evaluation. Telemetry preserves native train-loss and validation metric semantics from the corrected-COCO native protocol.",
+  "implementation": {
+    "entrypoint": "train",
+    "sha256": "12e26b777219335db74c979fe3054f0e306af57173bd250df6f8fde727363e3d"
+  },
+  "parameters": {
+    "epochs": {
+      "default": 60,
+      "type": "integer",
+      "minimum": 1
+    },
+    "batch_size": {
+      "default": 24,
+      "type": "integer",
+      "minimum": 1
+    },
+    "workers": {
+      "default": 10,
+      "type": "integer",
+      "minimum": 0
+    },
+    "learning_rate": {
+      "default": 0.001,
+      "type": "number",
+      "minimum": 1e-07
+    },
+    "weight_decay": {
+      "default": 0.05,
+      "type": "number",
+      "minimum": 0.0
+    },
+    "eta_min": {
+      "default": 5e-05,
+      "type": "number",
+      "minimum": 0.0
+    },
+    "warmup_steps": {
+      "default": 500,
+      "type": "integer",
+      "minimum": 0
+    },
+    "warmup_ratio": {
+      "default": 0.0001,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "validation_interval": {
+      "default": 5,
+      "type": "integer",
+      "minimum": 1
+    },
+    "grad_clip": {
+      "default": 35.0,
+      "type": "number",
+      "minimum": 0.0
+    },
+    "amp": {
+      "default": true,
+      "type": "boolean"
+    },
+    "log_interval": {
+      "default": 50,
+      "type": "integer",
+      "minimum": 1
+    },
+    "source_budget": {
+      "default": 9000,
+      "type": "integer",
+      "minimum": 1,
+      "description": "Fixed per-epoch slots shared by synthetic and corrected jp_v2 sources."
+    },
+    "real_repeat": {
+      "default": 20,
+      "type": "integer",
+      "minimum": 1,
+      "description": "Exact repetitions of every unique real training composite per epoch."
+    },
+    "jp_fraction": {
+      "default": 0.0,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Fraction of source_budget allocated to corrected jp_v2; the remainder is allocated to synthetic."
+    }
+  }
+}

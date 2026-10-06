@@ -1,0 +1,201 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "nanodet/synthetic-real-jp-mix-screen-v2",
+  "status": "sealed",
+  "name": "NanoDet synthetic-real jp_v2 mix screen v2",
+  "description": "Train NanoDet Plus M320 on the latest Blender product-layout synthetic corpus plus fixed real-capture replay while screening corrected jp_v2 allocation at 0%, 25%, and 50% of a fixed 9000-sample source budget. Real exposure, total samples per epoch, batch size, optimizer, epoch count, seed, architecture, and evaluation thresholds are fixed. Evaluate the complete detector-facing suite: bbox pathology, held-out real-capture quality, and five-video production recognition with ordered detector-semantic diagnostics. The functional-video semantic probe is fixed to the current leading C8 downsampling 2/2/2 classifier.",
+  "model": {
+    "train": {
+      "corpus": "nanodet/mahjong-training-synthetic-real-v2",
+      "protocol": "nanodet/nanodet-aabb-synthetic-real-mix-gpu-v1",
+      "architectures": [
+        "nanodet/nanodet-plus-m320-ghostpan-baseline-v1"
+      ],
+      "parameters": {
+        "epochs": {
+          "values": [
+            60
+          ]
+        },
+        "batch_size": {
+          "values": [
+            24
+          ]
+        },
+        "workers": {
+          "values": [
+            10
+          ]
+        },
+        "learning_rate": {
+          "values": [
+            0.001
+          ]
+        },
+        "weight_decay": {
+          "values": [
+            0.05
+          ]
+        },
+        "eta_min": {
+          "values": [
+            5e-05
+          ]
+        },
+        "warmup_steps": {
+          "values": [
+            500
+          ]
+        },
+        "warmup_ratio": {
+          "values": [
+            0.0001
+          ]
+        },
+        "validation_interval": {
+          "values": [
+            5
+          ]
+        },
+        "grad_clip": {
+          "values": [
+            35.0
+          ]
+        },
+        "amp": {
+          "values": [
+            true
+          ]
+        },
+        "log_interval": {
+          "values": [
+            50
+          ]
+        },
+        "source_budget": {
+          "values": [
+            9000
+          ]
+        },
+        "real_repeat": {
+          "values": [
+            20
+          ]
+        },
+        "jp_fraction": {
+          "values": [
+            0.0,
+            0.25,
+            0.5
+          ]
+        }
+      },
+      "seeds": [
+        42
+      ]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "bbox-pathology",
+      "corpus": "nanodet/mahjong-composite-pathology-320-v1",
+      "protocol": "nanodet/bbox-pathology-v2",
+      "parameters": {
+        "split": {
+          "values": [
+            "val"
+          ]
+        },
+        "score_threshold": {
+          "values": [
+            0.35
+          ]
+        },
+        "nms_iou_threshold": {
+          "values": [
+            0.6
+          ]
+        },
+        "max_detections": {
+          "values": [
+            200
+          ]
+        },
+        "pathology_overlap_threshold": {
+          "values": [
+            0.25
+          ]
+        },
+        "duplicate_overlap_threshold": {
+          "values": [
+            0.8
+          ]
+        }
+      }
+    },
+    {
+      "stage": "real-capture-quality",
+      "corpus": "nanodet/mahjong-composite-pathology-320-v1",
+      "protocol": "nanodet/deployment-real-quality-v1",
+      "parameters": {
+        "split": {
+          "values": [
+            "val"
+          ]
+        },
+        "source_domain": {
+          "values": [
+            "real_capture"
+          ]
+        },
+        "score_threshold": {
+          "values": [
+            0.35
+          ]
+        },
+        "nms_iou_threshold": {
+          "values": [
+            0.6
+          ]
+        },
+        "match_iou_threshold": {
+          "values": [
+            0.5
+          ]
+        },
+        "duplicate_overlap_threshold": {
+          "values": [
+            0.8
+          ]
+        },
+        "max_detections": {
+          "values": [
+            200
+          ]
+        }
+      }
+    },
+    {
+      "stage": "recognition-functional-video",
+      "corpus": "nanodet/recognition-e2e-night-iphone13-v1",
+      "protocol": "nanodet/recognition-functional-video-detector-v2",
+      "parameters": {
+        "base_classifier_model": {
+          "values": [
+            "tile-classifier/run-bdcce50e63fb4665bebbd8d3b78ea243-trial-0003-model"
+          ]
+        },
+        "red_five_model": {
+          "values": [
+            "recognition-runtime/red-five-c8-rgb-warmaug-v1"
+          ]
+        },
+        "detector_score_threshold": {
+          "values": [
+            0.35
+          ]
+        }
+      }
+    }
+  ]
+}

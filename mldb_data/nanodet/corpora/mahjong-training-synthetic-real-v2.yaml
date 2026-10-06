@@ -1,0 +1,44 @@
+{
+  "schema": "mjtensu.mldb-v2/corpus/v1",
+  "id": "nanodet/mahjong-training-synthetic-real-v2",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "description": "Frozen multi-source NanoDet corpus for Blender final-delivery-v2 plus annotated real iPhone captures. Real capture split is layout-disjoint and preserves the historical pathology holdouts layout-001/layout-002 outside training. Corrected jp_v2 is available by reusing the sealed baseline archive, without duplicating that 1.6 GB object. Legacy fixed composites physically present in the reused baseline archive are intentionally unused by the new training recipe.",
+  "storage": {
+    "root_uri": "s3://mldb-corpora"
+  },
+  "manifest": {
+    "file": "mahjong-training-synthetic-real-v2.manifest.jsonl",
+    "sha256": "dfe94bdc7bd9f09da81d3998bd7e3a87ba097f410eb31947653b994f6a485d4f",
+    "entries": 2
+  },
+  "representation": {
+    "kind": "multi-archive-coco-axis-aligned-object-detection",
+    "base_archive": "nanodet/mahjong-training-baseline-v1/nanodet-training-baseline-v1.tar",
+    "synthetic_real_archive": "nanodet/mahjong-training-synthetic-real-v2/nanodet-synthetic-real-v2.tar",
+    "detector_class": "mahjong_tile",
+    "geometry": "x-y-width-height",
+    "input_size": [
+      320,
+      320
+    ],
+    "sources": {
+      "synthetic": "blender-final-delivery-v2",
+      "real": "initial-120-complete-layouts",
+      "optional_base": "corrected-coco-mahjong-jp-v2"
+    },
+    "reserved_real_holdouts": [
+      "layout-001",
+      "layout-002"
+    ]
+  },
+  "splits": {
+    "synthetic_train": 9000,
+    "synthetic_val": 1000,
+    "real_train": 92,
+    "real_val": 24,
+    "jp_train": 12144,
+    "jp_valid": 722,
+    "jp_test": 370
+  }
+}
