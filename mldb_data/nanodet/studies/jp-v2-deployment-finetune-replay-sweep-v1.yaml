@@ -1,0 +1,180 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "nanodet/jp-v2-deployment-finetune-replay-sweep-v1",
+  "status": "sealed",
+  "name": "NanoDet jp_v2 bs24 to deployment fine-tune replay sweep",
+  "description": "Fine-tune the canonical corrected-jp_v2 batch-24 NanoDet checkpoint for 15 epochs on fixed deployment composites and repeated real iPhone captures while sweeping the exact number of corrected-jp_v2 replay images sampled per epoch: 0, 256, 512, and 1024. Architecture, seed, optimizer, augmentation, deployment exposure, and threshold are fixed. This is the coarse replay-ratio stage before an epoch-budget sweep.",
+  "model": {
+    "train": {
+      "corpus": "nanodet/mahjong-finetune-deployment-v1",
+      "protocol": "nanodet/nanodet-aabb-deployment-finetune-gpu-v1",
+      "architectures": [
+        "nanodet/nanodet-plus-m320-ghostpan-baseline-v1"
+      ],
+      "parameters": {
+        "epochs": {
+          "values": [
+            15
+          ]
+        },
+        "batch_size": {
+          "values": [
+            24
+          ]
+        },
+        "workers": {
+          "values": [
+            10
+          ]
+        },
+        "learning_rate": {
+          "values": [
+            0.0001
+          ]
+        },
+        "weight_decay": {
+          "values": [
+            0.05
+          ]
+        },
+        "eta_min": {
+          "values": [
+            1e-05
+          ]
+        },
+        "warmup_steps": {
+          "values": [
+            100
+          ]
+        },
+        "warmup_ratio": {
+          "values": [
+            0.1
+          ]
+        },
+        "validation_interval": {
+          "values": [
+            1
+          ]
+        },
+        "grad_clip": {
+          "values": [
+            35.0
+          ]
+        },
+        "amp": {
+          "values": [
+            true
+          ]
+        },
+        "log_interval": {
+          "values": [
+            10
+          ]
+        },
+        "composite_repeat": {
+          "values": [
+            1
+          ]
+        },
+        "real_repeat": {
+          "values": [
+            20
+          ]
+        },
+        "jp_replay_images": {
+          "values": [
+            0,
+            256,
+            512,
+            1024
+          ]
+        }
+      },
+      "seeds": [
+        42
+      ]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "bbox-pathology",
+      "corpus": "nanodet/mahjong-composite-pathology-320-v1",
+      "protocol": "nanodet/bbox-pathology-v2",
+      "parameters": {
+        "split": {
+          "values": [
+            "val"
+          ]
+        },
+        "score_threshold": {
+          "values": [
+            0.35
+          ]
+        },
+        "nms_iou_threshold": {
+          "values": [
+            0.6
+          ]
+        },
+        "max_detections": {
+          "values": [
+            200
+          ]
+        },
+        "pathology_overlap_threshold": {
+          "values": [
+            0.25
+          ]
+        },
+        "duplicate_overlap_threshold": {
+          "values": [
+            0.8
+          ]
+        }
+      }
+    },
+    {
+      "stage": "real-capture-quality",
+      "corpus": "nanodet/mahjong-composite-pathology-320-v1",
+      "protocol": "nanodet/deployment-real-quality-v1",
+      "parameters": {
+        "split": {
+          "values": [
+            "val"
+          ]
+        },
+        "source_domain": {
+          "values": [
+            "real_capture"
+          ]
+        },
+        "score_threshold": {
+          "values": [
+            0.35
+          ]
+        },
+        "nms_iou_threshold": {
+          "values": [
+            0.6
+          ]
+        },
+        "match_iou_threshold": {
+          "values": [
+            0.5
+          ]
+        },
+        "duplicate_overlap_threshold": {
+          "values": [
+            0.8
+          ]
+        },
+        "max_detections": {
+          "values": [
+            200
+          ]
+        }
+      }
+    }
+  ]
+}

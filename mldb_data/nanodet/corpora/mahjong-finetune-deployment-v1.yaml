@@ -1,0 +1,36 @@
+{
+  "schema": "mjtensu.mldb-v2/corpus/v1",
+  "id": "nanodet/mahjong-finetune-deployment-v1",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "description": "Fine-tune corpus view over the existing corrected jp_v2/base fixed-layout archive plus real iPhone deployment captures, with the canonical corrected-jp_v2 batch-24 Model weights embedded as immutable stage-1 initialization. Storage bytes are shared with mahjong-training-real-replay-v1; only the 17 MB initialization object was added.",
+  "storage": {
+    "root_uri": "s3://mldb-corpora/nanodet/mahjong-training-real-replay-v1"
+  },
+  "manifest": {
+    "file": "mahjong-finetune-deployment-v1.manifest.jsonl",
+    "sha256": "8214a00922d6d64aa375b0537695cfe638b0b74893aee3465a084c1aa26aef4f",
+    "entries": 3
+  },
+  "representation": {
+    "kind": "tar-coco-axis-aligned-object-detection-plus-real-replay-plus-init-weights",
+    "base_archive": "nanodet-training-baseline-v1.tar",
+    "real_capture_archive": "nanodet-real-capture-train-v1.tar",
+    "initial_weights": "jp-v2-bs24-init.pt",
+    "initial_model": "nanodet/run-7eeac0f4e5df4950a43d302ad10a1820-trial-0001-model",
+    "detector_class": "mahjong_tile",
+    "geometry": "x-y-width-height",
+    "input_size": [
+      320,
+      320
+    ]
+  },
+  "splits": {
+    "jp_train": 12144,
+    "jp_valid": 722,
+    "jp_test": 370,
+    "composite_train": 286,
+    "composite_val": 71,
+    "real_train": 32
+  }
+}

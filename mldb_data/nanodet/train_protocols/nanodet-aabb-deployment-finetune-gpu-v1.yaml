@@ -1,0 +1,93 @@
+{
+  "schema": "mjtensu.mldb-v2/train-protocol/v1",
+  "id": "nanodet/nanodet-aabb-deployment-finetune-gpu-v1",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "name": "NanoDet AABB deployment fine-tune from jp_v2 bs24",
+  "description": "Fine-tune the canonical corrected-jp_v2 batch-24 NanoDet Model on fixed-layout deployment composites plus repeated real iPhone captures, with an exact per-epoch seeded jp_v2 replay count. Uses the historical production fine-tune optimizer/augmentation family, resets optimizer/scheduler state, and returns the terminal EMA rather than selecting a checkpoint by jp_v2 validation mAP.",
+  "implementation": {
+    "entrypoint": "train",
+    "sha256": "45caa8ece36df830131396d72f77db63bff657123909359258ebbb12ef72a733"
+  },
+  "parameters": {
+    "epochs": {
+      "default": 15,
+      "type": "integer",
+      "minimum": 1
+    },
+    "batch_size": {
+      "default": 24,
+      "type": "integer",
+      "minimum": 1
+    },
+    "workers": {
+      "default": 10,
+      "type": "integer",
+      "minimum": 0
+    },
+    "learning_rate": {
+      "default": 0.0001,
+      "type": "number",
+      "minimum": 1e-07
+    },
+    "weight_decay": {
+      "default": 0.05,
+      "type": "number",
+      "minimum": 0.0
+    },
+    "eta_min": {
+      "default": 1e-05,
+      "type": "number",
+      "minimum": 0.0
+    },
+    "warmup_steps": {
+      "default": 100,
+      "type": "integer",
+      "minimum": 0
+    },
+    "warmup_ratio": {
+      "default": 0.1,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "validation_interval": {
+      "default": 1,
+      "type": "integer",
+      "minimum": 1
+    },
+    "grad_clip": {
+      "default": 35.0,
+      "type": "number",
+      "minimum": 0.0
+    },
+    "amp": {
+      "default": true,
+      "type": "boolean"
+    },
+    "log_interval": {
+      "default": 10,
+      "type": "integer",
+      "minimum": 1
+    },
+    "composite_repeat": {
+      "default": 1,
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of times the 286 unique fixed-layout composite training samples are exposed per training epoch."
+    },
+    "real_repeat": {
+      "default": 20,
+      "type": "integer",
+      "minimum": 1,
+      "description": "Number of times the 32 layout-disjoint annotated real-capture training samples are exposed per training epoch."
+    },
+    "jp_replay_images": {
+      "default": 512,
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 12144,
+      "description": "Unique corrected-jp_v2 training images sampled deterministically without replacement each epoch in addition to all deployment exposures."
+    }
+  }
+}
