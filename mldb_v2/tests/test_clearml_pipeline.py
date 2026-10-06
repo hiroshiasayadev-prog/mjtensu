@@ -618,6 +618,72 @@ def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion()
 
 
 
+def test_sdk_adapter_marks_historical_comparator_rows_without_rejecting_condition_differences() -> None:
+    FakeSDKTask.reset()
+    plan = _plan()
+    result = _result(plan)
+    adapter = ClearMLSDKAdapter(ClearMLSDKSettings(), task_class=FakeSDKTask)
+    pipeline_id = cast(str, adapter.create_pipeline_run(_pipeline_request(plan, result)))
+    summary = {
+        "schema": "mjtensu.mldb-v2/study-summary-projection/v4",
+        "study_result": result["id"],
+        "study": result["study"],
+        "status": "completed",
+        "rows": [],
+        "comparisons": [{
+            "stage": "quality",
+            "evaluation_protocol": "demo/eval-v2",
+            "evaluation_name": "Quality",
+            "evaluation_description": "",
+            "metrics": ["accuracy"],
+            "metric_preferences": {"accuracy": "higher"},
+            "metric_descriptions": {"accuracy": "Accuracy."},
+            "rows": [
+                {
+                    "trial": "trial-0001",
+                    "trial_label": "candidate",
+                    "disposition": "completed",
+                    "metrics": {"accuracy": 0.91},
+                },
+                {
+                    "trial": "trial-0002",
+                    "trial_label": "historical baseline",
+                    "disposition": "completed",
+                    "metrics": {"accuracy": 0.89},
+                    "reference": True,
+                    "reference_study_result": "demo/run-old",
+                    "comparison_note": "reference result; protocol demo/eval-v1 != demo/eval-v2; parameters differ",
+                },
+            ],
+        }],
+    }
+
+    adapter.project_pipeline_summary(execution_id=pipeline_id, summary=summary)
+
+    controller = FakeSDKTask.get_task(task_id=pipeline_id)
+    assert controller is not None
+    comparison = next(
+        report for report in controller.table_reports
+        if report["title"] == "Study Comparison"
+    )
+    assert comparison["table_plot"] == [
+        ["Trial", "Role", "Status", "Comparison note", "accuracy"],
+        ["candidate", "current", "completed", "", 0.91],
+        [
+            "historical baseline",
+            "reference",
+            "completed",
+            "reference result; protocol demo/eval-v1 != demo/eval-v2; parameters differ",
+            0.89,
+        ],
+    ]
+    bar = next(
+        report for report in controller.plotly_reports
+        if report["title"] == "Model Comparison - quality" and report["series"] == "accuracy"
+    )
+    assert bar["figure"]["data"][0]["y"] == ["candidate", "historical baseline"]
+
+
 def test_pipeline_summary_defers_comparison_events_until_terminal_status() -> None:
     FakeSDKTask.reset()
     plan = _plan()

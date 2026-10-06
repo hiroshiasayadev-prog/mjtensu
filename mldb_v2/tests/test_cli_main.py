@@ -253,7 +253,7 @@ def test_application_error_uses_stderr_and_nonzero_exit() -> None:
 
 def test_repository_local_mldb_entrypoint_help_smoke() -> None:
     completed = subprocess.run(
-        ["cmd", "/c", "mldb", "--help"],
+        [str(REPO / "mldb.sh"), "--help"],
         cwd=REPO,
         capture_output=True,
         text=True,

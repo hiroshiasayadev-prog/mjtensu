@@ -12,6 +12,7 @@ from mldb_v2.src.study.study import (
     ExistingStudyModelSource,
     ParameterAxis,
     Study,
+    StudyComparator,
     TrainingModelSource,
     TrainingStudyModelSource,
 )
@@ -64,6 +65,43 @@ def test_training_and_existing_sources_parse_and_preserve_authored_order() -> No
     assert training["model"]["train"]["seeds"] == [42, -1]
     existing = _validate_study(_existing_study())
     assert existing["model"]["existing"] == ["demo/run-abcd-trial-0001-model", "other/model-xyz"]
+
+
+def test_comparators_are_optional_ordered_and_unique() -> None:
+    value = _study()
+    value["comparators"] = [
+        {
+            "label": "baseline",
+            "study_result": "demo/run-1234567812344234a2341234567890ab",
+            "trial": "trial-0002",
+        },
+        {
+            "label": "older baseline",
+            "study_result": "demo/run-abcdefab12344321a123abcdefabcdef",
+            "trial": "trial-0001",
+        },
+    ]
+    parsed = _validate_study(value)
+    assert [item["label"] for item in parsed["comparators"]] == ["baseline", "older baseline"]
+
+    for mutation in (
+        [],
+        [{"label": "", "study_result": "demo/run-x", "trial": "trial-0001"}],
+        [{"label": "x", "study_result": "bad", "trial": "trial-0001"}],
+        [{"label": "x", "study_result": "demo/run-x", "trial": "trial-1"}],
+        [
+            {"label": "x", "study_result": "demo/run-a", "trial": "trial-0001"},
+            {"label": "x", "study_result": "demo/run-b", "trial": "trial-0001"},
+        ],
+        [
+            {"label": "x", "study_result": "demo/run-a", "trial": "trial-0001"},
+            {"label": "y", "study_result": "demo/run-a", "trial": "trial-0001"},
+        ],
+    ):
+        candidate = _study()
+        candidate["comparators"] = mutation
+        with pytest.raises(ValueError):
+            _validate_study(candidate)
 
 
 @pytest.mark.parametrize("mutation", [
@@ -204,7 +242,9 @@ def test_public_study_shape_is_exact_skeleton_mirror() -> None:
     assert TrainingStudyModelSource.__required_keys__ == frozenset({"train"})
     assert ExistingStudyModelSource.__required_keys__ == frozenset({"existing"})
     assert EvaluationStage.__required_keys__ == frozenset({"stage", "corpus", "protocol", "parameters"})
+    assert StudyComparator.__required_keys__ == frozenset({"label", "study_result", "trial"})
     assert Study.__required_keys__ == frozenset({"schema", "id", "status", "name", "description", "model", "evaluations"})
+    assert Study.__optional_keys__ == frozenset({"comparators"})
 
 
 def test_training_source_accepts_explicit_cases() -> None:

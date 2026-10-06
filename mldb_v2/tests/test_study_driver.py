@@ -260,6 +260,104 @@ def test_evaluation_projection_context_resolves_metric_preferences() -> None:
     )
 
 
+def test_historical_comparator_projection_reuses_canonical_evaluation_without_execution() -> None:
+    plan = _single_trial_plan(evaluations=1)
+    current = _study_result(plan)
+    reference_execution = "abcdefab12344321a123abcdefabcdef"
+    reference_id = f"demo/run-{reference_execution}"
+    reference_eval_id = f"{reference_id}-trial-0001-eval-0001"
+    reference = {
+        "schema": "mjtensu.mldb-v2/study-result/v1",
+        "id": reference_id,
+        "execution_key": reference_execution,
+        "plan": plan["id"],
+        "study": plan["study"],
+        "source_commit": plan["source_commit"],
+        "runtime_registry_version": 1,
+        "backend": "fake",
+        "created_at": "2026-09-13T00:00:00Z",
+        "status": "completed",
+        "diagnostic": None,
+        "trials": [{
+            "trial": "trial-0001",
+            "training": None,
+            "evaluations": [{
+                "coordinate": "eval-0001",
+                "stage": "holdout-a",
+                "disposition": "completed",
+                "result": reference_eval_id,
+                "reason": None,
+            }],
+        }],
+    }
+
+    documents = {
+        (EntityKind.STUDY, str(current["study"])): {
+            "comparators": [{
+                "label": "historical baseline",
+                "study_result": reference_id,
+                "trial": "trial-0001",
+            }],
+        },
+        (EntityKind.STUDY_RESULT, reference_id): reference,
+        (EntityKind.STUDY_PLAN, str(plan["id"])): plan,
+        (EntityKind.EVALUATION_RESULT, reference_eval_id): {
+            "model": "demo/historical-model",
+            "attempts": [],
+            "result": {"metrics": {"score": 0.88}, "artifacts": {}},
+        },
+    }
+
+    class Resolver:
+        def resolve(self, *, kind, entity_id):
+            key = (kind, str(entity_id))
+            if key not in documents:
+                raise FileNotFoundError(key)
+            return copy.deepcopy(documents[key])
+
+    rows: list[dict[str, object]] = []
+    comparisons = {
+        ("holdout-a", "demo/eval-v1"): {
+            "stage": "holdout-a",
+            "evaluation_protocol": "demo/eval-v1",
+            "evaluation_name": "Holdout",
+            "evaluation_description": "",
+            "metrics": ["score"],
+            "metric_preferences": {"score": "higher"},
+            "metric_descriptions": {"score": ""},
+            "artifacts": {},
+            "rows": [],
+        }
+    }
+    driver._append_reference_comparators(
+        resolver=Resolver(),
+        result=current,
+        plan=plan,
+        rows=rows,
+        comparisons_by_stage=comparisons,
+    )
+
+    reference_row = comparisons[("holdout-a", "demo/eval-v1")]["rows"][0]
+    assert reference_row["trial_label"] == "historical baseline"
+    assert reference_row["reference"] is True
+    assert reference_row["metrics"] == {"score": 0.88}
+    assert reference_row["comparison_note"] == "reference result; declared evaluation conditions match"
+    assert rows[0]["kind"] == "reference_evaluation"
+    assert rows[0]["result"] == reference_eval_id
+
+    mismatched = copy.deepcopy(plan["trials"][0]["evaluations"][0])
+    mismatched["evaluation_protocol"] = "demo/eval-v2"
+    mismatched["corpus"] = "demo/other-corpus-v1"
+    mismatched["parameters"] = {"threshold": 0.25}
+    note = driver._comparison_condition_note(
+        current=plan["trials"][0]["evaluations"][0],
+        reference=mismatched,
+    )
+    assert "protocol demo/eval-v2 != demo/eval-v1" in note
+    assert "corpus demo/other-corpus-v1 != demo/eval-corpus-v1" in note
+    assert "parameters differ" in note
+
+
 def _single_trial_plan(*, evaluations: int = 1) -> dict[str, object]:
     base = ready_fx._plan()
     payload = {

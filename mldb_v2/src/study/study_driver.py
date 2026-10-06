@@ -353,6 +353,215 @@ def _evaluation_projection_context(
     )
 
 
+def _plan_evaluation_record(
+    plan_trial: Mapping[str, object] | None,
+    *,
+    coordinate: object | None = None,
+    stage: str | None = None,
+) -> Mapping[str, object] | None:
+    if not isinstance(plan_trial, Mapping):
+        return None
+    evaluations = plan_trial.get("evaluations")
+    if type(evaluations) is not list:
+        return None
+    for item in evaluations:
+        if not isinstance(item, Mapping):
+            continue
+        if coordinate is not None and item.get("coordinate") != coordinate:
+            continue
+        if stage is not None and item.get("stage") != stage:
+            continue
+        return item
+    return None
+
+
+def _comparison_condition_note(
+    *,
+    current: Mapping[str, object] | None,
+    reference: Mapping[str, object] | None,
+) -> str:
+    if current is None or reference is None:
+        return "reference result; evaluation conditions unavailable for comparison"
+    differences: list[str] = []
+    current_protocol = current.get("evaluation_protocol")
+    reference_protocol = reference.get("evaluation_protocol")
+    if current_protocol != reference_protocol:
+        differences.append(f"protocol {reference_protocol} != {current_protocol}")
+    current_corpus = current.get("corpus")
+    reference_corpus = reference.get("corpus")
+    if current_corpus != reference_corpus:
+        differences.append(f"corpus {reference_corpus} != {current_corpus}")
+    if current.get("parameters") != reference.get("parameters"):
+        differences.append("parameters differ")
+    if not differences:
+        return "reference result; declared evaluation conditions match"
+    return "reference result; " + "; ".join(differences)
+
+
+def _append_reference_comparators(
+    *,
+    resolver: CanonicalRepositoryResolver,
+    result: StudyResult,
+    plan: StudyPlan | None,
+    rows: list[dict[str, object]],
+    comparisons_by_stage: dict[tuple[str, str | None], dict[str, object]],
+) -> None:
+    try:
+        study = resolver.resolve(kind=EntityKind.STUDY, entity_id=result["study"])
+    except (FileNotFoundError, ValueError):
+        return
+    raw_comparators = study.get("comparators") if isinstance(study, Mapping) else None
+    if type(raw_comparators) is not list or not raw_comparators:
+        return
+
+    current_plan_trial = None
+    if plan is not None and plan["trials"]:
+        current_plan_trial = plan["trials"][0]
+    target_by_stage: dict[str, dict[str, object]] = {}
+    for comparison in comparisons_by_stage.values():
+        raw_stage = comparison.get("stage")
+        if type(raw_stage) is str:
+            target_by_stage.setdefault(raw_stage, comparison)
+
+    for raw_comparator in raw_comparators:
+        if not isinstance(raw_comparator, Mapping):
+            continue
+        label = raw_comparator.get("label")
+        study_result_id = raw_comparator.get("study_result")
+        trial_id = raw_comparator.get("trial")
+        if type(label) is not str or type(study_result_id) is not str or type(trial_id) is not str:
+            continue
+        try:
+            reference_result = _validate_study_result(
+                resolver.resolve(kind=EntityKind.STUDY_RESULT, entity_id=study_result_id)
+            )
+        except (FileNotFoundError, ValueError):
+            continue
+        try:
+            reference_plan = _validate_study_plan(
+                resolver.resolve(kind=EntityKind.STUDY_PLAN, entity_id=reference_result["plan"])
+            )
+        except (FileNotFoundError, ValueError):
+            reference_plan = None
+
+        reference_trial = next(
+            (trial for trial in reference_result["trials"] if str(trial["trial"]) == trial_id),
+            None,
+        )
+        reference_plan_trial = (
+            next(
+                (trial for trial in reference_plan["trials"] if str(trial["trial"]) == trial_id),
+                None,
+            )
+            if reference_plan is not None
+            else None
+        )
+        if reference_trial is None:
+            continue
+
+        _, architecture_id, model_id = _trial_projection_context(
+            resolver=resolver,
+            plan_trial=reference_plan_trial,
+            result_trial=reference_trial,
+        )
+        stage_counts: dict[str, int] = {}
+        for evaluation in reference_trial["evaluations"]:
+            stage = str(evaluation["stage"])
+            stage_counts[stage] = stage_counts.get(stage, 0) + 1
+
+        for evaluation in reference_trial["evaluations"]:
+            stage = str(evaluation["stage"])
+            target = target_by_stage.get(stage)
+            if target is None:
+                continue
+            rendered_label = label
+            if stage_counts[stage] > 1:
+                rendered_label = f"{label} · {evaluation['coordinate']}"
+
+            metrics: dict[str, object] = {}
+            evaluation_model = model_id
+            result_id = evaluation["result"]
+            if evaluation["disposition"] == "completed" and result_id is not None:
+                try:
+                    document = resolver.resolve(
+                        kind=EntityKind.EVALUATION_RESULT,
+                        entity_id=result_id,
+                    )
+                except (FileNotFoundError, ValueError):
+                    document = None
+                if isinstance(document, Mapping):
+                    if type(document.get("model")) is str:
+                        evaluation_model = str(document["model"])
+                    payload = document.get("result")
+                    if isinstance(payload, Mapping):
+                        if isinstance(payload.get("metrics"), Mapping):
+                            metrics = copy.deepcopy(dict(payload["metrics"]))
+
+            reference_plan_evaluation = _plan_evaluation_record(
+                reference_plan_trial,
+                coordinate=evaluation["coordinate"],
+            )
+            current_plan_evaluation = _plan_evaluation_record(
+                current_plan_trial,
+                stage=stage,
+            )
+            note = _comparison_condition_note(
+                current=current_plan_evaluation,
+                reference=reference_plan_evaluation,
+            )
+            reference_protocol = (
+                reference_plan_evaluation.get("evaluation_protocol")
+                if isinstance(reference_plan_evaluation, Mapping)
+                else None
+            )
+
+            metric_names = cast(list[str], target["metrics"])
+            metric_preferences = cast(dict[str, str], target["metric_preferences"])
+            metric_descriptions = cast(dict[str, str], target["metric_descriptions"])
+            for metric in metrics:
+                if type(metric) is str and metric not in metric_names:
+                    metric_names.append(metric)
+                if type(metric) is str:
+                    metric_preferences.setdefault(metric, "neutral")
+                    metric_descriptions.setdefault(metric, "")
+
+            reference_row = {
+                "trial": trial_id,
+                "trial_label": rendered_label,
+                "architecture": architecture_id,
+                "model": evaluation_model,
+                "disposition": evaluation["disposition"],
+                "execution_id": None,
+                "metrics": copy.deepcopy(metrics),
+                "artifacts": {},
+                "reference": True,
+                "reference_study_result": study_result_id,
+                "reference_evaluation_protocol": reference_protocol,
+                "comparison_note": note,
+            }
+            cast(list[dict[str, object]], target["rows"]).append(reference_row)
+            rows.append(
+                {
+                    "trial": trial_id,
+                    "trial_label": rendered_label,
+                    "architecture": architecture_id,
+                    "model": evaluation_model,
+                    "kind": "reference_evaluation",
+                    "stage": stage,
+                    "coordinate": evaluation["coordinate"],
+                    "evaluation_protocol": reference_protocol,
+                    "disposition": evaluation["disposition"],
+                    "result": result_id,
+                    "execution_id": None,
+                    "metrics": copy.deepcopy(metrics),
+                    "artifacts": {},
+                    "reference": True,
+                    "reference_study_result": study_result_id,
+                    "comparison_note": note,
+                }
+            )
+
+
 def _study_summary_projection(
     *,
     resolver: CanonicalRepositoryResolver,
@@ -508,6 +717,14 @@ def _study_summary_projection(
                     "artifacts": copy.deepcopy(artifacts),
                 }
             )
+
+    _append_reference_comparators(
+        resolver=resolver,
+        result=result,
+        plan=plan,
+        rows=rows,
+        comparisons_by_stage=comparisons_by_stage,
+    )
     return {
         "schema": "mjtensu.mldb-v2/study-summary-projection/v4",
         "study_result": result["id"],

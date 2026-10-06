@@ -507,10 +507,63 @@ def test_preflight_is_read_only_and_does_not_execute_companions(tmp_path: Path) 
     assert _tree_bytes(root) == before
 
 
+def test_comparator_preflight_resolves_terminal_study_result_and_trial(tmp_path: Path) -> None:
+    root, study_id = _training_repo(tmp_path)
+    execution_key = "1234567812344234a2341234567890ab"
+    comparator_id = f"demo/run-{execution_key}"
+    comparator = {
+        "schema": "mjtensu.mldb-v2/study-result/v1",
+        "id": comparator_id,
+        "execution_key": execution_key,
+        "plan": "demo/study-v1-plan-deadbeefdeadbeef",
+        "study": "demo/study-v1",
+        "source_commit": "0" * 40,
+        "backend": "clearml",
+        "created_at": "2026-10-05T00:00:00Z",
+        "status": "completed",
+        "diagnostic": None,
+        "trials": [
+            {
+                "trial": "trial-0001",
+                "training": None,
+                "evaluations": [
+                    {
+                        "coordinate": "eval-0001",
+                        "stage": "quality",
+                        "disposition": "completed",
+                        "result": f"{comparator_id}-trial-0001-eval-0001",
+                        "reason": None,
+                    }
+                ],
+            }
+        ],
+    }
+    _write(root / "demo" / "study_results" / f"run-{execution_key}.yaml", comparator)
+
+    study_path = root / "demo" / "studies" / "study-v1.yaml"
+    study = json.loads(study_path.read_text(encoding="utf-8"))
+    study["comparators"] = [
+        {"label": "historical", "study_result": comparator_id, "trial": "trial-0001"}
+    ]
+    _write(study_path, study)
+
+    result = _StudyPlanningPreflight(mldb_data_root=root, verifier=_Verifier()).prepare(study_id)
+    assert len(result.comparators) == 1
+    assert result.comparators[0].label == "historical"
+    assert result.comparators[0].study_result["id"] == comparator_id
+    assert result.comparators[0].trial["trial"] == "trial-0001"
+
+    study["comparators"][0]["trial"] = "trial-0002"
+    _write(study_path, study)
+    with pytest.raises(_PlanningPreflightError, match="planning_input_resolution_failed"):
+        _StudyPlanningPreflight(mldb_data_root=root, verifier=_Verifier()).prepare(study_id)
+
+
 def test_private_boundary_contains_no_plan_or_runtime_materialization(tmp_path: Path) -> None:
     root, study_id = _training_repo(tmp_path)
     result = _StudyPlanningPreflight(mldb_data_root=root, verifier=_Verifier()).prepare(study_id)
-    assert set(result.__dict__) == {"study", "task", "model", "evaluations"}
+    assert set(result.__dict__) == {"study", "task", "model", "evaluations", "comparators"}
+    assert result.comparators == ()
     assert isinstance(result.model, _TrainingPlanningInput)
     assert set(result.model.__dict__) == {
         "corpus",

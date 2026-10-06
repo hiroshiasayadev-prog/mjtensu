@@ -2051,7 +2051,14 @@ class ClearMLSDKAdapter:
                 metric_preferences if isinstance(metric_preferences, Mapping) else {}
             )
             metrics = [name for name in metric_names if type(name) is str]
-            table: list[list[object]] = [["Trial", "Status", *metrics]]
+            has_reference = any(
+                isinstance(row, Mapping) and row.get("reference") is True
+                for row in rows
+            )
+            header = ["Trial", "Status", *metrics]
+            if has_reference:
+                header = ["Trial", "Role", "Status", "Comparison note", *metrics]
+            table: list[list[object]] = [header]
             normalized_rows: list[Mapping[str, object]] = []
             for row in rows:
                 if type(row) is not dict:
@@ -2062,7 +2069,16 @@ class ClearMLSDKAdapter:
                 if type(trial) is not str or type(disposition) is not str or not isinstance(values, Mapping):
                     continue
                 normalized_rows.append(row)
-                rendered: list[object] = [trial, disposition]
+                if has_reference:
+                    note = row.get("comparison_note", "")
+                    rendered = [
+                        trial,
+                        "reference" if row.get("reference") is True else "current",
+                        disposition,
+                        note if type(note) is str else "",
+                    ]
+                else:
+                    rendered = [trial, disposition]
                 for metric in metrics:
                     value = values.get(metric, "")
                     if type(value) in {int, float}:

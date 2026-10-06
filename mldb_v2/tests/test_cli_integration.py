@@ -402,9 +402,9 @@ def test_structured_exact_and_list_shapes_are_preserved(tmp_path: Path) -> None:
 
 
 def test_repository_command_resolves_from_outside_cwd(tmp_path: Path) -> None:
-    command = str(REPO / "mldb.cmd")
+    command = str(REPO / "mldb.sh")
     help_result = subprocess.run(
-        ["cmd", "/c", command, "--help"],
+        [command, "--help"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -415,7 +415,7 @@ def test_repository_command_resolves_from_outside_cwd(tmp_path: Path) -> None:
     assert help_result.stderr == ""
 
     read_only = subprocess.run(
-        ["cmd", "/c", command, "ps", "--json"],
+        [command, "ps", "--json"],
         cwd=tmp_path,
         capture_output=True,
         text=True,

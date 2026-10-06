@@ -1,20 +1,20 @@
 # MLDB v2 Operations Manual
 
-This is the day-to-day runbook for executing existing MLDB v2 Studies from the Windows development repository through ClearML to the GPU worker.
+This is the day-to-day runbook for executing existing MLDB v2 Studies from the Linux repository checkout through ClearML to the workers.
 
 > Current execution model (2026-10-02): one MLDB Study Result maps to one ClearML Pipeline Run. MLDB owns semantic release/canonical acceptance, ClearML owns physical child-Task execution, and the Study Result pins one immutable global runtime-registry version for the full run.
 
 ## 1. Proven deployment
 
-Repository root:
+Repository root on the current Linux controller:
 
-    C:\Users\imved\projects\mjtensu
+    /srv/data/projects/mjtensu
 
-Supported Windows entrypoint:
+Supported Linux entrypoint:
 
-    .\mldb.cmd <command> ...
+    ./mldb.sh <command> ...
 
-`mldb.cmd` changes to the repository root, sets `MLDB_REPO_ROOT`, prefers `.venv\Scripts\python.exe`, and invokes `python -m mldb_v2.src.cli`.
+`mldb.sh` changes to the repository root, sets `MLDB_REPO_ROOT`, loads repository-local `.env` defaults, and invokes `python -m mldb_v2.src.cli` with Python 3.11+. It prefers `.venv/bin/python` or another compatible local interpreter and falls back to the provisioned MLDB runner container when the host system Python is older.
 
 The currently validated external services are:
 
@@ -37,14 +37,13 @@ Treat the local `.env` and actual infrastructure as the live configuration sourc
 
 ## 2. Environment setup
 
-`mldb.cmd` automatically loads the repository-root `.env` before starting the CLI. The file is Git-ignored and is the normal place for local ClearML/S3 credentials and stable runtime defaults.
+`mldb.sh` automatically loads the repository-root `.env` before starting the CLI. The file is Git-ignored and is the normal place for local ClearML/S3 credentials and stable runtime defaults.
 
 Explicit process environment wins over `.env`. This makes normal use zero-bootstrap while still allowing one-off overrides such as:
 
-    $env:MLDB_V2_CLEARML_QUEUE = 'another-queue'
-    .\mldb.cmd run <study-id>
+    MLDB_V2_CLEARML_QUEUE=another-queue ./mldb.sh run <study-id>
 
-`mldb.cmd` also sets `MLDB_REPO_ROOT` itself. Do not put another repository root in `.env`.
+`mldb.sh` also sets `MLDB_REPO_ROOT` itself. Do not put another repository root in `.env`.
 
 The loader intentionally expects simple dotenv entries of the form `KEY=value`, with blank lines and `#` comments allowed. Keep secrets unquoted unless there is a concrete need to extend the loader. Never commit `.env`.
 
@@ -75,7 +74,7 @@ Environment variables consumed by the production composition include:
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` | S3 credentials | yes |
 | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | S3 credential fallback | yes |
 
-The validated local `.env` now also carries these non-secret runtime defaults so ordinary execution does not require a PowerShell bootstrap:
+The validated local `.env` now also carries these non-secret runtime defaults so ordinary execution does not require a separate shell bootstrap:
 
     MLDB_V2_DEFAULT_BACKEND=clearml
     MLDB_V2_CLEARML_QUEUE=default
@@ -90,10 +89,10 @@ The validated path does not use `MLDB_V2_CLEARML_DOCKER_ENV_FILE`; required obje
 
 Normal startup is therefore just:
 
-    Set-Location C:\Users\imved\projects\mjtensu
-    .\mldb.cmd doctor
+    cd /srv/data/projects/mjtensu
+    ./mldb.sh doctor
 
-If you bypass `mldb.cmd` and invoke `python -m mldb_v2.src.cli` directly, `.env` is not loaded by the Python module and `MLDB_REPO_ROOT` is not supplied automatically. Prefer the wrapper for normal operation.
+If you bypass `mldb.sh` and invoke `python -m mldb_v2.src.cli` directly, `.env` is not loaded by the Python module and `MLDB_REPO_ROOT` is not supplied automatically. Prefer the wrapper for normal operation.
 
 ### Global runtime registry
 
@@ -123,7 +122,7 @@ ClearML SDK exposes this as `Task.set_archived(True)`. Archived Tasks remain rec
 
 ### CPU latency queue and comparability
 
-`onnx-cpu-latency` is a benchmark stage, not ordinary throughput work. Route it only to `latency-cpu`. The canonical Linux worker is the dedicated CPU-only Agent `old-cpu`; the GPU Agent `old-gpu3090` subscribes only to `default`. The two Agents may execute concurrently on the same physical old host, so CPU latency work no longer occupies the GPU worker slot. Do **not** subscribe a Windows development worker, another CPU model, or any heterogeneous machine to `latency-cpu`; doing so changes benchmark hardware and invalidates direct historical/model comparison. Additional workers may subscribe to `default` for ordinary Training/Evaluation once they have the required runtime image and data access.
+`onnx-cpu-latency` is a benchmark stage, not ordinary throughput work. Route it only to `latency-cpu`. The canonical Linux worker is the dedicated CPU-only Agent `old-cpu`; the GPU Agent `old-gpu3090` subscribes only to `default`. The two Agents may execute concurrently on the same physical old host, so CPU latency work no longer occupies the GPU worker slot. Do **not** subscribe a non-canonical development worker, another CPU model, or any heterogeneous machine to `latency-cpu`; doing so changes benchmark hardware and invalidates direct historical/model comparison. Additional workers may subscribe to `default` for ordinary Training/Evaluation once they have the required runtime image and data access.
 
 Queue isolation fixes worker identity, but same-host GPU work and unrelated host processes can still perturb timing. For comparable latency numbers, keep other CPU-heavy host workloads away from the benchmark window. If host contention cannot be controlled, treat the latency values as non-comparable and rerun under controlled load. Keep the Protocol's batch size, ORT provider, intra/inter-op thread counts, execution mode, and runtime versions fixed as well.
 
@@ -134,12 +133,12 @@ The prebuilt task image `mldb-clearml-runner:torch2.5.1-cu124-v1` remains the ba
 Start with repository and runtime health:
 
     git status --short
-    .\mldb.cmd doctor
+    ./mldb.sh doctor
 
 Then validate the exact definition scope you intend to use, for example:
 
-    .\mldb.cmd validate study tile-classifier/<study-id> --json
-    .\mldb.cmd verify train-protocol tile-classifier/<protocol-id> --json
+    ./mldb.sh validate study tile-classifier/<study-id> --json
+    ./mldb.sh verify train-protocol tile-classifier/<protocol-id> --json
 
 ## 4. Source pinning before ClearML execution
 
@@ -164,15 +163,15 @@ If planning reports `source_not_pinned`, do not attach the working-tree patch to
 
 Plan one sealed Study explicitly:
 
-    .\mldb.cmd plan <namespace>/<study-id>
+    ./mldb.sh plan <namespace>/<study-id>
 
 Normal foreground execution:
 
-    .\mldb.cmd run <namespace>/<study-id>
+    ./mldb.sh run <namespace>/<study-id>
 
 or, without a configured default backend:
 
-    .\mldb.cmd run <namespace>/<study-id> --backend clearml
+    ./mldb.sh run <namespace>/<study-id> --backend clearml
 
 `run` plans/compiles the Study, resolves registry `latest` once, and creates a fresh durable Study Result containing that `runtime_registry_version`. It then creates/recovers one ClearML Pipeline Run for that Study Result; ClearML owns child-Task scheduling while the foreground MLDB process reconciles canonical results until terminal. Interrupting the local process does not mean cancellation; the backend Pipeline may continue. Use `resume` to reconnect/reconcile or `cancel` to request cancellation.
 
@@ -180,14 +179,14 @@ or, without a configured default backend:
 
 Useful read/control commands:
 
-    .\mldb.cmd ps --all
-    .\mldb.cmd status <study-result-id>
-    .\mldb.cmd watch <study-result-id>
-    .\mldb.cmd logs <study-result-id> --failed
-    .\mldb.cmd resume <study-result-id>
-    .\mldb.cmd advance <study-result-id>
-    .\mldb.cmd retry-stage <study-result-id> --trial <trial-id> --coordinate <evaluation-coordinate>
-    .\mldb.cmd cancel <study-result-id>
+    ./mldb.sh ps --all
+    ./mldb.sh status <study-result-id>
+    ./mldb.sh watch <study-result-id>
+    ./mldb.sh logs <study-result-id> --failed
+    ./mldb.sh resume <study-result-id>
+    ./mldb.sh advance <study-result-id>
+    ./mldb.sh retry-stage <study-result-id> --trial <trial-id> --coordinate <evaluation-coordinate>
+    ./mldb.sh cancel <study-result-id>
 
 `watch` is read-only. `advance` performs one explicit canonical reconciliation pass and is mainly for recovery/debugging. `rerun` creates a fresh Study Result from the immutable Plan of an earlier execution rather than recompiling the current mutable Study definition, and it preserves the source Study Result's `runtime_registry_version`.
 
@@ -201,10 +200,10 @@ After W011 implementation, the primary ClearML UI entrypoint for a running/compl
 
 After a terminal execution, prefer canonical objects over ClearML UI state:
 
-    .\mldb.cmd get runs <study-result-id> --json
-    .\mldb.cmd get training-results <training-result-id> --json
-    .\mldb.cmd get models <model-id> --json
-    .\mldb.cmd get evaluation-results <evaluation-result-id> --json
+    ./mldb.sh get runs <study-result-id> --json
+    ./mldb.sh get training-results <training-result-id> --json
+    ./mldb.sh get models <model-id> --json
+    ./mldb.sh get evaluation-results <evaluation-result-id> --json
 
 Namespace-first files are stored under paths such as:
 

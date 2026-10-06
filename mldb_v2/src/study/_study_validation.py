@@ -21,6 +21,7 @@ from mldb_v2.src.common.ids import (
     ModelId,
     StudyId,
     TrainProtocolId,
+    _validate_trial_id,
     _validate_typed_reference,
 )
 from mldb_v2.src.common.parameters import (
@@ -34,11 +35,13 @@ from .study import Study
 
 
 _SCHEMA = "mjtensu.mldb-v2/study/v1"
-_TOP_LEVEL_FIELDS = {"schema", "id", "status", "name", "description", "model", "evaluations"}
+_BASE_TOP_LEVEL_FIELDS = {"schema", "id", "status", "name", "description", "model", "evaluations"}
+_TOP_LEVEL_FIELDS = _BASE_TOP_LEVEL_FIELDS | {"comparators"}
 _TRAIN_GRID_FIELDS = {"corpus", "protocol", "architectures", "parameters", "seeds"}
 _TRAIN_CASES_FIELDS = {"corpus", "protocol", "cases"}
 _TRAIN_CASE_FIELDS = {"architecture", "parameters", "seed"}
 _EVALUATION_FIELDS = {"stage", "corpus", "protocol", "parameters"}
+_COMPARATOR_FIELDS = {"label", "study_result", "trial"}
 _STAGE_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*", re.ASCII)
 
 
@@ -160,9 +163,35 @@ def _validate_evaluations(value: object) -> None:
         raise ValueError("Study evaluation stage identifiers must be unique")
 
 
+def _validate_comparators(value: object) -> None:
+    if type(value) is not list or not value:
+        raise ValueError("Study comparators must be a non-empty list when present")
+    labels: set[str] = set()
+    sources: set[tuple[str, str]] = set()
+    for index, raw in enumerate(value):
+        comparator = _require_exact_mapping(raw, label=f"Study comparators[{index}]")
+        _require_exact_fields(
+            comparator, _COMPARATOR_FIELDS, label=f"Study comparators[{index}]"
+        )
+        label = _require_string(
+            comparator["label"], label=f"Study comparators[{index}].label", non_empty=True
+        )
+        study_result = _validate_typed_reference(comparator["study_result"])
+        trial = str(_validate_trial_id(comparator["trial"]))
+        if label in labels:
+            raise ValueError("Study comparator labels must be unique")
+        source = (study_result, trial)
+        if source in sources:
+            raise ValueError("Study comparator study_result/trial pairs must be unique")
+        labels.add(label)
+        sources.add(source)
+
+
 def _validate_study(value: object, *, expected_id: str | None = None) -> Study:
     document = _require_exact_mapping(value, label="Study")
-    _require_exact_fields(document, _TOP_LEVEL_FIELDS, label="Study")
+    fields = set(document)
+    if fields not in (_BASE_TOP_LEVEL_FIELDS, _TOP_LEVEL_FIELDS):
+        raise ValueError("Study fields do not match schema")
     if document["schema"] != _SCHEMA:
         raise ValueError("unsupported Study schema")
     _validate_versioned_entity_id(document["id"], expected_id=expected_id)
@@ -171,6 +200,8 @@ def _validate_study(value: object, *, expected_id: str | None = None) -> Study:
     _require_string(document["description"], label="Study description")
     _validate_model_source(document["model"])
     _validate_evaluations(document["evaluations"])
+    if "comparators" in document:
+        _validate_comparators(document["comparators"])
     return cast(Study, document)
 
 

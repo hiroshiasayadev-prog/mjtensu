@@ -5,9 +5,9 @@ Use this document symptom-first. Do not repair canonical records by hand to make
 Start every investigation with:
 
     git status --short
-    .\mldb.cmd doctor
-    .\mldb.cmd status <study-result-id>
-    .\mldb.cmd logs <study-result-id> --failed
+    ./mldb.sh doctor
+    ./mldb.sh status <study-result-id>
+    ./mldb.sh logs <study-result-id> --failed
 
 Then identify the first boundary that failed: planning/source pinning, admission, queue/worker, source checkout, executable integrity, S3/corpus, CUDA/Protocol execution, telemetry, artifact publication, candidate collection, or canonical acceptance.
 
@@ -67,7 +67,7 @@ Pre-registry historical Study Results may lack `runtime_registry_version`. They 
 
 ## S3 / artifact / corpus failure
 
-Check `MLDB_S3_ENDPOINT_URL`, region, bucket or artifact prefix, and one valid credential path (`AWS_*` or MinIO fallback). Confirm the launching process loaded `.env`; the supported `mldb.cmd` wrapper loads the repository-root `.env` automatically, while direct `python -m mldb_v2.src.cli` invocation does not.
+Check `MLDB_S3_ENDPOINT_URL`, region, bucket or artifact prefix, and one valid credential path (`AWS_*` or MinIO fallback). Confirm the launching process loaded `.env`; the supported `mldb.sh` wrapper loads the repository-root `.env` automatically, while direct `python -m mldb_v2.src.cli` invocation does not.
 
 Do not change artifact URIs or hashes in canonical records to match whatever bytes happen to exist. Object bytes must satisfy the formal URI/size/SHA contract.
 
