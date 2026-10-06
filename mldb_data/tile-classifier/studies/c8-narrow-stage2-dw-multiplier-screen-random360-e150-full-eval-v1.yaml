@@ -1,0 +1,343 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/c8-narrow-stage2-dw-multiplier-screen-random360-e150-full-eval-v1",
+  "status": "sealed",
+  "name": "C8 narrow stage2 DW multiplier 1/2/4 screen full eval",
+  "description": "Three-trial C8 narrow study testing stage 2 field-wise DW3x3 depth multipliers 1, 2, and 4 while stages 3 and 4 remain full equivariant convolutions. Training uses the accepted random360 e150 seed42 recipe and the same full eight-stage evaluation suite. Historical stage3/stage4 multiplier 1/2 and 2/2 models plus the C8 narrow full/full baseline are attached read-only as comparators.",
+  "model": {
+    "train": {
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-train-gpu-v6",
+      "architectures": [
+        "tile-classifier/tile-c8-gray35-narrow-stage2-dwm1-v1",
+        "tile-classifier/tile-c8-gray35-narrow-stage2-dwm2-v1",
+        "tile-classifier/tile-c8-gray35-narrow-stage2-dwm4-v1"
+      ],
+      "parameters": {
+        "epochs": {
+          "values": [
+            150
+          ]
+        },
+        "batch_size": {
+          "values": [
+            128
+          ]
+        },
+        "learning_rate": {
+          "values": [
+            0.001
+          ]
+        },
+        "weight_decay": {
+          "values": [
+            0.0001
+          ]
+        },
+        "rotation_augment_deg": {
+          "values": [
+            180.0
+          ]
+        },
+        "augmentation_recipe": {
+          "values": [
+            "random360-only-v1"
+          ]
+        },
+        "checkpoint_eval_every": {
+          "values": [
+            5
+          ]
+        },
+        "amp": {
+          "values": [
+            true
+          ]
+        },
+        "tf32": {
+          "values": [
+            true
+          ]
+        },
+        "cache_device": {
+          "values": [
+            "cuda"
+          ]
+        },
+        "cache_vram_fraction": {
+          "values": [
+            0.5
+          ]
+        }
+      },
+      "seeds": [
+        42
+      ]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "angle-robustness-dense64",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-angle-robustness-v4",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1024
+          ]
+        },
+        "eval_angles": {
+          "values": [
+            [
+              0.0,
+              5.625,
+              11.25,
+              16.875,
+              22.5,
+              28.125,
+              33.75,
+              39.375,
+              45.0,
+              50.625,
+              56.25,
+              61.875,
+              67.5,
+              73.125,
+              78.75,
+              84.375,
+              90.0,
+              95.625,
+              101.25,
+              106.875,
+              112.5,
+              118.125,
+              123.75,
+              129.375,
+              135.0,
+              140.625,
+              146.25,
+              151.875,
+              157.5,
+              163.125,
+              168.75,
+              174.375,
+              180.0,
+              185.625,
+              191.25,
+              196.875,
+              202.5,
+              208.125,
+              213.75,
+              219.375,
+              225.0,
+              230.625,
+              236.25,
+              241.875,
+              247.5,
+              253.125,
+              258.75,
+              264.375,
+              270.0,
+              275.625,
+              281.25,
+              286.875,
+              292.5,
+              298.125,
+              303.75,
+              309.375,
+              315.0,
+              320.625,
+              326.25,
+              331.875,
+              337.5,
+              343.125,
+              348.75,
+              354.375
+            ]
+          ]
+        },
+        "amp": {
+          "values": [
+            true
+          ]
+        },
+        "tf32": {
+          "values": [
+            true
+          ]
+        },
+        "cache_device": {
+          "values": [
+            "cuda"
+          ]
+        },
+        "cache_vram_fraction": {
+          "values": [
+            0.5
+          ]
+        }
+      }
+    },
+    {
+      "stage": "full-class-diagnostic",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-full-class-diagnostic-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            256
+          ]
+        }
+      }
+    },
+    {
+      "stage": "validity-rejection",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-validity-rejection-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            256
+          ]
+        }
+      }
+    },
+    {
+      "stage": "manzu-diagnostic-v4",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-manzu-diagnostic-v4",
+      "parameters": {
+        "split": {
+          "values": [
+            "manual_val"
+          ]
+        },
+        "batch_size": {
+          "values": [
+            64
+          ]
+        },
+        "occlusion_patch": {
+          "values": [
+            8
+          ]
+        }
+      }
+    },
+    {
+      "stage": "full-class-occlusion",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-full-class-occlusion-v1",
+      "parameters": {
+        "split": {
+          "values": [
+            "manual_val"
+          ]
+        },
+        "batch_size": {
+          "values": [
+            256
+          ]
+        },
+        "occlusion_patch": {
+          "values": [
+            8
+          ]
+        }
+      }
+    },
+    {
+      "stage": "onnx-cpu-latency",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-onnx-cpu-latency-v3",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "measure_runs": {
+          "values": [
+            200
+          ]
+        },
+        "intra_op_threads": {
+          "values": [
+            1
+          ]
+        },
+        "inter_op_threads": {
+          "values": [
+            1
+          ]
+        }
+      }
+    },
+    {
+      "stage": "ort-web-iphone-latency",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-ort-web-iphone-latency-v3",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "runs_per_block": {
+          "values": [
+            100
+          ]
+        },
+        "measure_blocks": {
+          "values": [
+            40
+          ]
+        }
+      }
+    },
+    {
+      "stage": "all-real-crop-recall",
+      "corpus": "tile-classifier/all-real-crops-gray64-v1",
+      "protocol": "tile-classifier/tile-shape-all-real-crop-recall-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1024
+          ]
+        },
+        "slice_min_samples": {
+          "values": [
+            10
+          ]
+        }
+      }
+    }
+  ],
+  "comparators": [
+    {
+      "label": "C8 narrow stage3/4 1/2",
+      "study_result": "tile-classifier/run-4def379d2179423bbbb409f7c63aa6c1",
+      "trial": "trial-0001"
+    },
+    {
+      "label": "C8 narrow stage3/4 2/2",
+      "study_result": "tile-classifier/run-4def379d2179423bbbb409f7c63aa6c1",
+      "trial": "trial-0003"
+    },
+    {
+      "label": "C8 narrow full/full",
+      "study_result": "tile-classifier/run-ac1a2514af214cb69977972c0278ab39",
+      "trial": "trial-0002"
+    }
+  ]
+}
