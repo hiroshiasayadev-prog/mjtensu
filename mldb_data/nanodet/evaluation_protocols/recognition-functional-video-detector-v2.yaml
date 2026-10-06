@@ -1,0 +1,185 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "nanodet/recognition-functional-video-detector-v2",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "name": "NanoDet production recognition functional video v2",
+  "description": "Detector-primary form of the sealed five-video production recognition evaluation. The NanoDet candidate is the primary Model; a fixed canonical base classifier and fixed red-five runtime model act as semantic probes. Reports end-to-end stabilization plus ordered hand/dora/meld detector-semantic precision, recall, F1, insertion, deletion, substitution diagnostics, and overlay video. Adds explicit per-take CSV summaries for generic Study table projection without ClearML-specific logic in the evaluator.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "64cae0faf76760b6977a2ff75e993deef77765d0ba6ec2955c687a90c9f87ce1"
+  },
+  "parameters": {
+    "red_five_model": {
+      "default": null,
+      "description": "Auxiliary red-five classifier Runtime Model ID."
+    },
+    "detector_score_threshold": {
+      "default": 0.35,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Evaluation-only NanoDet score threshold override; production default remains unchanged."
+    },
+    "base_classifier_model": {
+      "default": null,
+      "description": "Auxiliary fixed canonical base-classifier Model ID used as the semantic probe."
+    }
+  },
+  "model_parameters": {
+    "base-classifier": "base_classifier_model",
+    "red-five-classifier": "red_five_model"
+  },
+  "metrics": {
+    "frame_semantic_exact_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "completed_hand_exact_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "dora_exact_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "meld_exact_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "eligible_frame_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "take_gt_streak3_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Fraction of takes that produce three consecutive GT-exact eligible evaluations."
+    },
+    "take_product_confirmed_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Fraction of takes for which the production stabilizer reaches confirmed."
+    },
+    "take_product_confirmed_exact_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Fraction of takes whose first production confirmation exactly matches GT."
+    },
+    "completed_hand_detection_semantic_precision": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Correct ordered hand tiles / (correct + substitutions + insertions)."
+    },
+    "completed_hand_detection_semantic_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Correct ordered hand tiles / (correct + substitutions + deletions)."
+    },
+    "completed_hand_detection_semantic_f1": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "F1 of fixed-classifier-conditioned ordered hand detector semantics."
+    },
+    "dora_detection_semantic_precision": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Correct ordered dora tiles / (correct + substitutions + insertions)."
+    },
+    "dora_detection_semantic_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Correct ordered dora tiles / (correct + substitutions + deletions)."
+    },
+    "dora_detection_semantic_f1": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "F1 of fixed-classifier-conditioned ordered dora detector semantics."
+    },
+    "meld_detection_semantic_precision": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Correct ordered meld tiles / (correct + substitutions + insertions), using actual detected observations rather than inferred kan expansion."
+    },
+    "meld_detection_semantic_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Correct ordered meld tiles / (correct + substitutions + deletions), using actual detected observations rather than inferred kan expansion."
+    },
+    "meld_detection_semantic_f1": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "F1 of fixed-classifier-conditioned ordered meld detector semantics."
+    },
+    "all_regions_detection_semantic_f1": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Micro-aggregated ordered semantic detector F1 across hand, dora, and meld regions."
+    }
+  },
+  "artifacts": {
+    "onnx_model": {
+      "format": "onnx",
+      "schema": "mjtensu.recognition/base-classifier-onnx/v1",
+      "required": true,
+      "description": "Tensor-only ONNX export of the primary base classifier."
+    },
+    "functional_report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/functional-video/v2",
+      "required": true,
+      "description": "Per-take functional summary plus fixed-classifier-conditioned detector semantic diagnostics."
+    },
+    "functional_take_summary": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/functional-take-summary/v1",
+      "required": true,
+      "description": "One row per t1-t5 take with semantic exact rates, eligibility, first GT streak3, and first production confirmation timing/exactness.",
+      "study_view": "select"
+    },
+    "prediction_trace": {
+      "format": "jsonl",
+      "schema": "mjtensu.recognition/prediction-trace/v1",
+      "required": true,
+      "description": "Per-evaluation bbox/OBB, detector confidence, classification, production snapshot, GT/stabilizer state, and ordered detector-semantic alignment for each recognition region."
+    },
+    "overlay_video": {
+      "format": "mp4",
+      "schema": "mjtensu.recognition/overlay-video/v1",
+      "required": true,
+      "description": "Combined t1-t5 canonical landscape video with bbox/OBB, tile labels, GT streak, and product stabilizer state.",
+      "study_view": "select"
+    },
+    "detector_semantic_diagnostics": {
+      "format": "json",
+      "schema": "mjtensu.recognition/detector-semantic-diagnostics/v1",
+      "required": true,
+      "description": "Aggregate and per-take ordered semantic detector diagnostics including correct, substitution, insertion, deletion, confusion pairs, invalid detections, and meld fallback-order counts."
+    },
+    "detector_semantic_take_summary": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/detector-semantic-take-summary/v1",
+      "required": true,
+      "description": "One row per take and semantic region with detector-semantic P/R/F1, substitutions, insertions, deletions, invalid detections, fallback-order use, and exact-sequence rate.",
+      "study_view": "select"
+    }
+  }
+}
