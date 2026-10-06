@@ -1,0 +1,225 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "nanodet/deployment-real-quality-v1",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "name": "NanoDet deployment real-capture quality v1",
+  "description": "Evaluate product-facing NanoDet behavior on layout-disjoint annotated deployment composites. Applies the product score/NMS/semantic-region/merged-bridge/pairwise-duplicate postprocess, reports overall and hand/dora/meld detection quality, and measures matched classifier-crop coverage, purity, center error, and scale.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "bfeeee04cfaee315fcc1adebc8076d0fe5f19ba87e1d7744a52d23478f25a113"
+  },
+  "parameters": {
+    "split": {
+      "default": "val",
+      "type": "string"
+    },
+    "source_domain": {
+      "default": "real_capture",
+      "type": "string",
+      "enum": [
+        "real_capture",
+        "composite"
+      ]
+    },
+    "batch_size": {
+      "default": 8,
+      "type": "integer",
+      "minimum": 1
+    },
+    "workers": {
+      "default": 2,
+      "type": "integer",
+      "minimum": 0
+    },
+    "score_threshold": {
+      "default": 0.35,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "nms_iou_threshold": {
+      "default": 0.6,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "match_iou_threshold": {
+      "default": 0.5,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "duplicate_overlap_threshold": {
+      "default": 0.8,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "max_detections": {
+      "default": 200,
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "metrics": {
+    "precision": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "f1": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "clean_image_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "iou_p10": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "gt_coverage_p10": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "crop_purity_p10": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "center_error_x_p90": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "center_error_y_p90": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "width_ratio_median": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral"
+    },
+    "height_ratio_median": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral"
+    },
+    "merged_bridge_rejection_count": {
+      "type": "integer",
+      "required": true,
+      "preference": "neutral"
+    },
+    "pairwise_duplicate_rejection_count": {
+      "type": "integer",
+      "required": true,
+      "preference": "neutral"
+    },
+    "completed_hand_precision": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "completed_hand_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "completed_hand_f1": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "completed_hand_gt_coverage_p10": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "completed_hand_crop_purity_p10": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "dora_indicators_precision": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "dora_indicators_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "dora_indicators_f1": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "dora_indicators_gt_coverage_p10": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "dora_indicators_crop_purity_p10": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "melds_precision": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "melds_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "melds_f1": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "melds_gt_coverage_p10": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "melds_crop_purity_p10": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    }
+  },
+  "artifacts": {
+    "summary_json": {
+      "format": "json",
+      "schema": "mjtensu.nanodet/deployment-real-quality/v1",
+      "required": true
+    },
+    "per_image_details": {
+      "format": "jsonl",
+      "schema": "mjtensu.nanodet/deployment-real-quality-per-image/v1",
+      "required": true
+    },
+    "worst_case_contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.nanodet/deployment-real-quality-contact-sheet/v1",
+      "required": true,
+      "study_view": "select"
+    }
+  }
+}

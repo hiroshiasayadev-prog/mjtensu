@@ -1,0 +1,29 @@
+{
+  "schema": "mjtensu.mldb-v2/corpus/v1",
+  "id": "nanodet/recognition-e2e-night-iphone13-v1",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "description": "NanoDet-task view of the same immutable five 30-second iPhone 13 recognition videos and ground truth used by the classifier functional corpus. Bytes and storage root are shared; only Task ownership differs so detector-primary Evaluation Protocols can use the corpus.",
+  "storage": {
+    "root_uri": "s3://mldb-corpora/tile-classifier/recognition-e2e-night-iphone13-v1"
+  },
+  "manifest": {
+    "file": "recognition-e2e-night-iphone13-v1.manifest.jsonl",
+    "sha256": "984620835627ac3e36b386cc0389e9848e590060a0c52bde24624d5ca43ad3ab",
+    "entries": 11
+  },
+  "representation": {
+    "kind": "recognition-e2e-video",
+    "device": "iPhone 13",
+    "video_count": 5,
+    "duration_seconds_per_video": 30,
+    "capture_width": 720,
+    "capture_height": 1280,
+    "capture_fps": 30,
+    "logical_rotation_deg": -90,
+    "ground_truth": "ground-truth.json"
+  },
+  "splits": {
+    "eval": 5
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "schema": "mjtensu.mldb-v2/corpus/v1",
+  "id": "nanodet/mahjong-training-real-replay-v1",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "description": "Frozen NanoDet training corpus combining the corrected jp_v2/base fixed-layout corpus with 32 annotated real iPhone deployment composites from eight training layouts. The eight real captures from two held-out layouts are intentionally excluded and remain evaluation-only in mahjong-composite-pathology-320-v1.",
+  "storage": {
+    "root_uri": "s3://mldb-corpora/nanodet/mahjong-training-real-replay-v1"
+  },
+  "manifest": {
+    "file": "mahjong-training-real-replay-v1.manifest.jsonl",
+    "sha256": "1aeadf89d44d580f788712e69787da4cef9aaff94b33329c23916583f538e452",
+    "entries": 2
+  },
+  "representation": {
+    "kind": "tar-coco-axis-aligned-object-detection-plus-real-replay",
+    "base_archive": "nanodet-training-baseline-v1.tar",
+    "real_capture_archive": "nanodet-real-capture-train-v1.tar",
+    "detector_class": "mahjong_tile",
+    "geometry": "x-y-width-height",
+    "input_size": [
+      320,
+      320
+    ]
+  },
+  "splits": {
+    "jp_train": 12144,
+    "jp_valid": 722,
+    "jp_test": 370,
+    "composite_train": 286,
+    "composite_val": 71,
+    "real_train": 32
+  }
+}
