@@ -1,0 +1,39 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "nanodet/jp-v2-deployment-finetune-functional-video-v1",
+  "status": "sealed",
+  "name": "NanoDet jp_v2 deployment fine-tune functional video comparison",
+  "description": "Replay the four completed 15-epoch jp_v2-to-deployment fine-tune candidates (jp_v2 replay 0/256/512/1024 images per epoch) through the sealed five-video detector-primary production-equivalent recognition evaluation at score threshold 0.35. No retraining is performed. Functional-video v2 also projects per-take functional and detector-semantic tables plus selectable overlay video.",
+  "model": {
+    "existing": [
+      "nanodet/run-dae482c625b44a7081449ce018c83a13-trial-0001-model",
+      "nanodet/run-dae482c625b44a7081449ce018c83a13-trial-0002-model",
+      "nanodet/run-dae482c625b44a7081449ce018c83a13-trial-0003-model",
+      "nanodet/run-dae482c625b44a7081449ce018c83a13-trial-0004-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "recognition-functional-video",
+      "corpus": "nanodet/recognition-e2e-night-iphone13-v1",
+      "protocol": "nanodet/recognition-functional-video-detector-v2",
+      "parameters": {
+        "red_five_model": {
+          "values": [
+            "recognition-runtime/red-five-c8-rgb-warmaug-v1"
+          ]
+        },
+        "detector_score_threshold": {
+          "values": [
+            0.35
+          ]
+        },
+        "base_classifier_model": {
+          "values": [
+            "tile-classifier/run-ac1a2514af214cb69977972c0278ab39-trial-0001-model"
+          ]
+        }
+      }
+    }
+  ]
+}
