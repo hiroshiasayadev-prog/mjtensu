@@ -971,6 +971,36 @@ def test_retry_child_keeps_native_pipeline_owner_and_normal_bind_replay() -> Non
     assert node["job_id"] == owner_id
 
 
+def test_bind_task_to_pipeline_reopens_stopped_controller_for_resume() -> None:
+    FakeSDKTask.reset()
+    plan = _plan()
+    result = _result(plan)
+    adapter = ClearMLSDKAdapter(
+        ClearMLSDKSettings(step_queue="gpu-a"),
+        task_class=FakeSDKTask,
+    )
+    pipeline_id = cast(str, adapter.create_pipeline_run(_pipeline_request(plan, result)))
+    controller = FakeSDKTask.get_task(task_id=pipeline_id)
+    assert controller is not None
+    controller.status = "stopped"
+
+    child = FakeSDKTask(project="mldb/demo", task_id="resume-child")
+    child.properties["mldb.study_result"] = str(result["id"])
+    FakeSDKTask.tasks.append(child)
+
+    adapter.bind_task_to_pipeline(
+        task_id=child.id,
+        pipeline_execution_id=pipeline_id,
+        pipeline_step="trial-0001-train",
+    )
+
+    assert controller.status == "in_progress"
+    assert child.parent == pipeline_id
+    node = controller.configs["Pipeline"]["arch-v1 | training"]
+    assert node["executed"] == child.id
+    assert node["job_id"] == child.id
+
+
 def test_generic_study_execution_seam_has_no_clearml_dependency() -> None:
     root = Path(__file__).parents[1]
     generic = (root / "src/backend/study_execution.py").read_text(encoding="utf-8")

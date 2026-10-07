@@ -2375,10 +2375,7 @@ class ClearMLSDKAdapter:
                 raise ClearMLSDKError(
                     "stopped ClearML Pipeline cannot be reopened for MLDB resume"
                 )
-            mark_started(
-                force=True,
-                status_message="MLDB Study resumed after controller interruption",
-            )
+            mark_started(force=True)
         child_meta = _metadata(child)
         pipeline_meta = _metadata(pipeline)
         if child_meta.get("mldb.study_result") != pipeline_meta.get("mldb.study_result"):
