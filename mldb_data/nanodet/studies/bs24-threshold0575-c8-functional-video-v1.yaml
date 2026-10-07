@@ -1,9 +1,9 @@
 {
   "schema": "mjtensu.mldb-v2/study/v1",
-  "id": "mldb-smoke/c8-bs24-threshold0575-functional-video-v1",
+  "id": "nanodet/bs24-threshold0575-c8-functional-video-v1",
   "status": "sealed",
-  "name": "C8 + NanoDet bs24 threshold 0.575 functional video",
-  "description": "Replay the sealed five-video recognition corpus through the production TypeScript recognition pipeline using the current C8 batch128 classifier baseline, the corrected-COCO NanoDet batch24 60-epoch canonical Model, red-five C8, and the score-threshold-sweep F1 optimum 0.575. This is a functional video evaluation only; it does not measure physical-iPhone latency or change production defaults.",
+  "name": "NanoDet bs24 threshold 0.575 + C8 functional video",
+  "description": "Evaluate the corrected-COCO NanoDet batch24 60-epoch detector at score threshold 0.575 through the sealed five-video production-equivalent recognition pipeline with the current C8 classifier baseline and red-five C8. This is a detector-threshold ML experiment, not an infrastructure smoke test; it does not measure physical-iPhone latency or change production defaults.",
   "model": {
     "existing": [
       "tile-classifier/run-ac1a2514af214cb69977972c0278ab39-trial-0001-model"
