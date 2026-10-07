@@ -70,6 +70,35 @@ class ImageMatchResult:
 
 
 @dataclass(frozen=True)
+class PathologyImageResult:
+    image_id: int
+    file_name: str
+    ground_truth_count: int
+    prediction_count: int
+    duplicate_gt_count: int
+    duplicate_extra_prediction_count: int
+    multi_gt_prediction_count: int
+    spurious_prediction_count: int
+    missed_gt_count: int
+    tangled_component_count: int
+    maximum_gt_multiplicity: int
+    maximum_pred_gt_degree: int
+    count_delta: int
+    duplicate_score: float
+    multi_gt_score: float
+    spurious_score: float
+
+    @property
+    def affected(self) -> bool:
+        return bool(
+            self.duplicate_gt_count
+            or self.multi_gt_prediction_count
+            or self.spurious_prediction_count
+            or self.missed_gt_count
+        )
+
+
+@dataclass(frozen=True)
 class ParsedArguments:
     repository_root: Path
     model_path: Path
@@ -81,6 +110,11 @@ class ParsedArguments:
     nms_iou_threshold: float
     max_detections: int
     overlay_limit: int | None
+    pathology_overlap_threshold: float
+    duplicate_overlap_threshold: float
+    pathology_worst_count: int
+    native_composite_only: bool
+    deduplicate_file_name: bool
 
 
 def parse_args() -> ParsedArguments:
@@ -105,15 +139,43 @@ def parse_args() -> ParsedArguments:
     parser.add_argument(
         "--operating-threshold",
         type=float,
-        default=0.05,
-        help="PWA-like score threshold used for per-image matching and overlays (default: 0.05).",
+        default=0.35,
+        help="Product NanoDet score threshold used for pathology matching and overlays (default: 0.35).",
     )
     parser.add_argument("--nms-iou-threshold", type=float, default=NMS_IOU_THRESHOLD)
     parser.add_argument("--max-detections", type=int, default=MAX_DETECTIONS)
     parser.add_argument(
         "--overlay-limit",
         type=int,
-        help="Only write this many worst overlays. By default all images are written.",
+        help="Only write this many legacy IoU-matching overlays. By default all images are written.",
+    )
+    parser.add_argument(
+        "--pathology-overlap-threshold",
+        type=float,
+        default=0.25,
+        help="Minimum intersection/min(area) used to connect a prediction and GT (default: 0.25).",
+    )
+    parser.add_argument(
+        "--duplicate-overlap-threshold",
+        type=float,
+        default=0.8,
+        help="Product-style duplicate suppression overlap threshold (default: 0.8).",
+    )
+    parser.add_argument(
+        "--pathology-worst-count",
+        type=int,
+        default=16,
+        help="Maximum images in each pathology contact sheet (default: 16).",
+    )
+    parser.add_argument(
+        "--native-composite-only",
+        action="store_true",
+        help="Evaluate only COCO image records already stored as native 320x320 detector composites.",
+    )
+    parser.add_argument(
+        "--deduplicate-file-name",
+        action="store_true",
+        help="Keep only the first COCO image record for each file_name and its annotations.",
     )
     namespace = parser.parse_args()
 
@@ -157,6 +219,11 @@ def parse_args() -> ParsedArguments:
         nms_iou_threshold=float(namespace.nms_iou_threshold),
         max_detections=int(namespace.max_detections),
         overlay_limit=namespace.overlay_limit,
+        pathology_overlap_threshold=float(namespace.pathology_overlap_threshold),
+        duplicate_overlap_threshold=float(namespace.duplicate_overlap_threshold),
+        pathology_worst_count=int(namespace.pathology_worst_count),
+        native_composite_only=bool(namespace.native_composite_only),
+        deduplicate_file_name=bool(namespace.deduplicate_file_name),
     )
     validate_arguments(arguments)
     return arguments
@@ -175,6 +242,8 @@ def validate_arguments(arguments: ParsedArguments) -> None:
         ("candidate threshold", arguments.candidate_threshold),
         ("operating threshold", arguments.operating_threshold),
         ("NMS IoU threshold", arguments.nms_iou_threshold),
+        ("pathology overlap threshold", arguments.pathology_overlap_threshold),
+        ("duplicate overlap threshold", arguments.duplicate_overlap_threshold),
     ):
         if not 0.0 <= value <= 1.0:
             raise ValueError(f"{label} must be between zero and one: {value}")
@@ -184,6 +253,8 @@ def validate_arguments(arguments: ParsedArguments) -> None:
         raise ValueError("max detections must be positive")
     if arguments.overlay_limit is not None and arguments.overlay_limit <= 0:
         raise ValueError("overlay limit must be positive")
+    if arguments.pathology_worst_count <= 0:
+        raise ValueError("pathology worst count must be positive")
 
 
 def main() -> int:
@@ -191,6 +262,39 @@ def main() -> int:
     coco = load_coco(arguments.annotation_path)
     images = coco["images"]
     annotations = coco["annotations"]
+    if arguments.native_composite_only:
+        images = [
+            image
+            for image in images
+            if int(image.get("width", 0)) == INPUT_SIZE
+            and int(image.get("height", 0)) == INPUT_SIZE
+        ]
+        selected_image_ids = {int(image["id"]) for image in images}
+        annotations = [
+            annotation
+            for annotation in annotations
+            if int(annotation["image_id"]) in selected_image_ids
+        ]
+        if not images:
+            raise ValueError("native-composite-only selected no 320x320 images")
+    if arguments.deduplicate_file_name:
+        unique_images: list[dict[str, Any]] = []
+        seen_file_names: set[str] = set()
+        for image in images:
+            file_name = str(image["file_name"])
+            if file_name in seen_file_names:
+                continue
+            seen_file_names.add(file_name)
+            unique_images.append(image)
+        images = unique_images
+        selected_image_ids = {int(image["id"]) for image in images}
+        annotations = [
+            annotation
+            for annotation in annotations
+            if int(annotation["image_id"]) in selected_image_ids
+        ]
+        if not images:
+            raise ValueError("deduplicate-file-name selected no images")
     ground_truths_by_image = build_ground_truth_index(annotations)
 
     try:
@@ -250,11 +354,18 @@ def main() -> int:
     predictions_path = arguments.output_directory / "predictions.json"
     write_json(predictions_path, prediction_records)
 
-    official_metrics, official_error = run_official_coco_evaluation(
-        arguments.annotation_path,
-        predictions_path,
-        arguments.max_detections,
-    )
+    if arguments.native_composite_only or arguments.deduplicate_file_name:
+        official_metrics = None
+        official_error = (
+            "official COCO evaluation skipped because dataset filtering "
+            "changes the source annotation set"
+        )
+    else:
+        official_metrics, official_error = run_official_coco_evaluation(
+            arguments.annotation_path,
+            predictions_path,
+            arguments.max_detections,
+        )
     approximate_metrics = calculate_coco_style_metrics(
         ground_truths_by_image,
         detections_by_image,
@@ -270,6 +381,28 @@ def main() -> int:
         ]
         for image_id, detections in detections_by_image.items()
     }
+    product_detections_by_image = {
+        image_id: suppress_product_duplicates(
+            detections,
+            arguments.duplicate_overlap_threshold,
+        )
+        for image_id, detections in operating_detections_by_image.items()
+    }
+    pathology_nms_results, pathology_nms_details = analyze_pathologies(
+        image_records_by_id,
+        ground_truths_by_image,
+        operating_detections_by_image,
+        overlap_threshold=arguments.pathology_overlap_threshold,
+    )
+    pathology_product_results, pathology_product_details = analyze_pathologies(
+        image_records_by_id,
+        ground_truths_by_image,
+        product_detections_by_image,
+        overlap_threshold=arguments.pathology_overlap_threshold,
+    )
+    pathology_nms_summary = summarize_pathologies(pathology_nms_results)
+    pathology_product_summary = summarize_pathologies(pathology_product_results)
+
     per_image_results = calculate_per_image_matches(
         image_records_by_id,
         ground_truths_by_image,
@@ -307,10 +440,74 @@ def main() -> int:
     failures_path = arguments.output_directory / "per_image_results.json"
     write_json(failures_path, [asdict(result) for result in ordered_results])
 
+    pathology_directory = arguments.output_directory / "pathologies"
+    pathology_directory.mkdir(parents=True, exist_ok=True)
+    pathology_nms_path = pathology_directory / "after_nms.json"
+    pathology_product_path = pathology_directory / "after_product_postprocess.json"
+    pathology_summary_path = pathology_directory / "summary.json"
+    write_json(pathology_nms_path, pathology_nms_details)
+    write_json(pathology_product_path, pathology_product_details)
+    write_json(
+        pathology_summary_path,
+        {
+            "association_metric": "intersection / min(area(prediction), area(ground_truth))",
+            "association_threshold": arguments.pathology_overlap_threshold,
+            "operating_threshold": arguments.operating_threshold,
+            "nms_iou_threshold": arguments.nms_iou_threshold,
+            "product_duplicate_overlap_threshold": arguments.duplicate_overlap_threshold,
+            "definitions": {
+                "duplicate_gt": "GT connected to two or more predictions.",
+                "multi_gt_prediction": "Prediction connected to two or more GT boxes.",
+                "spurious_prediction": "Prediction connected to no GT box.",
+                "missed_gt": "GT connected to no prediction under the pathology overlap threshold.",
+                "tangled_component": "Connected component containing at least two GTs and two predictions.",
+                "positive_count_delta_image": "Image where prediction count exceeds GT count.",
+            },
+            "overlay_legend": {
+                "ground_truth": "green",
+                "normal_prediction": "red",
+                "duplicate_member_prediction": "cyan",
+                "multi_gt_prediction": "orange",
+                "spurious_prediction": "magenta",
+            },
+            "after_nms": pathology_nms_summary,
+            "after_product_postprocess": pathology_product_summary,
+        },
+    )
+
+    pathology_contact_sheets: dict[str, str] = {}
+    for stage_name, stage_results, stage_detections in (
+        ("after_nms", pathology_nms_results, operating_detections_by_image),
+        ("after_product", pathology_product_results, product_detections_by_image),
+    ):
+        for category in ("duplicate", "multi_gt", "spurious", "miss", "overall"):
+            selected = select_pathology_worst(
+                stage_results,
+                category,
+                arguments.pathology_worst_count,
+            )
+            contact_sheet_path = (
+                pathology_directory / f"{stage_name}-{category}-worst.png"
+            )
+            write_pathology_contact_sheet(
+                contact_sheet_path,
+                selected,
+                image_records_by_id,
+                arguments.image_root,
+                ground_truths_by_image,
+                stage_detections,
+                overlap_threshold=arguments.pathology_overlap_threshold,
+            )
+            pathology_contact_sheets[f"{stage_name}_{category}"] = str(
+                contact_sheet_path
+            )
+
     report = {
         "model": str(arguments.model_path),
         "annotations": str(arguments.annotation_path),
         "image_root": str(arguments.image_root),
+        "native_composite_only": arguments.native_composite_only,
+        "deduplicate_file_name": arguments.deduplicate_file_name,
         "image_count": len(images),
         "ground_truth_count": len(annotations),
         "prediction_count": len(prediction_records),
@@ -332,6 +529,13 @@ def main() -> int:
             "operating_threshold": arguments.operating_threshold,
             "nms_iou_threshold": arguments.nms_iou_threshold,
             "max_detections": arguments.max_detections,
+            "product_duplicate_overlap_threshold": arguments.duplicate_overlap_threshold,
+        },
+        "pathology": {
+            "association_metric": "intersection / min(area(prediction), area(ground_truth))",
+            "association_threshold": arguments.pathology_overlap_threshold,
+            "after_nms": pathology_nms_summary,
+            "after_product_postprocess": pathology_product_summary,
         },
         "official_coco_metrics": official_metrics,
         "official_coco_error": official_error,
@@ -347,6 +551,10 @@ def main() -> int:
             "predictions": str(predictions_path),
             "per_image_results": str(failures_path),
             "overlays": str(overlay_directory),
+            "pathology_summary": str(pathology_summary_path),
+            "pathology_after_nms": str(pathology_nms_path),
+            "pathology_after_product_postprocess": str(pathology_product_path),
+            "pathology_contact_sheets": pathology_contact_sheets,
         },
         "worst_images": [asdict(result) for result in ordered_results[:20]],
     }
@@ -366,8 +574,17 @@ def main() -> int:
         "precision_at_iou_0_50": operating_summary["precision"],
         "recall_at_iou_0_50": operating_summary["recall"],
         "images_with_no_errors": operating_summary["images_with_no_errors"],
+        "duplicate_gt_rate_after_nms": pathology_nms_summary["duplicate_gt_rate"],
+        "multi_gt_prediction_rate_after_nms": pathology_nms_summary["multi_gt_prediction_rate"],
+        "spurious_prediction_rate_after_nms": pathology_nms_summary["spurious_prediction_rate"],
+        "affected_image_rate_after_nms": pathology_nms_summary["affected_image_rate"],
+        "duplicate_gt_rate_after_product": pathology_product_summary["duplicate_gt_rate"],
+        "multi_gt_prediction_rate_after_product": pathology_product_summary["multi_gt_prediction_rate"],
+        "spurious_prediction_rate_after_product": pathology_product_summary["spurious_prediction_rate"],
+        "affected_image_rate_after_product": pathology_product_summary["affected_image_rate"],
         "report": str(report_path),
         "overlays": str(overlay_directory),
+        "pathologies": str(pathology_directory),
     }
     print(json.dumps(console_summary, ensure_ascii=False, indent=2))
     return 0
@@ -769,6 +986,486 @@ def summarize_operating_point(
             result.false_negative_count > 0 for result in results
         ),
     }
+
+
+
+FIXED_COMPOSITE_REGIONS: tuple[tuple[str, Box], ...] = (
+    ("completed_hand", Box(7.0, 0.0, 313.0, 72.0)),
+    ("dora_indicators", Box(7.0, 74.0, 313.0, 146.0)),
+    ("melds", Box(74.0, 148.0, 246.0, 320.0)),
+)
+
+
+def box_area(box: Box) -> float:
+    return max(0.0, box.x2 - box.x1) * max(0.0, box.y2 - box.y1)
+
+
+def intersection_area(left: Box, right: Box) -> float:
+    width = max(0.0, min(left.x2, right.x2) - max(left.x1, right.x1))
+    height = max(0.0, min(left.y2, right.y2) - max(left.y1, right.y1))
+    return width * height
+
+
+def overlap_over_smaller_box(left: Box, right: Box) -> float:
+    smaller = min(box_area(left), box_area(right))
+    return 0.0 if smaller <= 0.0 else intersection_area(left, right) / smaller
+
+
+def pair_overlap_details(prediction: Box, ground_truth: Box) -> dict[str, float]:
+    intersection = intersection_area(prediction, ground_truth)
+    pred_area = box_area(prediction)
+    gt_area = box_area(ground_truth)
+    union = pred_area + gt_area - intersection
+    return {
+        "iou": 0.0 if union <= 0.0 else intersection / union,
+        "gt_coverage": 0.0 if gt_area <= 0.0 else intersection / gt_area,
+        "pred_coverage": 0.0 if pred_area <= 0.0 else intersection / pred_area,
+        "overlap_over_smaller": (
+            0.0 if min(pred_area, gt_area) <= 0.0 else intersection / min(pred_area, gt_area)
+        ),
+    }
+
+
+def clip_box(left: Box, right: Box) -> Box | None:
+    x1 = max(left.x1, right.x1)
+    y1 = max(left.y1, right.y1)
+    x2 = min(left.x2, right.x2)
+    y2 = min(left.y2, right.y2)
+    if x2 <= x1 or y2 <= y1:
+        return None
+    return Box(x1, y1, x2, y2)
+
+
+def assign_composite_region(box: Box) -> tuple[str, Box] | None:
+    center_x = 0.5 * (box.x1 + box.x2)
+    center_y = 0.5 * (box.y1 + box.y2)
+    for name, region in FIXED_COMPOSITE_REGIONS:
+        if region.x1 <= center_x < region.x2 and region.y1 <= center_y < region.y2:
+            clipped = clip_box(box, region)
+            if clipped is not None:
+                return name, clipped
+    return None
+
+
+def suppress_product_duplicates(
+    detections: Sequence[Detection],
+    overlap_threshold: float,
+) -> list[Detection]:
+    by_region: defaultdict[str, list[tuple[Detection, Box]]] = defaultdict(list)
+    for detection in detections:
+        assigned = assign_composite_region(detection.box)
+        if assigned is not None:
+            region, clipped = assigned
+            by_region[region].append((detection, clipped))
+
+    winners: list[Detection] = []
+    for group in by_region.values():
+        candidates: list[tuple[Detection, Box]] = []
+        for candidate_index, candidate in enumerate(group):
+            _candidate_detection, candidate_box = candidate
+            candidate_area = box_area(candidate_box)
+            smaller = [
+                other
+                for other_index, other in enumerate(group)
+                if other_index != candidate_index
+                and box_area(other[1]) < candidate_area
+                and overlap_over_smaller_box(candidate_box, other[1]) >= overlap_threshold
+            ]
+            is_bridge = any(
+                overlap_over_smaller_box(smaller[left][1], smaller[right][1])
+                < overlap_threshold
+                for left in range(len(smaller))
+                for right in range(left + 1, len(smaller))
+            )
+            if not is_bridge:
+                candidates.append(candidate)
+
+        candidates.sort(key=lambda item: item[0].score, reverse=True)
+        kept: list[tuple[Detection, Box]] = []
+        for candidate in candidates:
+            if any(
+                overlap_over_smaller_box(candidate[1], accepted[1]) >= overlap_threshold
+                for accepted in kept
+            ):
+                continue
+            kept.append(candidate)
+        winners.extend(detection for detection, _clipped in kept)
+    return winners
+
+
+def _bipartite_tangled_component_count(
+    gt_neighbors: Sequence[Sequence[int]],
+    pred_neighbors: Sequence[Sequence[int]],
+) -> int:
+    seen_gt: set[int] = set()
+    seen_pred: set[int] = set()
+    tangled = 0
+    for start_gt, neighbors in enumerate(gt_neighbors):
+        if start_gt in seen_gt or not neighbors:
+            continue
+        pending: list[tuple[str, int]] = [("gt", start_gt)]
+        component_gt: set[int] = set()
+        component_pred: set[int] = set()
+        while pending:
+            kind, index = pending.pop()
+            if kind == "gt":
+                if index in seen_gt:
+                    continue
+                seen_gt.add(index)
+                component_gt.add(index)
+                pending.extend(("pred", pred) for pred in gt_neighbors[index])
+            else:
+                if index in seen_pred:
+                    continue
+                seen_pred.add(index)
+                component_pred.add(index)
+                pending.extend(("gt", gt) for gt in pred_neighbors[index])
+        if len(component_gt) >= 2 and len(component_pred) >= 2:
+            tangled += 1
+    return tangled
+
+
+def analyze_pathologies(
+    image_records_by_id: dict[int, dict[str, Any]],
+    ground_truths_by_image: dict[int, list[Box]],
+    detections_by_image: dict[int, list[Detection]],
+    *,
+    overlap_threshold: float,
+) -> tuple[list[PathologyImageResult], list[dict[str, Any]]]:
+    results: list[PathologyImageResult] = []
+    details: list[dict[str, Any]] = []
+    for image_id, image_record in image_records_by_id.items():
+        ground_truths = ground_truths_by_image.get(image_id, [])
+        detections = detections_by_image.get(image_id, [])
+        pair_details = [
+            [pair_overlap_details(detection.box, ground_truth) for ground_truth in ground_truths]
+            for detection in detections
+        ]
+        pred_neighbors = [
+            [
+                gt_index
+                for gt_index, values in enumerate(row)
+                if values["overlap_over_smaller"] >= overlap_threshold
+            ]
+            for row in pair_details
+        ]
+        gt_neighbors = [
+            [
+                pred_index
+                for pred_index, row in enumerate(pair_details)
+                if row[gt_index]["overlap_over_smaller"] >= overlap_threshold
+            ]
+            for gt_index in range(len(ground_truths))
+        ]
+
+        duplicate_gt_count = sum(len(neighbors) >= 2 for neighbors in gt_neighbors)
+        duplicate_extra = sum(max(0, len(neighbors) - 1) for neighbors in gt_neighbors)
+        multi_gt_count = sum(len(neighbors) >= 2 for neighbors in pred_neighbors)
+        spurious_count = sum(len(neighbors) == 0 for neighbors in pred_neighbors)
+        missed_count = sum(len(neighbors) == 0 for neighbors in gt_neighbors)
+        duplicate_score = sum(
+            sorted(
+                (
+                    pair_details[pred_index][gt_index]["overlap_over_smaller"]
+                    for pred_index in neighbors
+                ),
+                reverse=True,
+            )[1]
+            for gt_index, neighbors in enumerate(gt_neighbors)
+            if len(neighbors) >= 2
+        )
+        multi_gt_score = sum(
+            sorted(
+                (pair_details[pred_index][gt]["overlap_over_smaller"] for gt in neighbors),
+                reverse=True,
+            )[1]
+            for pred_index, neighbors in enumerate(pred_neighbors)
+            if len(neighbors) >= 2
+        )
+        spurious_score = sum(
+            detection.score
+            for detection, neighbors in zip(detections, pred_neighbors, strict=True)
+            if not neighbors
+        )
+
+        result = PathologyImageResult(
+            image_id=image_id,
+            file_name=str(image_record["file_name"]),
+            ground_truth_count=len(ground_truths),
+            prediction_count=len(detections),
+            duplicate_gt_count=duplicate_gt_count,
+            duplicate_extra_prediction_count=duplicate_extra,
+            multi_gt_prediction_count=multi_gt_count,
+            spurious_prediction_count=spurious_count,
+            missed_gt_count=missed_count,
+            tangled_component_count=_bipartite_tangled_component_count(
+                gt_neighbors, pred_neighbors
+            ),
+            maximum_gt_multiplicity=max((len(row) for row in gt_neighbors), default=0),
+            maximum_pred_gt_degree=max((len(row) for row in pred_neighbors), default=0),
+            count_delta=len(detections) - len(ground_truths),
+            duplicate_score=float(duplicate_score),
+            multi_gt_score=float(multi_gt_score),
+            spurious_score=float(spurious_score),
+        )
+        results.append(result)
+        details.append(
+            {
+                **asdict(result),
+                "affected": result.affected,
+                "ground_truths": [
+                    {
+                        "gt_index": gt_index,
+                        "box": ground_truth.to_coco(),
+                        "prediction_indices": gt_neighbors[gt_index],
+                    }
+                    for gt_index, ground_truth in enumerate(ground_truths)
+                ],
+                "predictions": [
+                    {
+                        "prediction_index": pred_index,
+                        "box": detection.box.to_coco(),
+                        "score": detection.score,
+                        "gt_indices": pred_neighbors[pred_index],
+                        "overlaps": [
+                            {"gt_index": gt_index, **values}
+                            for gt_index, values in enumerate(pair_details[pred_index])
+                            if values["overlap_over_smaller"] > 0.0
+                        ],
+                    }
+                    for pred_index, detection in enumerate(detections)
+                ],
+            }
+        )
+    return results, details
+
+
+def summarize_pathologies(
+    results: Sequence[PathologyImageResult],
+) -> dict[str, float | int]:
+    image_count = len(results)
+    gt_count = sum(result.ground_truth_count for result in results)
+    prediction_count = sum(result.prediction_count for result in results)
+    duplicate_gt_count = sum(result.duplicate_gt_count for result in results)
+    duplicate_extra = sum(result.duplicate_extra_prediction_count for result in results)
+    multi_gt = sum(result.multi_gt_prediction_count for result in results)
+    spurious = sum(result.spurious_prediction_count for result in results)
+    missed = sum(result.missed_gt_count for result in results)
+    return {
+        "image_count": image_count,
+        "ground_truth_count": gt_count,
+        "prediction_count": prediction_count,
+        "duplicate_gt_count": duplicate_gt_count,
+        "duplicate_gt_rate": duplicate_gt_count / gt_count if gt_count else 0.0,
+        "duplicate_extra_prediction_count": duplicate_extra,
+        "duplicate_extra_per_gt": duplicate_extra / gt_count if gt_count else 0.0,
+        "multi_gt_prediction_count": multi_gt,
+        "multi_gt_prediction_rate": multi_gt / prediction_count if prediction_count else 0.0,
+        "spurious_prediction_count": spurious,
+        "spurious_prediction_rate": spurious / prediction_count if prediction_count else 0.0,
+        "missed_gt_count": missed,
+        "missed_gt_rate": missed / gt_count if gt_count else 0.0,
+        "affected_image_count": sum(result.affected for result in results),
+        "affected_image_rate": (
+            sum(result.affected for result in results) / image_count if image_count else 0.0
+        ),
+        "positive_count_delta_image_count": sum(result.count_delta > 0 for result in results),
+        "positive_count_delta_image_rate": (
+            sum(result.count_delta > 0 for result in results) / image_count
+            if image_count
+            else 0.0
+        ),
+        "maximum_gt_multiplicity": max(
+            (result.maximum_gt_multiplicity for result in results), default=0
+        ),
+        "maximum_pred_gt_degree": max(
+            (result.maximum_pred_gt_degree for result in results), default=0
+        ),
+        "tangled_component_count": sum(result.tangled_component_count for result in results),
+    }
+
+
+def pathology_sort_key(result: PathologyImageResult, category: str) -> tuple[float, ...]:
+    if category == "duplicate":
+        return (
+            float(result.duplicate_extra_prediction_count),
+            result.duplicate_score,
+            float(result.maximum_gt_multiplicity),
+        )
+    if category == "multi_gt":
+        return (
+            float(result.multi_gt_prediction_count),
+            result.multi_gt_score,
+            float(result.maximum_pred_gt_degree),
+        )
+    if category == "spurious":
+        return (float(result.spurious_prediction_count), result.spurious_score)
+    if category == "miss":
+        return (float(result.missed_gt_count),)
+    return (
+        float(
+            result.duplicate_extra_prediction_count
+            + result.multi_gt_prediction_count
+            + result.spurious_prediction_count
+            + result.missed_gt_count
+        ),
+        float(abs(result.count_delta)),
+        result.duplicate_score + result.multi_gt_score + result.spurious_score,
+    )
+
+
+def select_pathology_worst(
+    results: Sequence[PathologyImageResult],
+    category: str,
+    count: int,
+) -> list[PathologyImageResult]:
+    if category == "duplicate":
+        candidates = [row for row in results if row.duplicate_gt_count]
+    elif category == "multi_gt":
+        candidates = [row for row in results if row.multi_gt_prediction_count]
+    elif category == "spurious":
+        candidates = [row for row in results if row.spurious_prediction_count]
+    elif category == "miss":
+        candidates = [row for row in results if row.missed_gt_count]
+    else:
+        candidates = [row for row in results if row.affected]
+    return sorted(candidates, key=lambda row: pathology_sort_key(row, category), reverse=True)[
+        :count
+    ]
+
+
+def write_pathology_overlay(
+    image_path: Path,
+    output_path: Path,
+    ground_truths: Sequence[Box],
+    detections: Sequence[Detection],
+    *,
+    overlap_threshold: float,
+) -> None:
+    with Image.open(image_path) as source:
+        image = source.convert("RGB")
+    draw = ImageDraw.Draw(image)
+    pair_details = [
+        [pair_overlap_details(detection.box, ground_truth) for ground_truth in ground_truths]
+        for detection in detections
+    ]
+    pred_neighbors = [
+        [
+            gt_index
+            for gt_index, values in enumerate(row)
+            if values["overlap_over_smaller"] >= overlap_threshold
+        ]
+        for row in pair_details
+    ]
+    gt_neighbors = [
+        [
+            pred_index
+            for pred_index, row in enumerate(pair_details)
+            if row[gt_index]["overlap_over_smaller"] >= overlap_threshold
+        ]
+        for gt_index in range(len(ground_truths))
+    ]
+    for gt_index, ground_truth in enumerate(ground_truths):
+        degree = len(gt_neighbors[gt_index])
+        draw.rectangle(
+            (ground_truth.x1, ground_truth.y1, ground_truth.x2, ground_truth.y2),
+            outline=(0, 255, 0),
+            width=2,
+        )
+        if degree != 1:
+            draw.text(
+                (ground_truth.x1 + 1, ground_truth.y1 + 1),
+                f"G{gt_index} p={degree}",
+                fill=(0, 255, 0),
+                stroke_width=1,
+                stroke_fill=(0, 0, 0),
+            )
+    for pred_index, detection in enumerate(detections):
+        degree = len(pred_neighbors[pred_index])
+        duplicate_member = (
+            degree == 1
+            and len(gt_neighbors[pred_neighbors[pred_index][0]]) >= 2
+        )
+        if degree == 0:
+            outline = (255, 0, 255)
+        elif degree >= 2:
+            outline = (255, 165, 0)
+        elif duplicate_member:
+            outline = (0, 255, 255)
+        else:
+            outline = (255, 0, 0)
+        draw.rectangle(
+            (detection.box.x1, detection.box.y1, detection.box.x2, detection.box.y2),
+            outline=outline,
+            width=2,
+        )
+        if degree != 1 or duplicate_member:
+            draw.text(
+                (detection.box.x1 + 1, detection.box.y2 - 11),
+                f"P{pred_index} {detection.score:.2f} g={degree}",
+                fill=outline,
+                stroke_width=1,
+                stroke_fill=(0, 0, 0),
+            )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(output_path)
+    image.close()
+
+
+def write_pathology_contact_sheet(
+    output_path: Path,
+    rows: Sequence[PathologyImageResult],
+    image_records_by_id: dict[int, dict[str, Any]],
+    image_root: Path,
+    ground_truths_by_image: dict[int, list[Box]],
+    detections_by_image: dict[int, list[Detection]],
+    *,
+    overlap_threshold: float,
+) -> None:
+    if not rows:
+        image = Image.new("RGB", (640, 80), "white")
+        ImageDraw.Draw(image).text((10, 10), "No matching pathology samples", fill="black")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        image.save(output_path)
+        image.close()
+        return
+    columns = min(4, len(rows))
+    cell_width, cell_height = 340, 385
+    rows_count = math.ceil(len(rows) / columns)
+    sheet = Image.new("RGB", (columns * cell_width, rows_count * cell_height), "white")
+    for ordinal, result in enumerate(rows):
+        temp_path = output_path.parent / f".tmp-{output_path.stem}-{ordinal}.png"
+        image_record = image_records_by_id[result.image_id]
+        write_pathology_overlay(
+            resolve_image_path(image_root, image_record),
+            temp_path,
+            ground_truths_by_image.get(result.image_id, []),
+            detections_by_image.get(result.image_id, []),
+            overlap_threshold=overlap_threshold,
+        )
+        with Image.open(temp_path) as overlay:
+            tile = overlay.convert("RGB").resize((320, 320), Image.Resampling.BILINEAR)
+        temp_path.unlink(missing_ok=True)
+        x = (ordinal % columns) * cell_width + 10
+        y = (ordinal // columns) * cell_height + 54
+        sheet.paste(tile, (x, y))
+        draw = ImageDraw.Draw(sheet)
+        file_name = Path(result.file_name).name
+        if len(file_name) > 48:
+            file_name = f"{file_name[:24]}...{file_name[-21:]}"
+        draw.text((x, y - 50), file_name, fill="black")
+        draw.text(
+            (x, y - 36),
+            (
+                f"dup={result.duplicate_extra_prediction_count} "
+                f"multi={result.multi_gt_prediction_count} "
+                f"stray={result.spurious_prediction_count} miss={result.missed_gt_count}"
+            ),
+            fill="black",
+        )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(output_path)
+    sheet.close()
 
 
 def write_overlay(
