@@ -4,6 +4,7 @@ import {
   appRoutePaths,
   ConditionsPage,
   HelpPage,
+  IntegrationCapturePage,
   ProductionShell,
   RecognitionCorrectionPage,
   RecognitionDebugPage,
@@ -22,6 +23,11 @@ export const productionRouteTable = [
   {
     name: 'debug',
     path: appRoutePaths.debug,
+    requiresActiveScoringSession: false,
+  },
+  {
+    name: 'integrationCapture',
+    path: appRoutePaths.integrationCapture,
     requiresActiveScoringSession: false,
   },
   {
@@ -57,6 +63,7 @@ export function AppRoutes() {
       <Route element={<ProductionShell />}>
         <Route path={appRoutePaths.top} element={<TopPage />} />
         <Route path={appRoutePaths.debug} element={<RecognitionDebugPage />} />
+        <Route path={appRoutePaths.integrationCapture} element={<IntegrationCapturePage />} />
         <Route path={appRoutePaths.recognition} element={<RecognitionPage />} />
         <Route
           path={appRoutePaths.recognitionCorrection}

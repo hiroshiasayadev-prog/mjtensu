@@ -72,6 +72,11 @@ describe('production shell routing', () => {
         requiresActiveScoringSession: false,
       },
       {
+        name: 'integrationCapture',
+        path: '/integration-capture',
+        requiresActiveScoringSession: false,
+      },
+      {
         name: 'recognition',
         path: '/recognition',
         requiresActiveScoringSession: false,
@@ -198,8 +203,13 @@ describe('production shell routing', () => {
     expect(version.style.bottom).not.toBe('');
   });
 
-  it('exposes the debug route as a small link from the bottom-right of Top', () => {
+  it('exposes capture and debug routes as small links from the bottom-right of Top', () => {
     renderRoute('/');
+
+    const captureLink = screen.getByRole('link', { name: 'capture' });
+    expect(captureLink).toBeVisible();
+    expect(captureLink).toHaveAttribute('href', '/integration-capture');
+    expect(captureLink.style.position).toBe('fixed');
 
     const debugLink = screen.getByRole('link', { name: 'debug' });
     expect(debugLink).toBeVisible();

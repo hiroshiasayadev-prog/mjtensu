@@ -25,6 +25,7 @@ export type {
   ConditionsNavigationState,
 } from './navigation';
 export { ConditionsPageView } from './conditions-page';
+export { IntegrationCapturePage } from './integration-capture-page';
 export {
   MobileScoringPageShell,
   PersistentBottomBar,

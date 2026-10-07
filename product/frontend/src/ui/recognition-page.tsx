@@ -748,7 +748,7 @@ function RecognitionDebugControls({
   );
 }
 
-function CaptureRegionOverlay({
+export function CaptureRegionOverlay({
   snapshot,
   regions,
 }: {
@@ -1264,7 +1264,7 @@ const LANDSCAPE_UI_SURFACE_LAYOUT = {
   height: '100%',
 } as const;
 
-function captureSurfaceLayout(isPortraitViewport: boolean): {
+export function captureSurfaceLayout(isPortraitViewport: boolean): {
   readonly width: string;
   readonly height: string;
 } {
@@ -1273,13 +1273,13 @@ function captureSurfaceLayout(isPortraitViewport: boolean): {
     : LANDSCAPE_CAPTURE_SURFACE_LAYOUT;
 }
 
-function landscapeUiSurfaceLayout(isPortraitViewport: boolean) {
+export function landscapeUiSurfaceLayout(isPortraitViewport: boolean) {
   return isPortraitViewport
     ? PORTRAIT_LANDSCAPE_UI_SURFACE_LAYOUT
     : LANDSCAPE_UI_SURFACE_LAYOUT;
 }
 
-function usePortraitViewport(): boolean {
+export function usePortraitViewport(): boolean {
   const [isPortrait, setIsPortrait] = useState(() => viewportIsPortrait());
 
   useEffect(() => {

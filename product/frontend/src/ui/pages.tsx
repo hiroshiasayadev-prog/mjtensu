@@ -136,6 +136,22 @@ export function TopPage() {
 
       <Text
         component={RouterLink}
+        to={appRoutePaths.integrationCapture}
+        c="dimmed"
+        size="xs"
+        style={{
+          position: 'fixed',
+          right: 'max(58px, calc(env(safe-area-inset-right) + 48px))',
+          bottom: 'max(8px, env(safe-area-inset-bottom))',
+          fontSize: 10,
+          textDecoration: 'none',
+        }}
+      >
+        capture
+      </Text>
+
+      <Text
+        component={RouterLink}
         to={appRoutePaths.debug}
         c="dimmed"
         size="xs"
