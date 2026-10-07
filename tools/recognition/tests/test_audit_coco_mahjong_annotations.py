@@ -124,6 +124,68 @@ class RuntimePreprocessingTests(unittest.TestCase):
         actual = audit._runtime_resample_channel(source, 7, 9)
         np.testing.assert_array_equal(actual, expected)
 
+    def test_batch_resampler_matches_scalar_resampler_exactly(self) -> None:
+        rng = np.random.default_rng(123)
+        batch = rng.integers(0, 256, size=(7, 42, 56), dtype=np.uint8)
+        actual = audit._runtime_resample_batch(batch, 64, 48)
+        expected = np.stack(
+            [audit._runtime_resample_channel(channel, 64, 48) for channel in batch]
+        )
+        np.testing.assert_array_equal(actual, expected)
+
+    def test_grouped_gray_preprocessing_matches_scalar_exactly(self) -> None:
+        rng = np.random.default_rng(456)
+        crops = [
+            Image.fromarray(
+                rng.integers(0, 256, size=(56, 42, 3), dtype=np.uint8),
+                mode="RGB",
+            )
+            for _ in range(9)
+        ]
+        actual = audit.preprocess_gray_batch(crops, executor=None)
+        expected = [audit.preprocess_gray_crop(crop) for crop in crops]
+        for actual_item, expected_item in zip(actual, expected, strict=True):
+            np.testing.assert_array_equal(actual_item, expected_item)
+
+
+class HumanReviewArtifactTests(unittest.TestCase):
+    def test_contact_sheets_are_partitioned_by_source_split_and_status(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            image_path = root / "source.png"
+            Image.new("RGB", (100, 100), "white").save(image_path)
+            base = {
+                "review_status": "high_confidence_mismatch",
+                "annotation_id": 1,
+                "image_path": str(image_path),
+                "bbox": [20.0, 20.0, 30.0, 30.0],
+                "annotated_label": "1m",
+                "predicted_label": "2m",
+                "confidence": 0.99,
+                "margin": 0.95,
+                "raw_category_name": "character_1",
+                "category_id": 19,
+            }
+            candidates = [
+                {**base, "dataset_id": "coco_mahjong", "split": "train2017"},
+                {**base, "dataset_id": "coco_mahjong_jp_v2", "split": "valid"},
+            ]
+            outputs = audit.write_contact_sheets(
+                candidates,
+                root / "sheets",
+                limit_per_status=1,
+                columns=1,
+                rows=1,
+            )
+            names = {Path(path).name for path in outputs}
+            self.assertEqual(
+                names,
+                {
+                    "coco_mahjong_train2017_high_confidence_mismatch_0001.jpg",
+                    "coco_mahjong_jp_v2_valid_high_confidence_mismatch_0001.jpg",
+                },
+            )
+
 
 class MismatchClassificationTests(unittest.TestCase):
     def test_high_confidence_mismatch_and_ambiguity_are_separate(self) -> None:

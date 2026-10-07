@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>JP-v2 Annotation Review</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,sans-serif;background:#101215;color:#e8eaed}*{box-sizing:border-box}body{margin:0}.bar{position:sticky;top:0;z-index:3;background:#16191e;border-bottom:1px solid #30343b;padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}.bar strong{margin-right:8px}.bar select,.bar button,.bar input,textarea{background:#22262d;color:#f3f4f6;border:1px solid #3a404a;border-radius:7px;padding:7px 9px}button{cursor:pointer}.bar .grow{flex:1}.wrap{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(360px,.7fr);gap:14px;padding:14px;height:calc(100vh - 64px)}.visuals{display:grid;grid-template-rows:minmax(0,1fr) 280px;gap:12px;min-height:0}.panel{background:#171a1f;border:1px solid #30343b;border-radius:10px;overflow:hidden}.canvasWrap{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#0c0e11}canvas{max-width:100%;max-height:100%;object-fit:contain}.cropRow{display:grid;grid-template-columns:1fr 1fr;gap:12px}.side{padding:16px;overflow:auto}.title{font-size:18px;font-weight:700;margin-bottom:12px}.badges{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.badge{padding:6px 9px;border-radius:999px;background:#252a32;font-size:13px}.high{background:#5b2027}.amb{background:#604a16}.gt{font-size:30px;font-weight:800}.pred{font-size:30px;font-weight:800}.arrow{opacity:.5;margin:0 8px}.metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.metric{background:#22262d;border-radius:8px;padding:10px}.metric small{display:block;color:#aab0ba}.actions{display:grid;gap:8px;margin-top:14px}.actions button{padding:12px;border-radius:8px;border:1px solid #444;background:#292f38;color:#fff;font-weight:700}.actions .keep{background:#254b38}.actions .change{background:#6b3f1d}.actions .hold{background:#3d3d49}.custom{display:flex;gap:8px}.custom select{flex:1}.custom button{min-width:110px}.note{width:100%;min-height:70px;margin-top:10px}.decision{padding:10px;border-left:4px solid #777;background:#22262d;margin:12px 0}.decision.change{border-color:#e59a45}.decision.keep_annotation{border-color:#5ccc8a}.decision.remove_annotation{border-color:#ef5350}.decision.hold{border-color:#9b9baa}.footer{font-size:12px;color:#969da8;margin-top:16px;line-height:1.6}.status{font-size:13px;color:#b8bec8}.exportMsg{font-size:12px;color:#9fd3aa}.hidden{display:none}@media(max-width:950px){.wrap{grid-template-columns:1fr;height:auto}.visuals{height:75vh}.side{overflow:visible}}
+</style>
+</head>
+<body>
+<div class="bar">
+  <strong>JP-v2 annotation review</strong>
+  <label>split <select id="split"><option value="all">all</option><option>train</option><option>valid</option><option>test</option></select></label>
+  <label>candidate <select id="consensus"><option value="dual_high_same">Plain+C8 high / same prediction</option><option value="dual_same_other">Plain+C8 same prediction / weaker</option><option value="dual_disagree">Both mismatch / different prediction</option><option value="plain_only">Plain only</option><option value="all">all</option></select></label>
+  <label>Plain signal <select id="status"><option value="all">all mismatch</option><option value="high_confidence_mismatch">high confidence</option><option value="ambiguous_mismatch">ambiguous</option></select></label>
+  <label>review <select id="reviewFilter"><option value="unreviewed">unreviewed</option><option value="all">all</option><option value="change">changed</option><option value="keep_annotation">GT kept</option><option value="remove_annotation">removed</option><option value="hold">hold</option></select></label>
+  <span id="counter" class="status"></span>
+  <span class="grow"></span>
+  <button id="prev">← Prev</button><button id="next">Next →</button>
+  <button id="export">Export corrected COCO</button>
+</div>
+<div class="wrap">
+  <div class="visuals">
+    <div class="panel canvasWrap"><canvas id="scene"></canvas></div>
+    <div class="cropRow">
+      <div class="panel canvasWrap"><canvas id="crop"></canvas></div>
+      <div class="panel canvasWrap"><canvas id="zoom"></canvas></div>
+    </div>
+  </div>
+  <div class="panel side">
+    <div id="empty" class="hidden">このfilterには候補がありません。</div>
+    <div id="content">
+      <div id="title" class="title"></div>
+      <div class="badges"><span id="consensusBadge" class="badge"></span><span id="signalBadge" class="badge"></span><span id="rawBadge" class="badge"></span></div>
+      <div><span class="gt" id="gt"></span><span class="arrow">→</span><span class="pred" id="pred"></span></div>
+      <div class="metrics">
+        <div class="metric"><small>confidence</small><span id="confidence"></span></div>
+        <div class="metric"><small>margin</small><span id="margin"></span></div>
+        <div class="metric"><small>Plain 2nd</small><span id="second"></span></div>
+        <div class="metric"><small>C8</small><span id="secondary"></span></div>
+        <div class="metric"><small>bbox</small><span id="bbox"></span></div>
+      </div>
+      <div id="decision" class="decision">unreviewed</div>
+      <textarea id="note" class="note" placeholder="任意メモ"></textarea>
+      <div class="actions">
+        <button class="keep" id="keep">K — GTは正しい / classifier誤判定</button>
+        <button class="change" id="usePred">P — classifier予測へannotation修正</button>
+        <div class="custom"><select id="customLabel"></select><button id="saveCustom">別ラベルへ修正</button></div>
+        <button id="removeAnn">X — このannotationを削除</button>
+        <button class="hold" id="hold">H — 保留</button>
+        <button id="undo">レビューを取り消す</button>
+      </div>
+      <div class="footer">Keyboard: K=GT維持 / P=予測へ修正 / X=annotation削除 / H=保留 / ← →=移動<br/>保存は即時。原本COCO JSONは変更しません。</div>
+      <div id="exportMsg" class="exportMsg"></div>
+    </div>
+  </div>
+</div>
+<script>
+let data=null, filtered=[], pos=0, current=null, image=null;
+const $=id=>document.getElementById(id);
+async function api(url, opts={}){const r=await fetch(url,opts);const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.statusText);return j}
+function reviewOf(key){return data.reviews[key]||null}
+function rebuild(keepKey=null){
+  const split=$('split').value, consensus=$('consensus').value, status=$('status').value, rf=$('reviewFilter').value;
+  filtered=data.candidates.filter(x=>{
+    if(split!=='all'&&x.split!==split)return false;
+    if(consensus!=='all'&&x.consensus_tier!==consensus)return false;
+    if(status!=='all'&&x.review_status!==status)return false;
+    const r=reviewOf(x.key); const d=r?r.decision:'unreviewed';
+    return rf==='all'||d===rf;
+  });
+  if(keepKey){const i=filtered.findIndex(x=>x.key===keepKey);pos=i>=0?i:Math.min(pos,Math.max(0,filtered.length-1));}
+  else pos=Math.min(pos,Math.max(0,filtered.length-1));
+  render();
+}
+function stats(){
+ const total=data.candidates.length, reviewed=Object.keys(data.reviews).length;
+ $('counter').textContent=`${filtered.length?pos+1:0}/${filtered.length} filtered · ${reviewed}/${total} reviewed`;
+}
+function fitCanvas(canvas,w,h){const box=canvas.parentElement.getBoundingClientRect();const dpr=devicePixelRatio||1;const scale=Math.min(box.width/w,box.height/h);canvas.width=Math.max(1,Math.floor(w*scale*dpr));canvas.height=Math.max(1,Math.floor(h*scale*dpr));canvas.style.width=`${w*scale}px`;canvas.style.height=`${h*scale}px`;return {ctx:canvas.getContext('2d'),dpr,scale}}
+function drawScene(){if(!image||!current)return;const c=$('scene'),f=fitCanvas(c,image.naturalWidth,image.naturalHeight),ctx=f.ctx;ctx.setTransform(f.scale*f.dpr,0,0,f.scale*f.dpr,0,0);ctx.drawImage(image,0,0);const [x,y,w,h]=current.bbox;ctx.strokeStyle='#ff3048';ctx.lineWidth=Math.max(2,4/f.scale);ctx.strokeRect(x,y,w,h);}
+function drawCrop(canvas, pad){if(!image||!current)return;const [x,y,w,h]=current.bbox;const px=Math.max(0,x-w*pad),py=Math.max(0,y-h*pad),pr=Math.min(image.naturalWidth,x+w*(1+pad)),pb=Math.min(image.naturalHeight,y+h*(1+pad));const sw=pr-px,sh=pb-py;const box=canvas.parentElement.getBoundingClientRect(),dpr=devicePixelRatio||1;canvas.width=Math.max(1,Math.floor(box.width*dpr));canvas.height=Math.max(1,Math.floor(box.height*dpr));canvas.style.width=`${box.width}px`;canvas.style.height=`${box.height}px`;const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#0c0e11';ctx.fillRect(0,0,box.width,box.height);const s=Math.min(box.width/sw,box.height/sh);const dw=sw*s,dh=sh*s,dx=(box.width-dw)/2,dy=(box.height-dh)/2;ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(image,px,py,sw,sh,dx,dy,dw,dh);if(pad>0){ctx.strokeStyle='#ff3048';ctx.lineWidth=3;ctx.strokeRect(dx+(x-px)*s,dy+(y-py)*s,w*s,h*s)}}
+function loadImage(){image=new Image();image.onload=()=>{drawScene();drawCrop($('crop'),0);drawCrop($('zoom'),1.4)};image.src=`/api/image?key=${encodeURIComponent(current.key)}&v=${encodeURIComponent(current.key)}`}
+function render(){stats();if(!filtered.length){$('content').classList.add('hidden');$('empty').classList.remove('hidden');current=null;return}$('content').classList.remove('hidden');$('empty').classList.add('hidden');current=filtered[pos];$('title').textContent=`${current.split} · annotation ${current.annotation_id} · image ${current.image_id}`;$('consensusBadge').textContent=current.consensus_tier;$('signalBadge').textContent=current.review_status;$('signalBadge').className=`badge ${current.review_status.startsWith('high_')?'high':'amb'}`;$('rawBadge').textContent=`raw ${current.raw_category_name} / category ${current.category_id}`;$('gt').textContent=current.annotated_label;$('pred').textContent=current.predicted_label;$('confidence').textContent=Number(current.confidence).toFixed(4);$('margin').textContent=Number(current.margin).toFixed(4);$('second').textContent=`${current.base_second_label} ${Number(current.base_second_confidence).toFixed(4)}`;$('secondary').textContent=current.secondary_predicted_label?`${current.secondary_predicted_label} ${Number(current.secondary_confidence).toFixed(4)} · ${current.secondary_review_status}`:'not flagged';$('bbox').textContent=current.bbox.map(v=>Number(v).toFixed(1)).join(', ');const r=reviewOf(current.key);$('note').value=r?.note||'';$('customLabel').value=r?.approved_label||(data.labels.includes(current.predicted_label)?current.predicted_label:data.labels[0]);const usePred=$('usePred');const predictedWritable=data.labels.includes(current.predicted_label);usePred.disabled=!predictedWritable;usePred.textContent=predictedWritable?'P — classifier予測へannotation修正':'P — invalid予測はannotationへ書き込み不可';const d=$('decision');d.className='decision '+(r?.decision||'');d.textContent=r?r.decision+(r.approved_label?` → ${r.approved_label}`:''):'unreviewed';loadImage()}
+async function save(decision,label=null){if(!current)return;try{const key=current.key;const body={key,decision,note:$('note').value};if(label)body.approved_label=label;const out=await api('/api/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});data.reviews[key]=out.review;$('exportMsg').textContent='saved';const rf=$('reviewFilter').value;if(rf==='unreviewed'){rebuild()}else{rebuild(key);next()}}catch(e){$('exportMsg').textContent='ERROR: '+e.message}}
+async function undo(){if(!current)return;const key=current.key;await api(`/api/review?key=${encodeURIComponent(key)}`,{method:'DELETE'});delete data.reviews[key];rebuild(key)}
+function next(){if(!filtered.length)return;pos=Math.min(filtered.length-1,pos+1);render()}
+function prev(){if(!filtered.length)return;pos=Math.max(0,pos-1);render()}
+async function doExport(){if(!confirm('承認済みの change だけを別の corrected COCO JSON に出力します。原本は変更しません。続けますか？'))return;$('exportMsg').textContent='exporting...';try{const r=await api('/api/export',{method:'POST'});$('exportMsg').textContent=`Exported: ${r.total_changes} changes · ${r.report}`}catch(e){$('exportMsg').textContent='ERROR: '+e.message}}
+for(const id of ['split','consensus','status','reviewFilter'])$(id).addEventListener('change',()=>{pos=0;rebuild()});$('next').onclick=next;$('prev').onclick=prev;$('keep').onclick=()=>save('keep_annotation');$('usePred').onclick=()=>save('change',current.predicted_label);$('removeAnn').onclick=()=>save('remove_annotation');$('hold').onclick=()=>save('hold');$('saveCustom').onclick=()=>save('change',$('customLabel').value);$('undo').onclick=undo;$('export').onclick=doExport;window.addEventListener('resize',()=>{if(image?.complete){drawScene();drawCrop($('crop'),0);drawCrop($('zoom'),1.4)}});window.addEventListener('keydown',e=>{if(e.target.matches('textarea,input,select'))return;if(e.key==='k'||e.key==='K')save('keep_annotation');else if((e.key==='p'||e.key==='P')&&!$('usePred').disabled)save('change',current.predicted_label);else if(e.key==='x'||e.key==='X')save('remove_annotation');else if(e.key==='h'||e.key==='H')save('hold');else if(e.key==='ArrowRight')next();else if(e.key==='ArrowLeft')prev()});
+(async()=>{data=await api('/api/bootstrap');$('customLabel').innerHTML=data.labels.map(x=>`<option value="${x}">${x}</option>`).join('');rebuild()})().catch(e=>{document.body.innerHTML=`<pre>${e.stack||e}</pre>`});
+</script>
+</body></html>

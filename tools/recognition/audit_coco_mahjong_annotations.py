@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import csv
 import hashlib
 import json
 import math
 import os
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from functools import lru_cache
@@ -42,7 +44,7 @@ BASE_MEAN = 0.6815832403977466
 BASE_STD = 0.2725553681973969
 RED_MEAN = np.asarray([0.66025093606229934, 0.69172744263865471, 0.6489080530422624], dtype=np.float32)
 RED_STD = np.asarray([0.30491469480493394, 0.24924454491506576, 0.27107025824445752], dtype=np.float32)
-EXPECTED_BASE_RUNTIME = "c8-tile-35-v1"
+EXPECTED_BASE_RUNTIME = "gray64-tile-35-v1"
 EXPECTED_RED_RUNTIME = "c8-red-five-v1"
 
 
@@ -265,9 +267,9 @@ def _runtime_resample_channel(source: np.ndarray, target_width: int, target_heig
     x_indices, x_weights = _resample_contributions(source_width, target_width)
     y_indices, y_weights = _resample_contributions(source_height, target_height)
 
-    # The frontend evaluates a 2-D product kernel. Its weight sum factorizes into
-    # independent X/Y sums, so this sparse separable evaluation is algebraically
-    # identical while preserving float64 until the single final byte rounding.
+    # Match the frontend's separable Lanczos pass: float64 horizontal
+    # accumulation, then float64 vertical accumulation, with byte rounding only
+    # after the vertical pass.
     horizontal = (
         source.astype(np.float64)[:, x_indices] * x_weights[None, :, :]
     ).sum(axis=2)
@@ -277,7 +279,37 @@ def _runtime_resample_channel(source: np.ndarray, target_width: int, target_heig
     return np.clip(np.floor(sampled + 0.5), 0, 255).astype(np.uint8)
 
 
-def _runtime_rgb_pixels(image: Image.Image) -> np.ndarray:
+def _runtime_resample_batch(
+    source: np.ndarray,
+    target_width: int,
+    target_height: int,
+) -> np.ndarray:
+    """Vectorized runtime-equivalent resampling for an NxHxW equal-shape batch."""
+    source = np.asarray(source, dtype=np.uint8)
+    if source.ndim != 3:
+        raise ValueError(f"Expected NxHxW batch, got {source.shape}")
+    _, source_height, source_width = source.shape
+    if (source_width, source_height) == (target_width, target_height):
+        return source.copy()
+    x_indices, x_weights = _resample_contributions(source_width, target_width)
+    y_indices, y_weights = _resample_contributions(source_height, target_height)
+    horizontal = (
+        source.astype(np.float64)[:, :, x_indices] * x_weights[None, None, :, :]
+    ).sum(axis=3)
+    sampled = (
+        horizontal[:, y_indices, :] * y_weights[None, :, :, None]
+    ).sum(axis=2)
+    return np.clip(np.floor(sampled + 0.5), 0, 255).astype(np.uint8)
+
+
+def _runtime_rgb_pixels(image: Image.Image | np.ndarray) -> np.ndarray:
+    if isinstance(image, np.ndarray):
+        rgb = np.asarray(image, dtype=np.uint8)
+        if rgb.ndim != 3 or rgb.shape[2] != 3:
+            raise ValueError(f"Expected HxWx3 RGB crop, got {rgb.shape}")
+        return rgb
+    if image.mode == "RGB":
+        return np.asarray(image, dtype=np.uint8)
     return np.asarray(image.convert("RGB"), dtype=np.uint8)
 
 
@@ -299,6 +331,23 @@ def _border_values(channel: np.ndarray) -> np.ndarray:
     )
 
 
+def _border_values_batch(channel: np.ndarray) -> np.ndarray:
+    if channel.ndim != 3:
+        raise ValueError(f"Expected NxHxW channel batch, got {channel.shape}")
+    _, height, width = channel.shape
+    if width == 1 or height == 1:
+        return channel.reshape(channel.shape[0], -1)
+    return np.concatenate(
+        (
+            channel[:, 0, :],
+            channel[:, -1, :],
+            channel[:, 1:-1, 0],
+            channel[:, 1:-1, -1],
+        ),
+        axis=1,
+    )
+
+
 def _runtime_letterbox_channel(channel: np.ndarray) -> np.ndarray:
     height, width = channel.shape
     resized_width, resized_height = _resized_size(width, height)
@@ -312,14 +361,30 @@ def _runtime_letterbox_channel(channel: np.ndarray) -> np.ndarray:
     return canvas
 
 
-def preprocess_gray_crop(image: Image.Image) -> np.ndarray:
+def _runtime_letterbox_batch(channel: np.ndarray) -> np.ndarray:
+    if channel.ndim != 3:
+        raise ValueError(f"Expected NxHxW channel batch, got {channel.shape}")
+    _, height, width = channel.shape
+    resized_width, resized_height = _resized_size(width, height)
+    resized = _runtime_resample_batch(channel, resized_width, resized_height)
+    border = _border_values_batch(channel)
+    fill = np.clip(np.floor(np.median(border, axis=1) + 0.5), 0, 255).astype(np.uint8)
+    canvas = np.empty((channel.shape[0], IMAGE_SIZE, IMAGE_SIZE), dtype=np.uint8)
+    canvas[:] = fill[:, None, None]
+    offset_x = (IMAGE_SIZE - resized_width) // 2
+    offset_y = (IMAGE_SIZE - resized_height) // 2
+    canvas[:, offset_y : offset_y + resized_height, offset_x : offset_x + resized_width] = resized
+    return canvas
+
+
+def preprocess_gray_crop(image: Image.Image | np.ndarray) -> np.ndarray:
     rgb = _runtime_rgb_pixels(image)
     gray = _runtime_gray_pixels(rgb)
     canvas = _runtime_letterbox_channel(gray).astype(np.float32) / np.float32(255.0)
     return np.ascontiguousarray((canvas - np.float32(BASE_MEAN)) / np.float32(BASE_STD))
 
 
-def preprocess_rgb_crop(image: Image.Image) -> np.ndarray:
+def preprocess_rgb_crop(image: Image.Image | np.ndarray) -> np.ndarray:
     rgb = _runtime_rgb_pixels(image)
     channels = np.stack(
         [_runtime_letterbox_channel(rgb[:, :, index]) for index in range(3)], axis=0
@@ -327,6 +392,61 @@ def preprocess_rgb_crop(image: Image.Image) -> np.ndarray:
     channels /= np.float32(255.0)
     normalized = (channels - RED_MEAN[:, None, None]) / RED_STD[:, None, None]
     return np.ascontiguousarray(normalized)
+
+
+def preprocess_gray_batch(
+    crops: Sequence[Image.Image | np.ndarray],
+    *,
+    executor: ThreadPoolExecutor | None,
+    vectorized_min_group: int = 4,
+    vectorized_chunk: int = 256,
+) -> list[np.ndarray]:
+    """Use equal-shape vectorization when profitable, scalar preprocessing otherwise."""
+    results: list[np.ndarray | None] = [None] * len(crops)
+    groups: dict[tuple[int, int], list[int]] = defaultdict(list)
+    for index, crop in enumerate(crops):
+        if isinstance(crop, np.ndarray):
+            height, width = int(crop.shape[0]), int(crop.shape[1])
+        else:
+            width, height = crop.size
+        groups[(height, width)].append(index)
+
+    scalar_indices: list[int] = []
+    for indices in groups.values():
+        if len(indices) < vectorized_min_group:
+            scalar_indices.extend(indices)
+            continue
+        for start in range(0, len(indices), vectorized_chunk):
+            chunk_indices = indices[start : start + vectorized_chunk]
+            rgb = np.stack(
+                [_runtime_rgb_pixels(crops[index]) for index in chunk_indices],
+                axis=0,
+            )
+            gray_values = (
+                rgb[:, :, :, 0].astype(np.float64) * 0.299
+                + rgb[:, :, :, 1].astype(np.float64) * 0.587
+                + rgb[:, :, :, 2].astype(np.float64) * 0.114
+            )
+            gray = np.clip(np.floor(gray_values + 0.5), 0, 255).astype(np.uint8)
+            canvas = _runtime_letterbox_batch(gray).astype(np.float32)
+            canvas /= np.float32(255.0)
+            prepared = (canvas - np.float32(BASE_MEAN)) / np.float32(BASE_STD)
+            for output_index, value in zip(chunk_indices, prepared, strict=True):
+                results[output_index] = np.ascontiguousarray(value)
+
+    if scalar_indices:
+        scalar_crops = [crops[index] for index in scalar_indices]
+        if executor is None:
+            prepared_scalar = [preprocess_gray_crop(crop) for crop in scalar_crops]
+        else:
+            prepared_scalar = list(executor.map(preprocess_gray_crop, scalar_crops))
+        for output_index, value in zip(scalar_indices, prepared_scalar, strict=True):
+            results[output_index] = value
+
+    if any(value is None for value in results):
+        raise RuntimeError("Preprocessing batch left unresolved crops")
+    return [value for value in results if value is not None]
+
 
 def softmax(logits: np.ndarray) -> np.ndarray:
     shifted = logits - np.max(logits, axis=1, keepdims=True)
@@ -524,62 +644,73 @@ def load_export_checkpoint(
     return metadata, checkpoint_path
 
 
+def _load_architecture_module(path: Path) -> Any:
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    spec = importlib.util.spec_from_file_location("audit_current_base_architecture", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Cannot load architecture module: {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    build = getattr(module, "build", None)
+    if not callable(build):
+        raise ValueError(f"Architecture module has no callable build(): {path}")
+    return module
+
+
 def make_torch_sessions(
     models: dict[str, Any],
     *,
-    base_metadata_path: Path,
+    base_architecture_path: Path,
+    base_weights_path: Path,
+    base_weights_sha256: str,
     red_metadata_path: Path,
 ) -> tuple[TorchSessionAdapter, TorchSessionAdapter, dict[str, Any]]:
     import torch
 
-    base_metadata, base_checkpoint = load_export_checkpoint(
-        base_metadata_path,
-        expected_onnx_sha256=str(models["base"]["sha256"]),
-    )
+    if sha256_file(base_weights_path) != base_weights_sha256:
+        raise ValueError(f"Base classifier weights SHA-256 mismatch: {base_weights_path}")
+    architecture_module = _load_architecture_module(base_architecture_path)
+    base_model = architecture_module.build().eval()
+    try:
+        base_state = torch.load(base_weights_path, map_location="cpu", weights_only=True)
+    except TypeError:  # torch < 2.0 compatibility
+        base_state = torch.load(base_weights_path, map_location="cpu")
+    if not isinstance(base_state, dict) or not all(isinstance(key, str) for key in base_state):
+        raise ValueError("Base weights are not a canonical pytorch-state-dict/v1 mapping")
+    base_model.load_state_dict(base_state, strict=True)
+    if base_model.training:
+        raise RuntimeError("Base classifier must be in eval mode before the output-shape probe")
+    with torch.inference_mode():
+        probe = base_model(torch.zeros((2, 1, IMAGE_SIZE, IMAGE_SIZE), dtype=torch.float32))
+    if tuple(probe.shape) != (2, len(BASE_LABELS)):
+        raise ValueError(f"Base architecture output mismatch: got {tuple(probe.shape)}")
+
     red_metadata, red_checkpoint = load_export_checkpoint(
         red_metadata_path,
         expected_onnx_sha256=str(models["red"]["sha256"]),
     )
-    base_payload = torch.load(base_checkpoint, map_location="cpu")
     red_payload = torch.load(red_checkpoint, map_location="cpu")
 
     try:
-        from tile_shape_classifier import build_model as build_tile_model
         from red_five_classifier import build_model as build_red_model
         from export_c8_classifiers_onnx import build_exported_model
     except ImportError:
-        from tools.recognition.tile_shape_classifier import build_model as build_tile_model
         from tools.recognition.red_five_classifier import build_model as build_red_model
         from tools.recognition.export_c8_classifiers_onnx import build_exported_model
-
-    base_config = base_payload["config"]
-    if tuple(str(value) for value in base_config["class_labels"]) != BASE_LABELS:
-        raise ValueError("Production base checkpoint class labels do not match audit contract")
-    base_fields = tuple(int(value) for value in base_config["model"]["c8_fields"])
-    base_model = build_tile_model(
-        "c8",
-        class_count=len(BASE_LABELS),
-        c8_fields=base_fields,
-    )
-    base_model.load_state_dict(base_payload["model_state_dict"])
 
     red_config = red_payload["config"]
     if str(red_config.get("input_mode")) != "rgb":
         raise ValueError("Production red-five checkpoint is not RGB")
-    red_fields = tuple(int(value) for value in red_config["model"]["c8_fields"])
+    red_fields = tuple(int(value) for value in red_config["model"]["c8_fields"] )
     red_model = build_red_model("rgb", c8_fields=red_fields)
     red_model.load_state_dict(red_payload["model_state_dict"])
-
-    # Use the same ordinary-Tensor module that was exported to the deployed ONNX.
-    # Canonical metadata records zero / near-zero source->export parity and binds the
-    # checkpoint SHA to the deployed ONNX SHA checked above.
-    base_exported = build_exported_model(base_model)
     red_exported = build_exported_model(red_model)
 
     base_session = TorchSessionAdapter(
-        base_exported,
-        checkpoint=base_checkpoint,
-        checkpoint_sha256=str(base_metadata["checkpoint"]["sha256"]),
+        base_model,
+        checkpoint=base_weights_path,
+        checkpoint_sha256=base_weights_sha256,
     )
     red_session = TorchSessionAdapter(
         red_exported,
@@ -587,11 +718,12 @@ def make_torch_sessions(
         checkpoint_sha256=str(red_metadata["checkpoint"]["sha256"]),
     )
     provenance = {
-        "base_export_metadata": str(base_metadata_path),
-        "red_export_metadata": str(red_metadata_path),
-        "base_export_parity": base_metadata.get("parity"),
-        "red_export_parity": red_metadata.get("parity"),
+        "base_architecture": str(base_architecture_path),
+        "base_architecture_sha256": sha256_file(base_architecture_path),
+        "base_weights_format": "pytorch-state-dict/v1",
         "base_runner": base_session.describe(),
+        "red_export_metadata": str(red_metadata_path),
+        "red_export_parity": red_metadata.get("parity"),
         "red_runner": red_session.describe(),
     }
     return base_session, red_session, provenance
@@ -640,10 +772,13 @@ def finalize_batch(
     base_session: Any,
     red_session: Any,
     thresholds: dict[str, float],
+    preprocess_executor: ThreadPoolExecutor | None = None,
 ) -> list[dict[str, Any]]:
     if not pending:
         return []
-    base_input = np.stack([record.pop("_gray") for record in pending])[:, None, :, :].astype(np.float32, copy=False)
+    crops = [record["_crop"] for record in pending]
+    gray_inputs = preprocess_gray_batch(crops, executor=preprocess_executor)
+    base_input = np.stack(gray_inputs)[:, None, :, :].astype(np.float32, copy=False)
     base_logits = np.asarray(base_session.run(None, {base_session.get_inputs()[0].name: base_input})[0])
     base_probs = softmax(base_logits)
     order = np.argsort(base_probs, axis=1)[:, ::-1]
@@ -665,7 +800,12 @@ def finalize_batch(
 
     red_outputs: dict[int, tuple[bool, float, float]] = {}
     if red_indices:
-        rgb_input = np.stack([preprocess_rgb_crop(pending[i]["_crop"]) for i in red_indices]).astype(np.float32, copy=False)
+        red_crops = [pending[i]["_crop"] for i in red_indices]
+        if preprocess_executor is None:
+            rgb_inputs = [preprocess_rgb_crop(crop) for crop in red_crops]
+        else:
+            rgb_inputs = list(preprocess_executor.map(preprocess_rgb_crop, red_crops))
+        rgb_input = np.stack(rgb_inputs).astype(np.float32, copy=False)
         red_logits = np.asarray(red_session.run(None, {red_session.get_inputs()[0].name: rgb_input})[0])
         red_probs = softmax(red_logits)
         red_order = np.argsort(red_probs, axis=1)[:, ::-1]
@@ -734,6 +874,7 @@ def audit_source(
     flagged_jsonl: Any,
     all_jsonl: Any | None,
     contact_candidates: list[dict[str, Any]],
+    preprocess_workers: int,
 ) -> dict[str, Any]:
     payload = load_json(source.annotations_path)
     source_annotation_sha256 = sha256_file(source.annotations_path)
@@ -757,8 +898,10 @@ def audit_source(
             flagged_csv.writerow({key: record.get(key) for key in fieldnames})
             flagged_jsonl.write(json.dumps(record, ensure_ascii=False) + "\n")
             status = record["review_status"]
-            contact_candidates.append(dict(record))
             retained_by_status[status] += 1
+            # Keep review rendering bounded during million-annotation audits.
+            if retained_by_status[status] <= 1000:
+                contact_candidates.append(dict(record))
         if summary["checked"] >= next_progress:
             print(
                 f"[audit] {source.dataset_id}/{source.split} "
@@ -768,52 +911,64 @@ def audit_source(
             while next_progress <= summary["checked"]:
                 next_progress += 100_000
 
-    for image_id, image_record in image_by_id.items():
-        image_path = safe_image_path(source.image_root, str(image_record["file_name"]))
-        with Image.open(image_path) as opened:
-            opened.load()
-            image = ImageOps.exif_transpose(opened).convert("RGB")
-        expected = (int(image_record.get("width", image.width)), int(image_record.get("height", image.height)))
-        if image.size != expected:
-            raise ValueError(f"Image size mismatch {image_path}: JSON={expected}, actual={image.size}")
+    preprocess_executor = (
+        ThreadPoolExecutor(max_workers=preprocess_workers) if preprocess_workers > 1 else None
+    )
+    try:
+        for image_id, image_record in image_by_id.items():
+            image_path = safe_image_path(source.image_root, str(image_record["file_name"]))
+            with Image.open(image_path) as opened:
+                opened.load()
+                image = ImageOps.exif_transpose(opened).convert("RGB")
+            expected = (int(image_record.get("width", image.width)), int(image_record.get("height", image.height)))
+            if image.size != expected:
+                raise ValueError(f"Image size mismatch {image_path}: JSON={expected}, actual={image.size}")
 
-        for annotation in annotations_by_image.get(image_id, []):
-            category_id = int(annotation["category_id"])
-            category = categories.get(category_id)
-            if category is None:
-                raise ValueError(f"Unknown category id {category_id} in {source.annotations_path}")
-            crop = extract_coco_crop(image, annotation["bbox"])
-            annotated_label = category.semantic_label
-            record = {
-                "dataset_id": source.dataset_id,
-                "split": source.split,
-                "source_annotation_sha256": source_annotation_sha256,
-                "annotation_id": int(annotation["id"]),
-                "image_id": image_id,
-                "image_file": str(image_record["file_name"]),
-                "image_path": str(image_path),
-                "category_id": category_id,
-                "raw_category_name": category.raw_name,
-                "annotated_label": annotated_label,
-                "annotated_base_label": None if annotated_label is None else RED_FIVE_BASE.get(annotated_label, annotated_label),
-                "bbox": [float(v) for v in annotation["bbox"]],
-                "crop_pixel_box": list(crop.pixel_box),
-                "crop_width": crop.image.width,
-                "crop_height": crop.image.height,
-                "crop_clipped": crop.clipped,
-                "crop_visible_over_requested_area": (
-                    float(crop.visible_area / crop.requested_area) if crop.requested_area > 0 else 0.0
-                ),
-                "_crop": crop.image,
-                "_gray": preprocess_gray_crop(crop.image),
-            }
-            pending.append(record)
-            if len(pending) >= batch_size:
-                consume(finalize_batch(pending, base_session=base_session, red_session=red_session, thresholds=thresholds))
-                pending = []
+            for annotation in annotations_by_image.get(image_id, []):
+                category_id = int(annotation["category_id"])
+                category = categories.get(category_id)
+                if category is None:
+                    raise ValueError(f"Unknown category id {category_id} in {source.annotations_path}")
+                crop = extract_coco_crop(image, annotation["bbox"])
+                annotated_label = category.semantic_label
+                record = {
+                    "dataset_id": source.dataset_id,
+                    "split": source.split,
+                    "source_annotation_sha256": source_annotation_sha256,
+                    "annotation_id": int(annotation["id"]),
+                    "image_id": image_id,
+                    "image_file": str(image_record["file_name"]),
+                    "image_path": str(image_path),
+                    "category_id": category_id,
+                    "raw_category_name": category.raw_name,
+                    "annotated_label": annotated_label,
+                    "annotated_base_label": None if annotated_label is None else RED_FIVE_BASE.get(annotated_label, annotated_label),
+                    "bbox": [float(v) for v in annotation["bbox"]],
+                    "crop_pixel_box": list(crop.pixel_box),
+                    "crop_width": crop.image.width,
+                    "crop_height": crop.image.height,
+                    "crop_clipped": crop.clipped,
+                    "crop_visible_over_requested_area": (
+                        float(crop.visible_area / crop.requested_area) if crop.requested_area > 0 else 0.0
+                    ),
+                    "_crop": crop.image,
+                }
+                pending.append(record)
+                if len(pending) >= batch_size:
+                    consume(finalize_batch(
+                        pending, base_session=base_session, red_session=red_session,
+                        thresholds=thresholds, preprocess_executor=preprocess_executor,
+                    ))
+                    pending = []
 
-    if pending:
-        consume(finalize_batch(pending, base_session=base_session, red_session=red_session, thresholds=thresholds))
+        if pending:
+            consume(finalize_batch(
+                pending, base_session=base_session, red_session=red_session,
+                thresholds=thresholds, preprocess_executor=preprocess_executor,
+            ))
+    finally:
+        if preprocess_executor is not None:
+            preprocess_executor.shutdown(wait=True)
 
     return {
         "dataset_id": source.dataset_id,
@@ -927,13 +1082,18 @@ def write_contact_sheets(
     rows: int = 4,
 ) -> list[str]:
     output_dir.mkdir(parents=True, exist_ok=True)
-    by_status: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    by_source_status: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for record in candidates:
-        by_status[record["review_status"]].append(record)
+        key = (
+            str(record["dataset_id"]),
+            str(record["split"]),
+            str(record["review_status"]),
+        )
+        by_source_status[key].append(record)
     outputs: list[str] = []
     cell_w, cell_h = 520, 360
     page_size = columns * rows
-    for status, records in sorted(by_status.items()):
+    for (dataset_id, split, status), records in sorted(by_source_status.items()):
         records.sort(key=lambda row: (-float(row["confidence"]), -float(row["margin"])))
         if limit_per_status >= 0:
             records = records[:limit_per_status]
@@ -955,7 +1115,9 @@ def write_contact_sheets(
                     f"bbox={record['bbox']}",
                 ]
                 draw.multiline_text((x0 + 8, y0 + 242), "\n".join(lines), fill="black", spacing=3)
-            path = output_dir / f"{status}_{page_index // page_size + 1:04d}.jpg"
+            path = output_dir / (
+                f"{dataset_id}_{split}_{status}_{page_index // page_size + 1:04d}.jpg"
+            )
             sheet.save(path, quality=90)
             outputs.append(str(path))
     return outputs
@@ -1009,7 +1171,9 @@ def run_audit(args: argparse.Namespace) -> None:
     if backend == "torch-cuda":
         base_session, red_session, inference_provenance = make_torch_sessions(
             models,
-            base_metadata_path=args.base_export_metadata.resolve(),
+            base_architecture_path=args.base_architecture.resolve(),
+            base_weights_path=args.base_weights.resolve(),
+            base_weights_sha256=str(args.base_weights_sha256),
             red_metadata_path=args.red_export_metadata.resolve(),
         )
     elif backend == "onnxruntime":
@@ -1071,6 +1235,7 @@ def run_audit(args: argparse.Namespace) -> None:
                     flagged_jsonl=jsonl_output,
                     all_jsonl=all_output,
                     contact_candidates=contact_candidates,
+                    preprocess_workers=int(args.preprocess_workers),
                 )
                 source_summaries.append(source_summary)
                 print(
@@ -1224,7 +1389,7 @@ def run_apply_corrections(args: argparse.Namespace) -> None:
 def build_parser() -> argparse.ArgumentParser:
     repository_root = Path(__file__).resolve().parents[2]
     parser = argparse.ArgumentParser(
-        description="Audit legacy COCO Mahjong tile annotations with the deployed production classifier."
+        description="Audit legacy COCO Mahjong tile annotations with the current bound tile classifier."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -1233,13 +1398,13 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument(
         "--production-root",
         type=Path,
-        default=Path("/persist/srv-bugrat/mjtensu-product/src"),
-        help="Checked-out source tree used by the actual production deployment.",
+        default=repository_root,
+        help="Source tree whose production-model-set.json defines the current classifier binding.",
     )
     audit.add_argument(
         "--output-dir",
         type=Path,
-        default=repository_root / ".local/recognition/coco_annotation_audit/production-c8",
+        default=repository_root / ".local/recognition/coco_annotation_audit/current-plain",
     )
     audit.add_argument(
         "--backend",
@@ -1248,12 +1413,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Use the provenance-linked production checkpoint on CUDA when available.",
     )
     audit.add_argument(
-        "--base-export-metadata",
+        "--base-architecture",
         type=Path,
-        default=repository_root
-        / ".local/recognition/tile_classifier_runs"
-        / "gray64_c8_rot22p5_bs512_gray35_v3_jp189_seed42"
-        / "tile-c8-gray35-v3-jp189.onnx.metadata.json",
+        default=repository_root / "mldb_data/tile-classifier/architectures/tile-plain-gray35-w500-late256-late-dw3-pw1-v1.py",
+    )
+    audit.add_argument(
+        "--base-weights",
+        type=Path,
+        default=repository_root / ".local/recognition/current_plain_audit/weights.pt",
+    )
+    audit.add_argument(
+        "--base-weights-sha256",
+        default="132e415167c1d8fb752e62c3f0de29fd568e5077589fffdcf61afb70b29c5cc5",
     )
     audit.add_argument(
         "--red-export-metadata",
@@ -1270,7 +1441,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=["coco_mahjong", "coco_mahjong_jp_v2"],
     )
     audit.add_argument("--splits", nargs="*", default=None)
-    audit.add_argument("--batch-size", type=int, default=512)
+    audit.add_argument("--batch-size", type=int, default=2048)
+    audit.add_argument("--preprocess-workers", type=int, default=min(8, os.cpu_count() or 1))
     audit.add_argument("--strong-confidence", type=float, default=0.90)
     audit.add_argument("--strong-margin", type=float, default=0.25)
     audit.add_argument("--low-confidence", type=float, default=0.60)
