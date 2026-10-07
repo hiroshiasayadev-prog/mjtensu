@@ -2187,6 +2187,7 @@ class ClearMLSDKAdapter:
         report_plotly = getattr(logger, "report_plotly", None)
         report_image = getattr(logger, "report_image", None)
         report_table = getattr(logger, "report_table", None)
+        report_media = getattr(logger, "report_media", None)
         if not callable(report_plotly):
             return
 
@@ -2251,6 +2252,22 @@ class ClearMLSDKAdapter:
                             if table_figure is not None:
                                 figures.append((label, table_figure))
                         figure = _selectable_plotly_figure(figures)
+                    elif artifact_format == "mp4":
+                        if callable(report_media):
+                            for label, child, _ref in loaded:
+                                source = _study_artifact_url(child, artifact_name)
+                                if source is None:
+                                    continue
+                                try:
+                                    report_media(
+                                        title=f"Study Video - {stage}",
+                                        series=f"{artifact_name} | {label}",
+                                        iteration=0,
+                                        url=source,
+                                    )
+                                except Exception:
+                                    pass
+                        continue
                     if figure is not None:
                         try:
                             report_plotly(
@@ -2292,6 +2309,15 @@ class ClearMLSDKAdapter:
                                     series=label,
                                     iteration=0,
                                     csv=str(path),
+                                )
+                        elif artifact_format == "mp4" and callable(report_media):
+                            source = _study_artifact_url(child, artifact_name)
+                            if source is not None:
+                                report_media(
+                                    title=f"Study Video - {stage}",
+                                    series=f"{artifact_name} | {label}",
+                                    iteration=0,
+                                    url=source,
                                 )
                     except Exception:
                         pass

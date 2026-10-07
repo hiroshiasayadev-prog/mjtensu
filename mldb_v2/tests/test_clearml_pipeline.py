@@ -222,6 +222,7 @@ class FakeSDKTask:
         self.single_values: dict[str, float] = {}
         self.plotly_reports: list[dict[str, object]] = []
         self.table_reports: list[dict[str, object]] = []
+        self.media_reports: list[dict[str, object]] = []
         self.flush_calls: list[bool] = []
         self.comment = ""
 
@@ -338,6 +339,9 @@ class FakeSDKTask:
 
     def report_table(self, **kwargs) -> None:
         self.table_reports.append(deepcopy(kwargs))
+
+    def report_media(self, **kwargs) -> None:
+        self.media_reports.append(deepcopy(kwargs))
 
     def set_comment(self, comment: str) -> None:
         self.comment = comment
@@ -839,6 +843,49 @@ def test_selectable_image_figure_keeps_large_study_projection_small() -> None:
     payload = json.dumps(figure)
     assert len(payload.encode("utf-8")) < 50_000
     assert payload.count("https://web.example.test/files/contact-") == 43
+
+
+def test_study_select_mp4_projects_video_media_to_controller() -> None:
+    FakeSDKTask.reset()
+    plan = _plan()
+    result = _result(plan)
+    adapter = ClearMLSDKAdapter(ClearMLSDKSettings(), task_class=FakeSDKTask)
+    pipeline_id = cast(str, adapter.create_pipeline_run(_pipeline_request(plan, result)))
+    child = FakeSDKTask(project="mldb/demo", task_id="video-child")
+    child.status = "completed"
+    artifact = type("Artifact", (), {})()
+    artifact.url = "https://files.example.test/mldb/video-child/overlay.mp4"
+    child.artifacts["evaluation/overlay_video"] = artifact
+    FakeSDKTask.tasks.append(child)
+    summary = {
+        "schema": "mjtensu.mldb-v2/study-summary-projection/v4",
+        "study_result": result["id"],
+        "study": result["study"],
+        "status": "completed",
+        "rows": [],
+        "comparisons": [{
+            "stage": "recognition-functional-video",
+            "metrics": [],
+            "artifacts": {"overlay_video": {"format": "mp4", "study_view": "select"}},
+            "rows": [{
+                "trial": "trial-0001",
+                "trial_label": "jp_fraction=0.0",
+                "disposition": "completed",
+                "execution_id": child.id,
+                "metrics": {},
+                "artifacts": {"overlay_video": {"uri": "s3://example/overlay.mp4"}},
+            }],
+        }],
+    }
+    adapter.project_pipeline_summary(execution_id=pipeline_id, summary=summary)
+    controller = FakeSDKTask.get_task(task_id=pipeline_id)
+    assert controller is not None
+    assert controller.media_reports == [{
+        "title": "Study Video - recognition-functional-video",
+        "series": "overlay_video | jp_fraction=0.0",
+        "iteration": 0,
+        "url": "https://files.example.test/mldb/video-child/overlay.mp4",
+    }]
 
 
 def test_pipeline_summary_table_failure_is_observational() -> None:
