@@ -3,9 +3,11 @@ from __future__ import annotations
 from collections import OrderedDict
 from copy import deepcopy
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast
 
 import pytest
+import mldb_v2.src.backend._clearml_sdk as clearml_sdk_module
 
 from mldb_v2.src.backend._clearml_admission import (
     ClearMLAdmissionService,
@@ -666,6 +668,63 @@ def test_sdk_prebuilt_runtime_cpu_route_uses_system_python_without_gpu_flag() ->
     }]
     assert "--gpus" not in FakeSDKTask.docker_calls[0]["docker_arguments"]
     assert FakeSDKTask.package_calls and "onnxruntime==1.28.0" in FakeSDKTask.package_calls[0]
+
+
+def test_sdk_runtime_image_profile_uses_digest_and_cpu_route_can_disable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    FakeSDKTask.reset()
+    calls: list[tuple[str, object]] = []
+
+    class FakeRuntimeRegistryClient:
+        def __init__(self, base_url: str, *, ca_bundle=None, **_kwargs) -> None:
+            calls.append(("client", (base_url, ca_bundle)))
+
+        def runtime_image(
+            self,
+            version: int,
+            profile: str,
+            *,
+            wait_seconds: int,
+            **_kwargs,
+        ):
+            calls.append(("resolve", (version, profile, wait_seconds)))
+            return SimpleNamespace(
+                image_ref="registry.example/mjtensu/gpu-runtime@sha256:" + "a" * 64
+            )
+
+    monkeypatch.setattr(clearml_sdk_module, "RuntimeRegistryClient", FakeRuntimeRegistryClient)
+    settings = ClearMLSDKSettings(
+        docker_image="fallback:latest",
+        docker_gpu="all",
+        runtime_registry_url="https://runtime-registry.example/",
+        runtime_registry_ca_bundle="/tmp/ca.pem",
+        runtime_image_profile="gpu-cu124",
+        runtime_image_wait_seconds=123,
+        stage_routes={
+            "holdout": {
+                "queue": "latency-cpu",
+                "docker_gpu": None,
+                "runtime_image_profile": None,
+            }
+        },
+        prebuilt_runtime=True,
+    )
+    adapter = ClearMLSDKAdapter(settings, task_class=FakeSDKTask)
+
+    training_task_id = adapter.create_task(_sdk_request(_training_stage_input()))
+    assert training_task_id == "sdk-1"
+    assert FakeSDKTask.docker_calls[-1]["docker_image"] == (
+        "registry.example/mjtensu/gpu-runtime@sha256:" + "a" * 64
+    )
+    assert ("resolve", (1, "gpu-cu124", 123)) in calls
+
+    FakeSDKTask.reset()
+    adapter = ClearMLSDKAdapter(settings, task_class=FakeSDKTask)
+    evaluation_task_id = adapter.create_task(_sdk_request(_evaluation_stage_input()))
+    assert evaluation_task_id == "sdk-1"
+    assert FakeSDKTask.docker_calls[-1]["docker_image"] == "fallback:latest"
+    assert "--gpus" not in FakeSDKTask.docker_calls[-1]["docker_arguments"]
 
 
 def test_sdk_retry_task_is_not_owner_and_owner_projection_aggregates_attempts() -> None:

@@ -19,6 +19,12 @@ def _metadata_dict(metadata) -> dict[str, object]:
     return asdict(metadata)
 
 
+def _image_dict(image) -> dict[str, object]:
+    payload = asdict(image)
+    payload["image_ref"] = image.image_ref
+    return payload
+
+
 def make_handler(service: RuntimeRegistryService):
     class Handler(BaseHTTPRequestHandler):
         server_version = "mldb-runtime-registry/1"
@@ -37,6 +43,27 @@ def make_handler(service: RuntimeRegistryService):
 
         def do_GET(self) -> None:  # noqa: N802
             path, query = self._path_and_query()
+            if path == "/image":
+                raw_version = query.get("version", [None])[0]
+                profile = query.get("profile", [None])[0]
+                try:
+                    version = int(raw_version) if raw_version is not None else 0
+                    if version <= 0 or type(profile) is not str or not profile:
+                        raise ValueError
+                    image = service.ensure_image(version, profile)
+                except ValueError as exc:
+                    self._json(400, {"error": "invalid_image_request", "detail": str(exc)})
+                    return
+                except RegistryNotFound as exc:
+                    self._json(404, {"error": "registry_not_found", "detail": str(exc)})
+                    return
+                status = 200
+                if image.state == "BUILDING":
+                    status = 202
+                elif image.state == "FAILED":
+                    status = 424
+                self._json(status, _image_dict(image))
+                return
             if path != "/":
                 self._json(404, {"error": "not_found"})
                 return
@@ -85,6 +112,7 @@ def make_handler(service: RuntimeRegistryService):
                 return
             response = _metadata_dict(result.metadata)
             response["created"] = result.created
+            response["images"] = [_image_dict(image) for image in result.images]
             self._json(201 if result.created else 200, response)
 
     return Handler

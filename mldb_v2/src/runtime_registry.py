@@ -76,6 +76,16 @@ class RuntimeImageArtifact:
 
 
 @dataclass(frozen=True)
+class RuntimeImageArtifact:
+    version: int
+    profile: str
+    repository: str
+    tag: str
+    digest: str
+    image_ref: str
+
+
+@dataclass(frozen=True)
 class RuntimeConvergenceReport:
     version: int
     changed: bool

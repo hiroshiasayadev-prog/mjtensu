@@ -7,7 +7,7 @@ import unittest
 from unittest import mock
 
 from mldb_v2.services.runtime_registry.core import RegistryCorruption, RegistryStore
-from mldb_v2.services.runtime_registry.service import RuntimeRegistryService
+from mldb_v2.services.runtime_registry.service import RuntimeImagePolicy, RuntimeRegistryService
 from mldb_v2.services.runtime_registry.validator import UvSyncValidationError, UvSyncValidator
 
 
@@ -78,6 +78,60 @@ class RuntimeRegistryTests(unittest.TestCase):
             with self.assertRaises(UvSyncValidationError):
                 service.set(b"p", b"l")
             self.assertEqual(objects.objects, {})
+
+    def test_set_queues_runtime_image_without_waiting_for_build(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            objects = MemoryObjectStore()
+            validator = RecordingValidator()
+            store = RegistryStore(Path(tmp) / "registry.sqlite3", objects, "registry-bucket")
+            policy = RuntimeImagePolicy(
+                profile="gpu-cu124",
+                recipe_version="gpu-cu124-v1",
+                repository="registry.example/mjtensu/gpu-runtime",
+                base_image="registry.example/mjtensu/gpu-base@sha256:" + "a" * 64,
+            )
+            service = RuntimeRegistryService(store, validator, (policy,))
+            result = service.set(b"p", b"l")
+
+            self.assertTrue(result.created)
+            self.assertEqual(result.images[0].state, "BUILDING")
+            self.assertEqual(result.images[0].tag, "rr-v1")
+            self.assertIsNone(result.images[0].image_ref)
+
+            store.mark_image_ready(1, "gpu-cu124", "sha256:" + "b" * 64)
+            ready = service.ensure_image(1, "gpu-cu124")
+            self.assertEqual(ready.state, "READY")
+            self.assertEqual(
+                ready.image_ref,
+                "registry.example/mjtensu/gpu-runtime@sha256:" + "b" * 64,
+            )
+
+            store.mark_image_missing(1, "gpu-cu124")
+            rebuilt = service.ensure_image(1, "gpu-cu124")
+            self.assertEqual(rebuilt.state, "BUILDING")
+            self.assertEqual(rebuilt.recipe_version, "gpu-cu124-v1")
+
+    def test_ready_image_cache_orders_by_recent_access(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            objects = MemoryObjectStore()
+            validator = RecordingValidator()
+            store = RegistryStore(Path(tmp) / "registry.sqlite3", objects, "registry-bucket")
+            policy = RuntimeImagePolicy(
+                profile="gpu-cu124",
+                recipe_version="gpu-cu124-v1",
+                repository="registry.example/mjtensu/gpu-runtime",
+                base_image="registry.example/mjtensu/gpu-base@sha256:" + "a" * 64,
+            )
+            service = RuntimeRegistryService(store, validator, (policy,))
+            for version in range(1, 4):
+                result = service.set(f"p{version}".encode(), f"l{version}".encode())
+                self.assertEqual(result.metadata.version, version)
+                store.mark_image_ready(version, "gpu-cu124", "sha256:" + str(version) * 64)
+
+            service.ensure_image(1, "gpu-cu124")
+            order = [image.version for image in store.ready_images("gpu-cu124")]
+            self.assertEqual(order[0], 1)
+            self.assertEqual(set(order), {1, 2, 3})
 
     def test_uv_validator_uses_clean_locked_sync(self) -> None:
         seen: dict[str, object] = {}

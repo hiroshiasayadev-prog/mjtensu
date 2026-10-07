@@ -107,8 +107,12 @@ def test_existing_runtime_configuration_mapping_matches_consumers() -> None:
         "CLEARML_API_ACCESS_KEY": "test-access",
         "CLEARML_API_SECRET_KEY": "test-secret",
         "MLDB_V2_CLEARML_QUEUE": "default",
-        "MLDB_V2_CLEARML_STAGE_ROUTES_JSON": '{"onnx-cpu-latency":{"queue":"latency-cpu","docker_gpu":null}}',
+        "MLDB_V2_CLEARML_STAGE_ROUTES_JSON": '{"onnx-cpu-latency":{"queue":"latency-cpu","docker_gpu":null,"runtime_image_profile":null}}',
         "MLDB_V2_CLEARML_PREBUILT_RUNTIME": "true",
+        "MLDB_V2_RUNTIME_REGISTRY_URL": "https://runtime-registry.example.invalid/",
+        "MLDB_RUNTIME_REGISTRY_CA_BUNDLE": "/tmp/runtime-registry-ca.pem",
+        "MLDB_V2_CLEARML_RUNTIME_IMAGE_PROFILE": "gpu-cu124",
+        "MLDB_V2_CLEARML_RUNTIME_IMAGE_WAIT_SECONDS": "45",
         "MLDB_V2_CLEARML_REPOSITORY": "https://github.com/example/repo.git",
         "MLDB_V2_CLEARML_DOCKER_IMAGE": "python:3.10-slim-bookworm",
         "MLDB_V2_CLEARML_DOCKER_ENV_FILE": "/srv/bugrat/clearml/.env",
@@ -133,7 +137,11 @@ def test_existing_runtime_configuration_mapping_matches_consumers() -> None:
     assert settings.secret_key == environment["CLEARML_API_SECRET_KEY"]
     assert backend_config.options["queue"] == "default"
     assert backend_config.options["stage_routes"] == {
-        "onnx-cpu-latency": {"queue": "latency-cpu", "docker_gpu": None}
+        "onnx-cpu-latency": {
+            "queue": "latency-cpu",
+            "docker_gpu": None,
+            "runtime_image_profile": None,
+        }
     }
     assert settings.stage_routes == backend_config.options["stage_routes"]
     assert settings.prebuilt_runtime is True
@@ -142,6 +150,10 @@ def test_existing_runtime_configuration_mapping_matches_consumers() -> None:
     assert settings.docker_env_file == "/srv/bugrat/clearml/.env"
     assert settings.docker_gpu == "all"
     assert settings.docker_shm_size == "2g"
+    assert settings.runtime_registry_url == environment["MLDB_V2_RUNTIME_REGISTRY_URL"]
+    assert settings.runtime_registry_ca_bundle == environment["MLDB_RUNTIME_REGISTRY_CA_BUNDLE"]
+    assert settings.runtime_image_profile == "gpu-cu124"
+    assert settings.runtime_image_wait_seconds == 45
     assert settings.s3_endpoint_url == environment["MLDB_S3_ENDPOINT_URL"]
     assert settings.s3_region == environment["MLDB_S3_REGION"]
     assert settings.runtime_data_root == "runtime-data"

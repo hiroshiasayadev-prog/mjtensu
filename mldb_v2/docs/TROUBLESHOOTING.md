@@ -44,24 +44,24 @@ A retry must not create a second logical stage just because admission status was
 
 Typical causes are source checkout, package/container setup, Docker arguments, runtime-registry bootstrap, or credentials. Verify the pinned Git commit is remote-reachable, repository URL is correct, the configured Docker image exists, and ClearML credentials/endpoints are present in the launching process.
 
-On `precision5820-gpu3060`, also verify that the Task received `MLDB_RUNTIME_REGISTRY_VERSION`, the worker-injected registry root/internal endpoint are present, `/usr/local/bin/uv` is mounted, and the managed runtime root is writable. The bootstrap is fail-closed: a failed convergence must leave the previous `current.json` marker unchanged.
+For a GPU Task, verify that the controller resolved the pinned `MLDB_RUNTIME_REGISTRY_VERSION` to a READY `gpu-cu124` image and that ClearML's `docker_cmd` uses the returned `repository@sha256:...` reference. The worker no longer mounts or mutates a managed runtime directory.
 
 Use the Task logs. Do not classify this as a Training Protocol failure until the harness actually enters domain execution.
 
-## Runtime registry / managed environment failure
+## Runtime registry / materialized image failure
 
-First distinguish run-level pinning from worker enforcement. The Study Result should contain one positive `runtime_registry_version`, and every StageInput for that Study should carry the same value. If a stage shows a different value, treat it as a lifecycle/provenance defect; do not resolve `latest` again to repair it.
+First distinguish run-level pinning from image materialization. The Study Result should contain one positive `runtime_registry_version`, and every StageInput for that Study should carry the same value. If a stage shows a different value, treat it as a lifecycle/provenance defect; do not resolve `latest` again to repair it.
 
-For a migrated worker (`precision5820-gpu3060` or `old-gpu3090`), check:
+For a GPU stage, check:
 
 1. the pinned snapshot exists through `GET /?version=N`;
-2. the worker-specific `.../clearml/runtime-registry/<worker-id>/current.json` still names the last successfully verified version;
-3. the reusable venv exists and is `include-system-site-packages = true`;
-4. the Task is actually re-executed as `/mldb-runtime-registry/venv/bin/python ...`;
-5. version changes acquire the exclusive runtime lock while running Tasks retain a shared lock;
-6. package verification succeeds after differential `uv pip` operations.
+2. `GET /image?version=N&profile=gpu-cu124` is READY rather than BUILDING/FAILED;
+3. the returned reference is digest-qualified (`repository@sha256:...`);
+4. the ClearML Task `docker_cmd` uses exactly that reference;
+5. the GPU parent worker reports compiled bootstrap v1.0.6 with a host-visible bootstrap directory;
+6. Task setup reports that no pip version is configured, keeps the baked pip, and installs zero additional packages.
 
-Do not delete the marker or venv merely to force progress unless corruption has been established. Do not manually advance the marker. A base-image package that must be removed entirely cannot currently be hidden by the system-site-packages overlay; that case intentionally fails closed and requires a base-runtime/worker design change.
+If an old image is MISSING, request the image endpoint and let the builder reconstruct it. Do not edit SQLite/materialization rows or canonical Study Results by hand.
 
 Pre-registry historical Study Results may lack `runtime_registry_version`. They remain readable, but reproducible rerun/recovery must not silently substitute current `latest`.
 
@@ -75,7 +75,7 @@ Do not change artifact URIs or hashes in canonical records to match whatever byt
 
 Separate scheduling from domain execution. A Task reaching a worker does not prove CUDA is available inside the Task container.
 
-Check the Docker image, GPU selector, worker Docker/NVIDIA runtime, and Protocol-specific requirements. The current prebuilt runtime is `mldb-clearml-runner:torch2.5.1-cu124-v1`. GPU availability still depends on the selected worker and Docker GPU route; registry package convergence does not provision a GPU device by itself.
+Check the digest-qualified runtime image, GPU selector, worker Docker/NVIDIA runtime, and Protocol-specific requirements. GPU availability still depends on the selected worker and Docker GPU route; materializing a registry image does not provision a GPU device by itself.
 
 Classifier verification can require `cache_device=cuda` to prevent silent CPU fallback. The rotated detector Protocol already requires CUDA.
 

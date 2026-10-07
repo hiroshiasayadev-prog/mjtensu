@@ -47,9 +47,9 @@ Never work around `source_not_pinned` by shipping an ad-hoc working-tree patch t
 
 ## Current validated path
 
-As of 2026-10-02, the global runtime registry is live at v2 with 67 direct pins / 86 resolved packages. v2 extends the initial worker baseline with `opencv-python-headless==4.11.0.86` so the recognition functional-video render runtime is represented by the global Python snapshot.
+As of the 2026-10-03 rollout, the global runtime registry and image pipeline are live; concurrent NanoDet dependency publication advanced the registry through v7 during verification. The immutable Python snapshot is materialized asynchronously into a digest-pinned `gpu-cu124` OCI image stored by the Garage-backed private registry.
 
-Registry enforcement is active on both `precision5820-gpu3060` and `old-gpu3090`. The old RTX 3090 worker keeps its `default` and `recognition-functional` queues and its Chrome/ffmpeg render image while re-executing MLDB through the same reusable managed-venv mechanism. `old-cpu`, `old-iphone`, and `dev-wsl-gpu3060` are not yet migrated. Earlier RTX 3090 telemetry/result-acceptance evidence remains valid historical evidence in `records/tasks/MLDB-V2-TASK-010-05-verify-clearml-telemetry-closure.md`.
+GPU image enforcement is active on `precision5820-gpu3060`, `old-gpu3090`, and `dev-wsl-gpu3060`. All three pull the same Task image digest, and their parent ClearML workers also use one digest-pinned worker image with compiled bootstrap v1.0.6 so Task startup does not install or upgrade Python packages. The old RTX 3090 keeps its `default` and `recognition-functional` queues. CPU/iPhone-specialized routes currently opt out of GPU image materialization and keep their static runtime path. Earlier RTX 3090 telemetry/result-acceptance evidence remains valid historical evidence in `records/tasks/MLDB-V2-TASK-010-05-verify-clearml-telemetry-closure.md`.
 
 ## Repository map
 
