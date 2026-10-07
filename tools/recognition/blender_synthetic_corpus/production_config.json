@@ -1,0 +1,86 @@
+{
+  "schema": "mjtensu.blender-synthetic-nanodet-config/v1",
+  "render": {
+    "width": 768,
+    "height": 432,
+    "samples": 12,
+    "jpeg_quality": 92
+  },
+  "composite": {
+    "width": 320,
+    "height": 320,
+    "padding_rgb": [0, 0, 0],
+    "min_retained_area_ratio": 0.6,
+    "regions": {
+      "completed_hand": {
+        "destination": [7, 0, 306, 72],
+        "source_aspect": [17, 4],
+        "base_crop": [58, 208, 442, 104],
+        "jitter_xy": [22, 14],
+        "size_multiplier": [0.94, 1.06]
+      },
+      "dora_indicators": {
+        "destination": [7, 74, 306, 72],
+        "source_aspect": [17, 4],
+        "base_crop": [58, 98, 442, 104],
+        "jitter_xy": [30, 18],
+        "size_multiplier": [0.92, 1.10]
+      },
+      "melds": {
+        "destination": [74, 148, 172, 172],
+        "source_aspect": [1, 1],
+        "base_crop": [492, 96, 216, 216],
+        "jitter_xy": [24, 20],
+        "size_multiplier": [0.92, 1.08]
+      }
+    }
+  },
+  "tile": {
+    "width_m": 0.0195,
+    "depth_m": 0.0272,
+    "body_height_m": 0.0125,
+    "back_height_m": 0.0032,
+    "bevel_m": 0.0017,
+    "decal_margin_m": 0.0016
+  },
+  "table": {
+    "felt_width_m": 0.53,
+    "felt_depth_m": 0.31,
+    "frame_width_m": 0.028,
+    "frame_height_m": 0.018,
+    "wood_margin_m": 0.13
+  },
+  "coverage": {
+    "meld_count_weights": [0.20, 0.20, 0.20, 0.20, 0.20],
+    "white_dragon_meld_probability_when_present": 0.28,
+    "winning_tile_separation_probability": 0.32,
+    "placement_regime_weights": {
+      "neat": 0.28,
+      "ordinary": 0.52,
+      "messy": 0.20
+    },
+    "lighting_temperature_weights": {
+      "warm": 0.31,
+      "neutral": 0.38,
+      "cool": 0.31
+    },
+    "lighting_brightness_weights": {
+      "bright": 0.30,
+      "normal": 0.46,
+      "dim": 0.24
+    },
+    "partial_shadow_probability": 0.28,
+    "glare_probability": 0.20,
+    "edge_proximity_probability": 0.18
+  },
+  "camera": {
+    "height_m": [0.63, 0.73],
+    "lens_mm": [39.0, 47.0],
+    "target_x_m": [-0.012, 0.012],
+    "target_y_m": [-0.010, 0.010],
+    "roll_deg": [-2.1, 2.1],
+    "lateral_x_m": [-0.014, 0.014],
+    "lateral_y_m": [-0.012, 0.012],
+    "exposure_ev": [-0.9, 0.7]
+  }
+}

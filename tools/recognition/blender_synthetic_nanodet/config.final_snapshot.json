@@ -1,0 +1,37 @@
+{
+  "schema": "mjtensu.blender-synthetic-nanodet-config/v1",
+  "render": {
+    "width": 640,
+    "height": 360
+  },
+  "coverage": {
+    "meld_count_weights": [
+      0.24,
+      0.18,
+      0.2,
+      0.2,
+      0.18
+    ],
+    "white_meld_probability_given_present": 0.22,
+    "meld_edge_near_probability": 0.18
+  },
+  "placement": {
+    "regime_weights": [
+      0.25,
+      0.5,
+      0.25
+    ]
+  },
+  "annotation": {
+    "min_retained_area_ratio": 0.985
+  },
+  "runtime": {
+    "progress_every": 25,
+    "max_attempts_per_image": 64
+  },
+  "capture_reference": {
+    "viewport_width": 750,
+    "viewport_height": 334,
+    "source_geometry_note": "Representative mjtensu iPhone runtime viewport from capture metadata; guide math is ported from pwa_capture_dataset/src/layout.ts."
+  }
+}
