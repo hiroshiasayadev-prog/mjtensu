@@ -24,6 +24,7 @@ from mldb_v2.src.backend._clearml_sdk import (
     _comparison_bar_figure,
     _selectable_image_figure,
     _selectable_plotly_figure,
+    _selectable_video_figure,
     _study_artifact_url,
 )
 from mldb_v2.src.backend._config import BackendConfig
@@ -495,6 +496,39 @@ def test_comparison_bar_colors_follow_metric_preference_without_reordering() -> 
     assert accuracy["layout"]["hoverlabel"]["font"]["color"] == "#FFFFFF"
 
 
+def test_comparison_bar_uses_visible_source_condition_instead_of_trial_id() -> None:
+    figure = _comparison_bar_figure(
+        stage="quality",
+        evaluation_name="Quality",
+        metric_name="score",
+        metric_preference="higher",
+        rows=[
+            {
+                "trial": "trial-0001",
+                "trial_label": "NanoDet baseline · trial-0001",
+                "source_parameters": {"batch_size": 6, "seed": 42},
+                "parameters": {"split": "val"},
+                "metrics": {"score": 0.8},
+            },
+            {
+                "trial": "trial-0002",
+                "trial_label": "NanoDet baseline · trial-0002",
+                "source_parameters": {"batch_size": 12, "seed": 42},
+                "parameters": {"split": "val"},
+                "metrics": {"score": 0.9},
+            },
+        ],
+    )
+
+    assert figure is not None
+    assert figure["data"][0]["y"] == [
+        "NanoDet baseline · batch_size=6",
+        "NanoDet baseline · batch_size=12",
+    ]
+    assert "trial-0001" not in json.dumps(figure)
+    assert "trial-0002" not in json.dumps(figure)
+
+
 def test_comparison_bar_ties_share_rank_color() -> None:
     figure = _comparison_bar_figure(
         stage="quality",
@@ -585,7 +619,7 @@ def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion()
     )
     assert comparison["series"] == "quality"
     assert comparison["table_plot"] == [
-        ["Trial", "Status", "accuracy", "loss"],
+        ["Condition / model", "Status", "accuracy", "loss"],
         ["Readable model", "completed", 0.9, 0.2],
     ]
     assert comparison["extra_layout"] == {"height": 320}
@@ -616,6 +650,140 @@ def test_sdk_adapter_projects_study_comparison_tables_without_scalar_explosion()
     assert controller.status == "completed"
 
 
+
+
+def test_sdk_adapter_projects_numeric_evaluation_parameter_sweep_as_lines() -> None:
+    FakeSDKTask.reset()
+    plan = _plan()
+    result = _result(plan)
+    adapter = ClearMLSDKAdapter(ClearMLSDKSettings(), task_class=FakeSDKTask)
+    pipeline_id = cast(str, adapter.create_pipeline_run(_pipeline_request(plan, result)))
+    rows = [
+        {
+            "trial": "trial-0001",
+            "trial_label": "NanoDet baseline · trial-0001",
+            "architecture": "demo/nanodet-v1",
+            "model": "demo/model-v1",
+            "source_parameters": {"batch_size": 24, "seed": 42},
+            "disposition": "completed",
+            "parameters": {
+                "score_threshold": threshold,
+                "nms_iou_threshold": 0.6,
+                "split": "val",
+            },
+            "metrics": {"f1": f1, "recall": recall},
+        }
+        for threshold, f1, recall in [
+            (0.45, 0.86, 0.95),
+            (0.40, 0.84, 0.96),
+            (0.50, 0.88, 0.94),
+        ]
+    ]
+    summary = {
+        "schema": "mjtensu.mldb-v2/study-summary-projection/v4",
+        "study_result": result["id"],
+        "study": result["study"],
+        "status": "completed",
+        "rows": [],
+        "comparisons": [{
+            "stage": "bbox-pathology",
+            "evaluation_protocol": "demo/eval-v1",
+            "evaluation_name": "BBox pathology",
+            "evaluation_description": "Measures product-facing detector pathology.",
+            "metrics": ["f1", "recall"],
+            "metric_preferences": {"f1": "higher", "recall": "higher"},
+            "metric_descriptions": {},
+            "rows": rows,
+        }],
+    }
+
+    adapter.project_pipeline_summary(execution_id=pipeline_id, summary=summary)
+    controller = FakeSDKTask.get_task(task_id=pipeline_id)
+    assert controller is not None
+
+    table = next(
+        report for report in controller.table_reports
+        if report["title"] == "Study Comparison"
+    )
+    assert table["table_plot"][0] == [
+        "Condition / model", "score_threshold", "Status", "f1", "recall"
+    ]
+    assert [row[:2] for row in table["table_plot"][1:]] == [
+        ["NanoDet baseline", 0.45],
+        ["NanoDet baseline", 0.4],
+        ["NanoDet baseline", 0.5],
+    ]
+
+    sweeps = [
+        report for report in controller.plotly_reports
+        if report["title"] == "Model Comparison - bbox-pathology"
+    ]
+    assert [report["series"] for report in sweeps] == ["f1", "recall"]
+    f1_figure = sweeps[0]["figure"]
+    assert len(f1_figure["data"]) == 1
+    assert f1_figure["data"][0]["type"] == "scatter"
+    assert f1_figure["data"][0]["mode"] == "lines+markers"
+    assert f1_figure["data"][0]["x"] == [0.4, 0.45, 0.5]
+    assert f1_figure["data"][0]["y"] == [0.84, 0.86, 0.88]
+    assert f1_figure["layout"]["xaxis"]["title"]["text"] == "score_threshold"
+    assert "trial-0001" not in json.dumps(f1_figure)
+    assert all(report["iteration"] == 0 for report in sweeps)
+
+
+def test_terminal_summary_reprojection_advances_comparison_iteration() -> None:
+    FakeSDKTask.reset()
+    plan = _plan()
+    result = _result(plan)
+    adapter = ClearMLSDKAdapter(ClearMLSDKSettings(), task_class=FakeSDKTask)
+    pipeline_id = cast(str, adapter.create_pipeline_run(_pipeline_request(plan, result)))
+    summary = {
+        "schema": "mjtensu.mldb-v2/study-summary-projection/v4",
+        "study_result": result["id"],
+        "study": result["study"],
+        "status": "completed",
+        "rows": [],
+        "comparisons": [{
+            "stage": "quality",
+            "evaluation_protocol": "demo/eval-v1",
+            "evaluation_name": "Quality",
+            "evaluation_description": "Quality sweep.",
+            "metrics": ["score"],
+            "metric_preferences": {"score": "higher"},
+            "metric_descriptions": {},
+            "rows": [
+                {
+                    "trial": "trial-0001",
+                    "trial_label": "Model A",
+                    "source_parameters": {"batch_size": 24},
+                    "parameters": {"threshold": 0.4},
+                    "disposition": "completed",
+                    "metrics": {"score": 0.8},
+                },
+                {
+                    "trial": "trial-0001",
+                    "trial_label": "Model A",
+                    "source_parameters": {"batch_size": 24},
+                    "parameters": {"threshold": 0.5},
+                    "disposition": "completed",
+                    "metrics": {"score": 0.9},
+                },
+            ],
+        }],
+    }
+
+    adapter.project_pipeline_summary(execution_id=pipeline_id, summary=summary)
+    controller = FakeSDKTask.get_task(task_id=pipeline_id)
+    assert controller is not None
+    assert controller.plotly_reports[-1]["iteration"] == 0
+    assert controller.table_reports[-1]["iteration"] == 0
+
+    controller.mark_started(force=True)
+    adapter.project_pipeline_summary(execution_id=pipeline_id, summary=summary)
+
+    assert controller.plotly_reports[-1]["iteration"] == 1
+    assert controller.table_reports[-1]["iteration"] == 1
+    assert controller.plotly_reports[-1]["title"] == "Model Comparison - quality"
+    assert controller.plotly_reports[-1]["figure"]["data"][0]["type"] == "scatter"
 
 
 def test_pipeline_summary_defers_comparison_events_until_terminal_status() -> None:
@@ -823,6 +991,26 @@ def test_study_artifact_url_uses_clearml_web_files_proxy(monkeypatch) -> None:
     assert _study_artifact_url(task, "contact_sheet") == (
         "https://web.example.test/files/mldb/task/artifacts/contact.png"
     )
+
+
+def test_selectable_video_figure_uses_media_metadata_without_embedding_bytes() -> None:
+    figure = _selectable_video_figure([
+        ("threshold 0.55", "https://clearml.example/files/a.mp4"),
+        ("threshold 0.575", "https://clearml.example/files/b.mp4"),
+    ])
+    assert figure is not None
+    assert figure["data"][0]["type"] == "scatter"
+    media = figure["layout"]["meta"]["mldb_study_media"]
+    assert media == {
+        "kind": "video",
+        "items": [
+            {"label": "0.55", "url": "https://clearml.example/files/a.mp4"},
+            {"label": "0.575", "url": "https://clearml.example/files/b.mp4"},
+        ],
+    }
+    payload = json.dumps(figure)
+    assert "data:video" not in payload
+    assert len(payload) < 2000
 
 
 def test_selectable_image_figure_keeps_large_study_projection_small() -> None:

@@ -8,6 +8,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal, Protocol, cast
 
+from mldb_v2.src.backend._clearml_project_routing import _clearml_project_for_reference
 from mldb_v2.src.backend.study_execution import (
     BackendStudyExecutionObservation,
     StudyExecutionKey,
@@ -275,7 +276,7 @@ class ClearMLPipelineService:
         self, *, plan: StudyPlan, study_result: StudyResult
     ) -> BackendStudyExecutionObservation:
         plan, study_result = _validate_pair(plan, study_result)
-        project = f"mldb/{_namespace(study_result['id'])}"
+        project = _clearml_project_for_reference(study_result["id"])
         ownership = _pipeline_ownership_key(plan, study_result)
         metadata = _metadata(plan, study_result, ownership_key=ownership)
         configuration = _configuration(plan, study_result, ownership_key=ownership)
@@ -362,7 +363,7 @@ class ClearMLPipelineService:
         self, *, plan: StudyPlan, study_result: StudyResult
     ) -> BackendStudyExecutionObservation | None:
         plan, study_result = _validate_pair(plan, study_result)
-        project = f"mldb/{_namespace(study_result['id'])}"
+        project = _clearml_project_for_reference(study_result["id"])
         ownership = _pipeline_ownership_key(plan, study_result)
         metadata = _metadata(plan, study_result, ownership_key=ownership)
         configuration = _configuration(plan, study_result, ownership_key=ownership)

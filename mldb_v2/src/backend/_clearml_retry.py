@@ -21,6 +21,7 @@ from mldb_v2.src.backend._clearml_admission import (
     _transport_stage_input,
     _validate_stage_input_identity,
 )
+from mldb_v2.src.backend._clearml_project_routing import _clearml_project_for_namespace
 from mldb_v2.src.backend._clearml_observation import (
     ClearMLObservationService,
     _stage_key_from_input,
@@ -123,7 +124,7 @@ class ClearMLRetryService:
         namespace, study_id = _validate_stage_input_identity(stage_input)
         if stage_input["kind"] != "evaluation":
             raise ClearMLRetryError("retry-stage currently supports evaluation stages only")
-        project = f"mldb/{namespace}"
+        project = _clearml_project_for_namespace(namespace)
         ownership_key = _ownership_key(stage_input)
         stage_input_json = _transport_stage_input(stage_input)
         pipeline_step = (

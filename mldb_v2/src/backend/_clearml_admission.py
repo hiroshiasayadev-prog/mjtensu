@@ -8,6 +8,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol, cast
 
+from mldb_v2.src.backend._clearml_project_routing import _clearml_project_for_namespace
 from mldb_v2.src.backend.execution_harness import CommonExecutionHarness
 from mldb_v2.src.backend.stage_input import StageInput
 from mldb_v2.src.common.ids import (
@@ -381,7 +382,7 @@ class ClearMLAdmissionService:
         ):
             raise ValueError("pipeline_execution_id must be null or a non-empty string")
         namespace, study_id = _validate_stage_input_identity(stage_input)
-        project = f"mldb/{namespace}"
+        project = _clearml_project_for_namespace(namespace)
         ownership_key = _ownership_key(stage_input)
         stage_input_json = _transport_stage_input(stage_input)
         pipeline_step = (

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, Protocol, cast
 
+from mldb_v2.src.backend._clearml_project_routing import _clearml_project_for_reference
 from mldb_v2.src.backend._clearml_admission import (
     ClearMLTaskRecord,
     _HARNESS_SYMBOL,
@@ -362,7 +363,7 @@ class ClearMLObservationService:
     ) -> tuple[StageKey, ClearMLTaskRecord, ClearMLRuntimeProjection] | None:
         requested = _validate_stage_key(stage_key)
         ownership_key = _ownership_key_for_stage_key(requested)
-        project = f"mldb/{_namespace_of(requested['study_result'])}"
+        project = _clearml_project_for_reference(requested["study_result"])
         try:
             records = tuple(
                 self._client.search_tasks(

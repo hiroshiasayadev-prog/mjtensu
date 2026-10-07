@@ -488,27 +488,55 @@ def _pipeline_trial_labels(
                 label = _local_reference_name(architecture_id)
         base_labels[trial_id] = label
 
-    counts: dict[str, int] = {}
-    for label in base_labels.values():
-        counts[label] = counts.get(label, 0) + 1
-    labels: dict[str, str] = {}
-    trial_sources = {
-        str(raw_trial["trial"]): raw_trial.get("source")
-        for raw_trial in raw_trials
-        if type(raw_trial) is dict and type(raw_trial.get("trial")) is str
-    }
-    for trial, label in base_labels.items():
-        if counts[label] == 1:
-            labels[trial] = label
+    groups: dict[str, list[str]] = {}
+    trial_sources: dict[str, object] = {}
+    for raw_trial in raw_trials:
+        if type(raw_trial) is not dict or type(raw_trial.get("trial")) is not str:
             continue
+        trial_id = str(raw_trial["trial"])
+        groups.setdefault(base_labels[trial_id], []).append(trial_id)
+        trial_sources[trial_id] = raw_trial.get("source")
+
+    def source_conditions(trial: str) -> dict[str, object]:
         source = trial_sources.get(trial)
-        parameters = source.get("parameters") if isinstance(source, Mapping) else None
-        batch_size = parameters.get("batch_size") if isinstance(parameters, Mapping) else None
-        labels[trial] = (
-            f"{label} | bs{batch_size}"
-            if type(batch_size) is int
-            else f"{label} | {trial}"
-        )
+        if not isinstance(source, Mapping):
+            return {}
+        conditions: dict[str, object] = {}
+        parameters = source.get("parameters")
+        if isinstance(parameters, Mapping):
+            conditions.update({str(key): value for key, value in parameters.items()})
+        if "seed" in source:
+            conditions["seed"] = source["seed"]
+        return conditions
+
+    labels: dict[str, str] = {}
+    used: set[str] = set()
+    for trial, label in base_labels.items():
+        peers = groups[label]
+        candidate = label
+        if len(peers) > 1:
+            peer_conditions = {peer: source_conditions(peer) for peer in peers}
+            keys = sorted({key for values in peer_conditions.values() for key in values})
+            varying = [
+                key
+                for key in keys
+                if len({
+                    json.dumps(values.get(key, "<missing>"), sort_keys=True, default=str)
+                    for values in peer_conditions.values()
+                }) > 1
+            ]
+            values = peer_conditions[trial]
+            fragments = [
+                f"{key}={values.get(key, '<unset>')}"
+                for key in varying
+            ]
+            candidate = f"{label} | {', '.join(fragments)}" if fragments else f"{label} | {trial}"
+        if candidate in used:
+            candidate = f"{candidate} | {trial}"
+        if candidate in used:
+            raise ClearMLSDKError("ClearML Pipeline trial labels are not unique")
+        labels[trial] = candidate
+        used.add(candidate)
     return labels
 
 
@@ -849,7 +877,11 @@ def _native_pipeline_dag(
         display = f"{labels.get(trial, trial)} | {suffix}"
         if display in used_display_names:
             extra = coordinate if type(coordinate) is str else name
-            display = f"{display} ・ゑｽｷ {extra}"
+            display = f"{display} | {extra}"
+        if display in used_display_names:
+            display = f"{display} | {name}"
+        if display in used_display_names:
+            raise ClearMLSDKError("ClearML Pipeline node display names are not unique")
         used_display_names.add(display)
         display_names[name] = display
         prepared.append(raw)
@@ -932,6 +964,242 @@ def _comparison_rank_colors(
     ]
 
 
+def _study_comparison_projection_iteration(task: object) -> int:
+    getter = getattr(task, "get_reported_plots", None)
+    if not callable(getter):
+        return 0
+    try:
+        plots = getter() or []
+    except Exception:
+        return 0
+    latest = -1
+    for plot in plots:
+        if not isinstance(plot, Mapping):
+            continue
+        metric = plot.get("metric")
+        if type(metric) is not str:
+            continue
+        if not (
+            metric == "Study Comparison"
+            or metric == "Parameter Sweep"
+            or metric.startswith("Model Comparison - ")
+            or metric.startswith("Parameter Sweep - ")
+        ):
+            continue
+        raw_iteration = plot.get("iter", 0)
+        if type(raw_iteration) is int and raw_iteration >= 0:
+            latest = max(latest, raw_iteration)
+    return latest + 1 if latest >= 0 else 0
+
+
+def _comparison_parameter_value(value: object) -> str:
+    if value is None:
+        return "null"
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    if type(value) is float:
+        return f"{value:.12g}"
+    return str(value)
+
+
+def _comparison_varying_parameter_names(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    field: str,
+) -> list[str]:
+    if len(rows) < 2:
+        return []
+    mappings: list[Mapping[str, object]] = []
+    for row in rows:
+        value = row.get(field)
+        mappings.append(value if isinstance(value, Mapping) else {})
+    keys = sorted(
+        {
+            key
+            for parameters in mappings
+            for key in parameters
+            if type(key) is str
+        }
+    )
+    varying: list[str] = []
+    missing = object()
+    for key in keys:
+        values = [parameters.get(key, missing) for parameters in mappings]
+        serialized = {
+            "<missing>"
+            if value is missing
+            else json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+            for value in values
+        }
+        if len(serialized) > 1:
+            varying.append(key)
+    return varying
+
+
+def _comparison_parameter_fragment(
+    row: Mapping[str, object],
+    *,
+    field: str,
+    names: Sequence[str],
+) -> str | None:
+    parameters = row.get(field)
+    if not isinstance(parameters, Mapping):
+        return None
+    parts = [
+        f"{name}={_comparison_parameter_value(parameters[name])}"
+        for name in names
+        if name in parameters
+    ]
+    return ", ".join(parts) or None
+
+
+def _comparison_base_label(row: Mapping[str, object]) -> str:
+    raw = row.get("trial_label") or row.get("trial")
+    base = raw if type(raw) is str else ""
+    if " · trial-" in base:
+        base = base.split(" · trial-", 1)[0]
+    if base.startswith("trial-"):
+        model = row.get("model")
+        architecture = row.get("architecture")
+        if type(model) is str and model:
+            base = model.rsplit("/", 1)[-1]
+        elif type(architecture) is str and architecture:
+            base = architecture.rsplit("/", 1)[-1]
+    return base
+
+
+def _comparison_series_labels(rows: Sequence[Mapping[str, object]]) -> list[str]:
+    source_names = _comparison_varying_parameter_names(rows, field="source_parameters")
+    labels: list[str] = []
+    for row in rows:
+        base = _comparison_base_label(row)
+        source = _comparison_parameter_fragment(
+            row,
+            field="source_parameters",
+            names=source_names,
+        )
+        if source is not None and base:
+            labels.append(f"{base} · {source}")
+        elif source is not None:
+            labels.append(source)
+        else:
+            labels.append(base)
+    return labels
+
+
+def _comparison_row_labels(rows: Sequence[Mapping[str, object]]) -> list[str]:
+    series_labels = _comparison_series_labels(rows)
+    evaluation_names = _comparison_varying_parameter_names(rows, field="parameters")
+    evaluation_conditions = [
+        _comparison_parameter_fragment(row, field="parameters", names=evaluation_names)
+        for row in rows
+    ]
+    distinct_series = {label for label in series_labels if label}
+    labels: list[str] = []
+    for series, condition in zip(series_labels, evaluation_conditions, strict=True):
+        if condition is None:
+            labels.append(series)
+        elif len(distinct_series) <= 1:
+            labels.append(condition)
+        elif series:
+            labels.append(f"{series} · {condition}")
+        else:
+            labels.append(condition)
+    return labels
+
+
+def _comparison_varying_numeric_parameter(
+    rows: Sequence[Mapping[str, object]],
+) -> str | None:
+    varying = _comparison_varying_parameter_names(rows, field="parameters")
+    if len(varying) != 1:
+        return None
+    axis = varying[0]
+    for row in rows:
+        parameters = row.get("parameters")
+        if not isinstance(parameters, Mapping):
+            return None
+        value = parameters.get(axis)
+        if type(value) not in {int, float} or not math.isfinite(float(value)):
+            return None
+    return axis
+
+
+def _comparison_sweep_figure(
+    *,
+    stage: str,
+    evaluation_name: str | None,
+    metric_name: str,
+    metric_preference: str,
+    parameter_name: str,
+    rows: Sequence[Mapping[str, object]],
+) -> dict[str, object] | None:
+    if type(metric_name) is not str or not metric_name:
+        return None
+    by_series: dict[str, list[tuple[float, float]]] = {}
+    series_labels = _comparison_series_labels(rows)
+    for row, series_label in zip(rows, series_labels, strict=True):
+        parameters = row.get("parameters")
+        metrics = row.get("metrics")
+        if not series_label or not isinstance(parameters, Mapping) or not isinstance(metrics, Mapping):
+            continue
+        raw_x = parameters.get(parameter_name)
+        raw_y = metrics.get(metric_name)
+        if type(raw_x) not in {int, float} or type(raw_y) not in {int, float}:
+            continue
+        x = float(raw_x)
+        y = float(raw_y)
+        if not math.isfinite(x) or not math.isfinite(y):
+            continue
+        by_series.setdefault(series_label, []).append((x, y))
+    if not by_series:
+        return None
+
+    traces: list[dict[str, object]] = []
+    for label, points in by_series.items():
+        ordered = sorted(points)
+        traces.append({
+            "type": "scatter",
+            "mode": "lines+markers",
+            "name": label,
+            "x": [point[0] for point in ordered],
+            "y": [point[1] for point in ordered],
+            "showlegend": len(by_series) > 1,
+            "hovertemplate": (
+                f"{parameter_name}: %{{x:.6g}}<br>"
+                f"{metric_name}: %{{y:.6g}}<extra>{label}</extra>"
+            ),
+        })
+
+    preference = metric_preference if metric_preference in {"higher", "lower", "neutral"} else "neutral"
+    preference_label = {
+        "higher": "higher is better",
+        "lower": "lower is better",
+        "neutral": "neutral",
+    }[preference]
+    return {
+        "data": traces,
+        "layout": {
+            "title": {"text": f"{metric_name} vs {parameter_name} / {preference_label}"},
+            "showlegend": len(by_series) > 1,
+            "height": 360,
+            "margin": {"l": 75, "r": 40, "t": 100, "b": 80},
+            "hovermode": "x unified",
+            "xaxis": {"title": {"text": parameter_name}, "automargin": True},
+            "yaxis": {"title": {"text": metric_name}, "automargin": True},
+            "meta": {
+                "evaluation": stage,
+                "evaluation_name": evaluation_name or stage,
+                "metric": metric_name,
+                "preference": preference,
+                "sweep_parameter": parameter_name,
+            },
+        },
+    }
+
+
 def _comparison_bar_figure(
     *,
     stage: str,
@@ -945,10 +1213,10 @@ def _comparison_bar_figure(
 
     labels: list[str] = []
     values: list[float | None] = []
-    for row in rows:
-        trial = row.get("trial_label") or row.get("trial")
+    rendered_labels = _comparison_row_labels(rows)
+    for row, display_label in zip(rows, rendered_labels, strict=True):
         raw_metrics = row.get("metrics")
-        if type(trial) is not str or not isinstance(raw_metrics, Mapping):
+        if not display_label or not isinstance(raw_metrics, Mapping):
             continue
         value = raw_metrics.get(metric_name)
         numeric: float | None = None
@@ -956,7 +1224,7 @@ def _comparison_bar_figure(
             candidate = float(value)
             if math.isfinite(candidate):
                 numeric = candidate
-        labels.append(trial)
+        labels.append(display_label)
         values.append(numeric)
 
     if not labels or not any(value is not None for value in values):
@@ -1063,10 +1331,10 @@ def _grouped_metric_figure(
 ) -> dict[str, object] | None:
     labels = [label for _metric, label in categories]
     traces: list[dict[str, object]] = []
-    for row in rows:
-        trial = row.get("trial_label") or row.get("trial")
+    display_labels = _comparison_row_labels(rows)
+    for row, trial in zip(rows, display_labels, strict=True):
         raw_metrics = row.get("metrics")
-        if type(trial) is not str or not isinstance(raw_metrics, Mapping):
+        if not trial or not isinstance(raw_metrics, Mapping):
             continue
         values: list[float | None] = []
         for metric, _label in categories:
@@ -1447,6 +1715,38 @@ def _selectable_image_figure(items: Sequence[tuple[str, str]]) -> dict[str, obje
             "margin": {"l": 20, "r": 20, "t": 120, "b": 20},
         },
     }
+
+def _selectable_video_figure(items: Sequence[tuple[str, str]]) -> dict[str, object] | None:
+    if not items:
+        return None
+    display_labels = _selector_labels([label for label, _source in items])
+    return {
+        "data": [{
+            "type": "scatter",
+            "x": [0],
+            "y": [0],
+            "mode": "markers",
+            "marker": {"opacity": 0},
+            "hoverinfo": "skip",
+            "showlegend": False,
+        }],
+        "layout": {
+            "height": 620,
+            "xaxis": {"visible": False, "fixedrange": True},
+            "yaxis": {"visible": False, "fixedrange": True},
+            "margin": {"l": 20, "r": 20, "t": 90, "b": 20},
+            "meta": {
+                "mldb_study_media": {
+                    "kind": "video",
+                    "items": [
+                        {"label": display_labels[index], "url": source}
+                        for index, (_label, source) in enumerate(items)
+                    ],
+                }
+            },
+        },
+    }
+
 
 def _csv_table_figure(path: Path) -> dict[str, object] | None:
     try:
@@ -2037,6 +2337,8 @@ class ClearMLSDKAdapter:
                 except Exception:
                     pass
 
+        projection_iteration = _study_comparison_projection_iteration(task)
+
         for comparison in comparisons:
             if type(comparison) is not dict:
                 continue
@@ -2051,18 +2353,41 @@ class ClearMLSDKAdapter:
                 metric_preferences if isinstance(metric_preferences, Mapping) else {}
             )
             metrics = [name for name in metric_names if type(name) is str]
-            table: list[list[object]] = [["Trial", "Status", *metrics]]
             normalized_rows: list[Mapping[str, object]] = []
             for row in rows:
                 if type(row) is not dict:
                     continue
-                trial = row.get("trial_label") or row.get("trial")
                 disposition = row.get("disposition")
                 values = row.get("metrics")
-                if type(trial) is not str or type(disposition) is not str or not isinstance(values, Mapping):
+                if type(disposition) is not str or not isinstance(values, Mapping):
                     continue
                 normalized_rows.append(row)
-                rendered: list[object] = [trial, disposition]
+
+            evaluation_parameter_names = _comparison_varying_parameter_names(
+                normalized_rows,
+                field="parameters",
+            )
+            sweep_parameter = _comparison_varying_numeric_parameter(normalized_rows)
+            series_labels = _comparison_series_labels(normalized_rows)
+            table: list[list[object]] = [[
+                "Condition / model",
+                *evaluation_parameter_names,
+                "Status",
+                *metrics,
+            ]]
+            for row, series_label in zip(normalized_rows, series_labels, strict=True):
+                disposition = row["disposition"]
+                values = cast(Mapping[str, object], row["metrics"])
+                parameters = row.get("parameters")
+                rendered: list[object] = [series_label]
+                for parameter in evaluation_parameter_names:
+                    value = (
+                        parameters.get(parameter, "")
+                        if isinstance(parameters, Mapping)
+                        else ""
+                    )
+                    rendered.append(value)
+                rendered.append(disposition)
                 for metric in metrics:
                     value = values.get(metric, "")
                     if type(value) in {int, float}:
@@ -2076,7 +2401,7 @@ class ClearMLSDKAdapter:
                     report_table(
                         title="Study Comparison",
                         series=stage,
-                        iteration=0,
+                        iteration=projection_iteration,
                         table_plot=table,
                         extra_layout={"height": 320},
                     )
@@ -2084,6 +2409,34 @@ class ClearMLSDKAdapter:
                     pass
 
             if callable(report_plotly):
+                if sweep_parameter is not None:
+                    for metric in metrics:
+                        preference = preferences.get(metric, "neutral")
+                        figure = _comparison_sweep_figure(
+                            stage=stage,
+                            evaluation_name=(
+                                evaluation_name if type(evaluation_name) is str else None
+                            ),
+                            metric_name=metric,
+                            metric_preference=(
+                                preference if type(preference) is str else "neutral"
+                            ),
+                            parameter_name=sweep_parameter,
+                            rows=normalized_rows,
+                        )
+                        if figure is None:
+                            continue
+                        try:
+                            report_plotly(
+                                title=f"Model Comparison - {stage}",
+                                series=metric,
+                                iteration=projection_iteration,
+                                figure=figure,
+                            )
+                        except Exception:
+                            pass
+                    continue
+
                 evaluation_description = comparison.get("evaluation_description")
                 grouped, consumed = _comparison_grouped_metric_figures(
                     evaluation_name=(
@@ -2102,7 +2455,7 @@ class ClearMLSDKAdapter:
                         report_plotly(
                             title=f"Model Comparison - {stage}",
                             series=series_name,
-                            iteration=0,
+                            iteration=projection_iteration,
                             figure=figure,
                         )
                     except Exception:
@@ -2133,7 +2486,7 @@ class ClearMLSDKAdapter:
                         report_plotly(
                             title=f"Model Comparison - {stage}",
                             series=metric,
-                            iteration=0,
+                            iteration=projection_iteration,
                             figure=figure,
                         )
                     except Exception:
@@ -2219,6 +2572,13 @@ class ClearMLSDKAdapter:
                             if table_figure is not None:
                                 figures.append((label, table_figure))
                         figure = _selectable_plotly_figure(figures)
+                    elif artifact_format == "mp4":
+                        videos: list[tuple[str, str]] = []
+                        for label, child, _ref in loaded:
+                            source = _study_artifact_url(child, artifact_name)
+                            if source is not None:
+                                videos.append((label, source))
+                        figure = _selectable_video_figure(videos)
                     if figure is not None:
                         try:
                             report_plotly(

@@ -208,15 +208,21 @@ def _trial_projection_context(
     resolver: CanonicalRepositoryResolver,
     plan_trial: Mapping[str, object] | None,
     result_trial: Mapping[str, object],
-) -> tuple[str, str | None, str | None]:
+) -> tuple[str, str | None, str | None, dict[str, object]]:
     trial_id = str(result_trial["trial"])
     architecture_id: str | None = None
     model_id: str | None = None
+    source_parameters: dict[str, object] = {}
     source = plan_trial.get("source") if isinstance(plan_trial, Mapping) else None
     if isinstance(source, Mapping) and source.get("kind") == "training":
         raw_architecture = source.get("architecture")
         if type(raw_architecture) is str:
             architecture_id = raw_architecture
+        raw_parameters = source.get("parameters")
+        if isinstance(raw_parameters, Mapping):
+            source_parameters = copy.deepcopy(dict(raw_parameters))
+        if type(source.get("seed")) is int:
+            source_parameters.setdefault("seed", int(source["seed"]))
         training = result_trial.get("training")
         if isinstance(training, Mapping) and type(training.get("result")) is str:
             try:
@@ -248,6 +254,10 @@ def _trial_projection_context(
                     training_result = None
                 if isinstance(training_result, Mapping) and type(training_result.get("architecture")) is str:
                     architecture_id = str(training_result["architecture"])
+                if isinstance(training_result, Mapping) and isinstance(training_result.get("parameters"), Mapping):
+                    source_parameters = copy.deepcopy(dict(training_result["parameters"]))
+                if isinstance(training_result, Mapping) and type(training_result.get("seed")) is int:
+                    source_parameters.setdefault("seed", int(training_result["seed"]))
 
     label = trial_id
     if architecture_id is not None:
@@ -264,7 +274,7 @@ def _trial_projection_context(
             label = _local_reference_name(architecture_id)
     elif model_id is not None:
         label = _local_reference_name(model_id)
-    return label, architecture_id, model_id
+    return label, architecture_id, model_id, source_parameters
 
 
 def _evaluation_projection_context(
@@ -274,13 +284,13 @@ def _evaluation_projection_context(
     coordinate: object,
 ) -> tuple[
     str | None, str | None, str | None, list[str], dict[str, str], dict[str, str],
-    dict[str, dict[str, object]],
+    dict[str, object], dict[str, dict[str, object]],
 ]:
     if not isinstance(plan_trial, Mapping):
-        return None, None, None, [], {}, {}, {}
+        return None, None, None, [], {}, {}, {}, {}
     evaluations = plan_trial.get("evaluations")
     if type(evaluations) is not list:
-        return None, None, None, [], {}, {}, {}
+        return None, None, None, [], {}, {}, {}, {}
     plan_evaluation = next(
         (
             item
@@ -290,10 +300,10 @@ def _evaluation_projection_context(
         None,
     )
     if not isinstance(plan_evaluation, Mapping):
-        return None, None, None, [], {}, {}, {}
+        return None, None, None, [], {}, {}, {}, {}
     raw_protocol = plan_evaluation.get("evaluation_protocol")
     if type(raw_protocol) is not str:
-        return None, None, None, [], {}, {}, {}
+        return None, None, None, [], {}, {}, {}, {}
 
     protocol_id = raw_protocol
     protocol_name = _local_reference_name(protocol_id)
@@ -301,6 +311,12 @@ def _evaluation_projection_context(
     metric_names: list[str] = []
     metric_preferences: dict[str, str] = {}
     metric_descriptions: dict[str, str] = {}
+    raw_parameters = plan_evaluation.get("parameters")
+    parameters = (
+        copy.deepcopy(dict(raw_parameters))
+        if isinstance(raw_parameters, Mapping)
+        else {}
+    )
     artifact_views: dict[str, dict[str, object]] = {}
     try:
         protocol = resolver.resolve(
@@ -349,6 +365,7 @@ def _evaluation_projection_context(
         metric_names,
         metric_preferences,
         metric_descriptions,
+        parameters,
         artifact_views,
     )
 
@@ -369,7 +386,7 @@ def _study_summary_projection(
         for trial in (plan["trials"] if plan is not None else [])
     }
 
-    contexts: dict[str, tuple[str, str | None, str | None]] = {}
+    contexts: dict[str, tuple[str, str | None, str | None, dict[str, object]]] = {}
     base_counts: dict[str, int] = {}
     for trial in result["trials"]:
         trial_id = str(trial["trial"])
@@ -385,7 +402,7 @@ def _study_summary_projection(
     comparisons_by_stage: dict[tuple[str, str | None], dict[str, object]] = {}
     for trial in result["trials"]:
         trial_id = str(trial["trial"])
-        base_label, architecture_id, model_id = contexts[trial_id]
+        base_label, architecture_id, model_id, source_parameters = contexts[trial_id]
         trial_label = (
             base_label
             if base_counts[base_label] == 1
@@ -399,6 +416,7 @@ def _study_summary_projection(
                     "trial_label": trial_label,
                     "architecture": architecture_id,
                     "model": model_id,
+                    "source_parameters": copy.deepcopy(source_parameters),
                     "kind": "training",
                     "stage": "training",
                     "coordinate": None,
@@ -448,6 +466,7 @@ def _study_summary_projection(
                 protocol_metric_names,
                 protocol_metric_preferences,
                 protocol_metric_descriptions,
+                evaluation_parameters,
                 protocol_artifact_views,
             ) = _evaluation_projection_context(
                 resolver=resolver,
@@ -459,6 +478,7 @@ def _study_summary_projection(
                 "trial_label": trial_label,
                 "architecture": architecture_id,
                 "model": evaluation_model,
+                "source_parameters": copy.deepcopy(source_parameters),
                 "kind": "evaluation",
                 "stage": stage,
                 "coordinate": evaluation["coordinate"],
@@ -468,6 +488,7 @@ def _study_summary_projection(
                 "disposition": evaluation["disposition"],
                 "result": result_id,
                 "execution_id": execution_id,
+                "parameters": copy.deepcopy(evaluation_parameters),
                 "metrics": metrics,
                 "artifacts": artifacts,
             }
@@ -502,8 +523,10 @@ def _study_summary_projection(
                     "trial_label": trial_label,
                     "architecture": architecture_id,
                     "model": evaluation_model,
+                    "source_parameters": copy.deepcopy(source_parameters),
                     "disposition": evaluation["disposition"],
                     "execution_id": execution_id,
+                    "parameters": copy.deepcopy(evaluation_parameters),
                     "metrics": copy.deepcopy(metrics),
                     "artifacts": copy.deepcopy(artifacts),
                 }

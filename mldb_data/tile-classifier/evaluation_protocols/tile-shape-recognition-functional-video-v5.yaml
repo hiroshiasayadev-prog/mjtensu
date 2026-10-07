@@ -98,7 +98,8 @@
       "format": "mp4",
       "schema": "mjtensu.recognition/overlay-video/v1",
       "required": true,
-      "description": "Combined t1-t5 canonical landscape video with bbox/OBB, tile labels, GT streak, and product stabilizer state."
+      "description": "Combined t1-t5 canonical landscape video with bbox/OBB, tile labels, GT streak, and product stabilizer state.",
+      "study_view": "select"
     }
   }
 }

@@ -59,6 +59,9 @@ Guard:
 - **Source-of-truth check:** repo state、runtime state、model stateを過去会話だけで確定しない。
 - **Correction wording:** 誤りを見つけたら、何が誤りで何を現物確認したかを分けて返す。
 - **Branch/worktree gate:** 新規branch/worktreeは目的・親・統合方法をuserと合意してから作る。
+- **Condition-visibility gate:** user-facing experiment comparisonでは、varying parameter値をtable列・plot軸・series/condition labelのいずれかに必ず露出する。内部trial/eval IDを実験条件の代替表示名にしてはならない。内部IDはmetadata/fallbackに限定する。
+- **Experiment-namespace gate:** 実モデル性能・閾値・アーキテクチャ・E2E挙動を評価するML experimentを `mldb-smoke` に置いてはならない。`mldb-smoke` はintegration/infrastructure smoke専用。実験の配置先は既存の実Project/namespace構造を確認して決め、名前にも `smoke` を付けない。
+- **Ambiguity-before-mutation gate:** path/project表現は会話の流れと実システム構造を先に使って解釈する。文脈と実物確認で一意に決まるなら質問で止めない。それでも複数解釈が残る場合だけmutation前に短く確認し、推測でdirectory/project/taskを作成・移動しない。
 
 ## Incident index
 
@@ -70,6 +73,10 @@ Guard:
 | INC-20260929-02 | Investigation guide確認前にINV-015を書き、さらに依頼されていないcommit/pushまで行った。authoring authority確認とrepository mutationを分離する。 |
 | INC-20260929-03 | 実験隔離のためuser合意なしで4本のbranch/worktreeを作り、未merge成果を分散させた。branch/worktree作成は事前合意し、canonical recordsは本体repoへ書く。 |
 | INC-20260930-01 | canonical repoを変更せずCI/CDのdeploy checkoutを直接書き換えてdevへ反映した。deploy checkoutは生成・反映先として扱い、source変更はcanonical repoで行ってcommit/pushしCI/CD経由で反映する。 |
+| INC-20261005-01 | Study parameter sweepをmodel-comparison UIへ流し、varying conditionを内部trial IDに隠したため比較不能な表示を作った。user-facing比較ではparameter値を明示し、内部IDを条件名として使わない。 |
+| INC-20261005-02 | detector thresholdを実動画E2Eで評価する本実験を `mldb-smoke` に作成した。`mldb-smoke` は非ML実験用であり、本実験の配置先は既存の実Project/namespace構造を確認して決める。 |
+| INC-20261005-03 | 会話の流れ上 `mldb/nanodet` がClearML Pipeline Projectを指すことが明白だったのに、文脈を無視してrepo pathと誤解し、`mldb_data/tile-detector`等の無意味なtreeを作成した。まず会話文脈と実Project構造で解釈し、それでも曖昧な場合だけ質問する。 |
+| INC-20261005-04 | ClearML Project再編で、MLDB canonical sourceが `project = f"mldb/{namespace}"` とProject配置を決定していることを確認せず、既存ClearML Task/Modelだけ `move_to_project` / project editで移動した。これはpush/次回runで旧Projectを再生成する非canonical修正であり、INC-20260930-01と同型。Project/UI再編は先にsource-side projection/routingを修正・検証し、その後に既存履歴を移行する。 |
 
 ## Incident template
 

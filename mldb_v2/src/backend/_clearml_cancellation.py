@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
+from mldb_v2.src.backend._clearml_project_routing import _clearml_project_for_namespace
 from mldb_v2.src.common.ids import (
     StudyResultId,
     _canonical_json_bytes,
@@ -155,7 +156,7 @@ def _owned_tasks(
     *, client: ClearMLTaskSearchClient, study_result: StudyResultId
 ) -> tuple[ClearMLOwnedTask, ...]:
     exact_study_result, namespace = _study_identity(study_result)
-    project = f"mldb/{namespace}"
+    project = _clearml_project_for_namespace(namespace)
     try:
         records = client.search_tasks_by_metadata(
             project=project,
