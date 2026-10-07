@@ -53,7 +53,7 @@ def test_context_shapes_are_exact_frozen_and_require_telemetry() -> None:
     train_fields = (
         "task", "corpus", "architecture", "model", "seed", "parameters", "telemetry", "work_dir"
     )
-    evaluation_fields = ("task", "corpus", "model", "parameters", "telemetry", "work_dir")
+    evaluation_fields = ("task", "corpus", "model", "models", "parameters", "telemetry", "work_dir")
     for cls in (SkeletonTrainContext, TrainContext):
         assert _field_names(cls) == train_fields
         assert cls.__dataclass_params__.frozen is True
