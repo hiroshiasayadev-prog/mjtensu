@@ -488,27 +488,55 @@ def _pipeline_trial_labels(
                 label = _local_reference_name(architecture_id)
         base_labels[trial_id] = label
 
-    counts: dict[str, int] = {}
-    for label in base_labels.values():
-        counts[label] = counts.get(label, 0) + 1
-    labels: dict[str, str] = {}
-    trial_sources = {
-        str(raw_trial["trial"]): raw_trial.get("source")
-        for raw_trial in raw_trials
-        if type(raw_trial) is dict and type(raw_trial.get("trial")) is str
-    }
-    for trial, label in base_labels.items():
-        if counts[label] == 1:
-            labels[trial] = label
+    groups: dict[str, list[str]] = {}
+    trial_sources: dict[str, object] = {}
+    for raw_trial in raw_trials:
+        if type(raw_trial) is not dict or type(raw_trial.get("trial")) is not str:
             continue
+        trial_id = str(raw_trial["trial"])
+        groups.setdefault(base_labels[trial_id], []).append(trial_id)
+        trial_sources[trial_id] = raw_trial.get("source")
+
+    def source_conditions(trial: str) -> dict[str, object]:
         source = trial_sources.get(trial)
-        parameters = source.get("parameters") if isinstance(source, Mapping) else None
-        batch_size = parameters.get("batch_size") if isinstance(parameters, Mapping) else None
-        labels[trial] = (
-            f"{label} | bs{batch_size}"
-            if type(batch_size) is int
-            else f"{label} | {trial}"
-        )
+        if not isinstance(source, Mapping):
+            return {}
+        conditions: dict[str, object] = {}
+        parameters = source.get("parameters")
+        if isinstance(parameters, Mapping):
+            conditions.update({str(key): value for key, value in parameters.items()})
+        if "seed" in source:
+            conditions["seed"] = source["seed"]
+        return conditions
+
+    labels: dict[str, str] = {}
+    used: set[str] = set()
+    for trial, label in base_labels.items():
+        peers = groups[label]
+        candidate = label
+        if len(peers) > 1:
+            peer_conditions = {peer: source_conditions(peer) for peer in peers}
+            keys = sorted({key for values in peer_conditions.values() for key in values})
+            varying = [
+                key
+                for key in keys
+                if len({
+                    json.dumps(values.get(key, "<missing>"), sort_keys=True, default=str)
+                    for values in peer_conditions.values()
+                }) > 1
+            ]
+            values = peer_conditions[trial]
+            fragments = [
+                f"{key}={values.get(key, '<unset>')}"
+                for key in varying
+            ]
+            candidate = f"{label} | {', '.join(fragments)}" if fragments else f"{label} | {trial}"
+        if candidate in used:
+            candidate = f"{candidate} | {trial}"
+        if candidate in used:
+            raise ClearMLSDKError("ClearML Pipeline trial labels are not unique")
+        labels[trial] = candidate
+        used.add(candidate)
     return labels
 
 
@@ -849,7 +877,11 @@ def _native_pipeline_dag(
         display = f"{labels.get(trial, trial)} | {suffix}"
         if display in used_display_names:
             extra = coordinate if type(coordinate) is str else name
-            display = f"{display} ・ゑｽｷ {extra}"
+            display = f"{display} | {extra}"
+        if display in used_display_names:
+            display = f"{display} | {name}"
+        if display in used_display_names:
+            raise ClearMLSDKError("ClearML Pipeline node display names are not unique")
         used_display_names.add(display)
         display_names[name] = display
         prepared.append(raw)

@@ -22,6 +22,8 @@ from mldb_v2.src.backend._clearml_sdk import (
     ClearMLSDKAdapter,
     ClearMLSDKSettings,
     _comparison_bar_figure,
+    _native_pipeline_dag,
+    _pipeline_trial_labels,
     _selectable_image_figure,
     _selectable_plotly_figure,
     _study_artifact_url,
@@ -969,6 +971,37 @@ def test_retry_child_keeps_native_pipeline_owner_and_normal_bind_replay() -> Non
     )
     assert node["executed"] == owner_id
     assert node["job_id"] == owner_id
+
+
+def test_pipeline_trial_labels_expose_varying_source_parameter() -> None:
+    labels = _pipeline_trial_labels(
+        ClearMLSDKSettings(),
+        {"trials": [
+            {"trial": "trial-0001", "source": {"kind": "training", "architecture": "demo/arch-v1", "parameters": {"batch_size": 24, "jp_fraction": 0.0}, "seed": 42}},
+            {"trial": "trial-0002", "source": {"kind": "training", "architecture": "demo/arch-v1", "parameters": {"batch_size": 24, "jp_fraction": 0.25}, "seed": 42}},
+            {"trial": "trial-0003", "source": {"kind": "training", "architecture": "demo/arch-v1", "parameters": {"batch_size": 24, "jp_fraction": 0.5}, "seed": 42}},
+        ]},
+    )
+    assert len(set(labels.values())) == 3
+    assert labels["trial-0001"].endswith("jp_fraction=0.0")
+    assert labels["trial-0002"].endswith("jp_fraction=0.25")
+    assert labels["trial-0003"].endswith("jp_fraction=0.5")
+
+
+def test_native_pipeline_dag_never_overwrites_duplicate_display_names() -> None:
+    steps = []
+    for trial in ("trial-0001", "trial-0002", "trial-0003"):
+        train = f"{trial}-train"
+        steps.append({"name": train, "parents": [], "stage": "training", "trial": trial, "kind": "training", "coordinate": None})
+        steps.append({"name": f"{trial}-eval-0001", "parents": [train], "stage": "quality", "trial": trial, "kind": "evaluation", "coordinate": "eval-0001"})
+    dag = _native_pipeline_dag(
+        {"steps": steps},
+        queue="default",
+        trial_labels={trial: "same-label" for trial in ("trial-0001", "trial-0002", "trial-0003")},
+    )
+    assert len(dag) == 6
+    logical = {node["mldb.logical_step"] for node in dag.values()}
+    assert logical == {step["name"] for step in steps}
 
 
 def test_bind_task_to_pipeline_reopens_stopped_controller_for_resume() -> None:
