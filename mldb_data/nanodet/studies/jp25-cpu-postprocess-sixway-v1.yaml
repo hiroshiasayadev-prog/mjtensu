@@ -1,0 +1,31 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "nanodet/jp25-cpu-postprocess-sixway-v1",
+  "status": "sealed",
+  "name": "NanoDet jp25 CPU postprocess: baseline vs coverage vs NMS vs Soft-NMS",
+  "description": "Six formal CPU-only postprocessing counterfactuals on jp25 model and sealed fixed recognition trace; compare suppressions, hand/meld duplication, and semantic exactness proxies without retraining or rerunning inference.",
+  "model": {
+    "existing": [
+      "nanodet/run-09b6de7dfb7e4add819a4eef0047bf81-trial-0002-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "cpu-postprocess-replay",
+      "corpus": "nanodet/nanodet-jp25-functional-trace-v1",
+      "protocol": "nanodet/cpu-postprocess-trace-replay-v1",
+      "parameters": {
+        "postprocess_condition": {
+          "values": [
+            "baseline",
+            "coverage_0.75",
+            "coverage_0.70",
+            "nms_iou_0.55",
+            "nms_iou_0.50",
+            "gaussian_soft_nms_sigma_0.50"
+          ]
+        }
+      }
+    }
+  ]
+}

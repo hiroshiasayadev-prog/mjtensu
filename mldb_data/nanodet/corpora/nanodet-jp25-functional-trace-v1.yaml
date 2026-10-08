@@ -1,0 +1,26 @@
+{
+  "schema": "mjtensu.mldb-v2/corpus/v1",
+  "id": "nanodet/nanodet-jp25-functional-trace-v1",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "description": "Immutable 1497-frame, five-take fixed-classifier detection trace of jp_fraction=0.25 NanoDet from evaluation result run-09b6de7dfb7e4add819a4eef0047bf81; enables CPU-only postprocess counterfactual without rerunning model.",
+  "storage": {
+    "root_uri": "s3://mldb-w004-smoke/mldb-v2/4806e340582f52fe7d8de5e8a3c8652828a115ce56bd4dbd7ecc8f2ae57466ac/artifacts"
+  },
+  "manifest": {
+    "file": "nanodet-jp25-functional-trace-v1.manifest.jsonl",
+    "sha256": "cfe1badd18ca3f086a91caa09667fde541ea93e269e85a49b5903cad284b8d2e",
+    "entries": 1
+  },
+  "representation": {
+    "kind": "fixed-postprocess-detection-trace",
+    "file": "prediction_trace",
+    "source_evaluation_result": "nanodet/run-09b6de7dfb7e4add819a4eef0047bf81-trial-0002-eval-0003",
+    "source_model": "nanodet/run-09b6de7dfb7e4add819a4eef0047bf81-trial-0002-model",
+    "frames": 1497,
+    "postprocess": "NMS IoU=0.60 and coverage=0.80 already applied"
+  },
+  "splits": {
+    "eval": 1497
+  }
+}
