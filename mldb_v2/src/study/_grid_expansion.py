@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from itertools import product
 from types import MappingProxyType
 from typing import Iterator, Literal, Mapping, TypeAlias
@@ -71,6 +71,7 @@ class _ExpandedEvaluationCoordinate:
     corpus: CorpusId
     evaluation_protocol: EvaluationProtocolId
     parameters: Mapping[str, PublicParameterValue]
+    inputs: Mapping[str, Mapping[str, str]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -212,6 +213,7 @@ def _expand_evaluations(
                     corpus=CorpusId(str(stage.corpus["id"])),
                     evaluation_protocol=EvaluationProtocolId(str(stage.protocol["id"])),
                     parameters=_freeze_parameters(resolved),
+                    inputs=deepcopy(dict(stage.stage.get("inputs", {}))),
                 )
             )
             sequence += 1

@@ -247,3 +247,102 @@ def test_training_source_rejects_duplicate_explicit_cases() -> None:
     }
     with pytest.raises(ValueError, match="cases must be unique"):
         _validate_study(value)
+
+def _dependent_study() -> dict[str, object]:
+    study = _study()
+    producer = copy.deepcopy(study["evaluations"][0])
+    producer["stage"] = "onnx-export"
+    producer["parameters"] = {"threshold": {"values": [0.5]}}
+    consumer = copy.deepcopy(producer)
+    consumer["stage"] = "ort-web-iphone-latency"
+    consumer["inputs"] = {
+        "onnx_model": {"from_stage": "onnx-export", "artifact": "onnx_model"}
+    }
+    study["evaluations"] = [producer, consumer]
+    return study
+
+
+def test_study_dependency_syntax_accepted_before_plan():
+    assert _validate_study(_dependent_study())["evaluations"][1]["inputs"]["onnx_model"] == {
+        "from_stage": "onnx-export", "artifact": "onnx_model"
+    }
+
+
+@pytest.mark.parametrize(("mutation", "diagnostic"), [
+    ({"from_stage": "does-not-exist"}, "from_stage.*does-not-exist.*does not exist"),
+    ({"from_stage": "ort-web-iphone-latency"}, "from_stage cannot refer to itself"),
+    ({"artifact": ""}, "invalid artifact name"),
+    ({"unexpected": "field"}, "requires from_stage and artifact"),
+])
+def test_study_dependency_rejects_invalid_reference_at_definition_validation(
+    mutation, diagnostic
+):
+    study = _dependent_study()
+    study["evaluations"][1]["inputs"]["onnx_model"].update(mutation)
+    with pytest.raises(ValueError, match=diagnostic):
+        _validate_study(study)
+
+
+def test_study_dependency_rejects_cycles_and_ambiguous_producer_sweeps():
+    study = _dependent_study()
+    study["evaluations"][0]["inputs"] = {
+        "report": {"from_stage": "ort-web-iphone-latency", "artifact": "latency_report"}
+    }
+    with pytest.raises(ValueError, match="cycle"):
+        _validate_study(study)
+    study = _dependent_study()
+    study["evaluations"][0]["parameters"]["threshold"]["values"] = [0.1, 0.5]
+    with pytest.raises(ValueError, match="ambiguous"):
+        _validate_study(study)
+
+
+def test_study_validate_checks_declared_producer_artifact_and_format(tmp_path: Path):
+    import json
+    from mldb_v2.src.verification._definition_lifecycle import _RepositoryDefinitionValidator
+    root = tmp_path / "mldb_data"
+    (root / "demo" / "studies").mkdir(parents=True)
+    (root / "demo" / "evaluation_protocols").mkdir(parents=True)
+    (root / "demo" / "namespace.yaml").write_text(json.dumps({
+        "schema": "mjtensu.mldb-v2/namespace/v1",
+        "id": "demo", "name": "Demo", "description": "",
+    }))
+    study = _dependent_study()
+    (root / "demo" / "studies" / "study-v1.yaml").write_text(json.dumps(study))
+    base = {
+        "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+        "status": "draft", "task": "demo/task-v1",
+        "name": "Eval", "description": "",
+        "implementation": {"entrypoint": "evaluate"}, "parameters": {},
+        "metrics": {"score": {"required": True, "type": "number"}},
+        "artifacts": {},
+    }
+    producer = {**base, "id": "demo/eval-v1", "artifacts": {
+        "onnx_model": {"format": "onnx", "schema": "demo/onnx/v1", "required": True}
+    }}
+    consumer = {**base, "id": "demo/eval-v2", "artifact_inputs": {
+        "onnx_model": "onnx"
+    }}
+    paths = [
+        root / "demo" / "evaluation_protocols" / "eval-v1.yaml",
+        root / "demo" / "evaluation_protocols" / "eval-v2.yaml",
+    ]
+    paths[0].write_text(json.dumps(producer))
+    paths[1].write_text(json.dumps(consumer))
+    study["evaluations"][1]["protocol"] = "demo/eval-v2"
+    (root / "demo" / "studies" / "study-v1.yaml").write_text(json.dumps(study))
+    validator = _RepositoryDefinitionValidator(root)
+    req = {"kind": "study", "id": "demo/study-v1"}
+    assert validator.validate(request=req)["valid"] is True
+    for mutation, snippet in [
+        ({"artifacts": {}}, "does not declare artifact"),
+        ({"artifacts": {"onnx_model": {
+            "format": "json", "schema": "demo/onnx/v1", "required": True
+        }}}, "format"),
+        ({"artifacts": {"onnx_model": {
+            "format": "onnx", "schema": "demo/onnx/v1", "required": False
+        }}}, "optional"),
+    ]:
+        paths[0].write_text(json.dumps({**producer, **mutation}))
+        verdict = validator.validate(request=req)
+        assert verdict["valid"] is False
+        assert snippet in verdict["diagnostics"][0]["message"]

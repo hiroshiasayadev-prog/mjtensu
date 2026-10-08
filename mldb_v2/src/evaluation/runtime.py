@@ -20,6 +20,7 @@ from mldb_v2.src.catalog.task import _load_task
 from mldb_v2.src.catalog.runtime_model import _load_runtime_model
 from mldb_v2.src.catalog._core_definition_validation import _validate_versioned_entity_id
 from mldb_v2.src.common.ids import (
+    EntityKind,
     _validate_evaluation_coordinate_id,
     _validate_trial_id,
     _validate_typed_reference,
@@ -35,6 +36,7 @@ from mldb_v2.src.evaluation.evaluate_interface import (
     LoadedModel,
     LoadedRuntimeModel,
     MaterializedCorpus,
+    LoadedEvaluationArtifact,
     _load_evaluation_callable,
 )
 from mldb_v2.src.evaluation.evaluation_protocol import (
@@ -45,7 +47,7 @@ from mldb_v2.src.evaluation.evaluation_protocol import (
 )
 from mldb_v2.src.evaluation.evaluation_result import EvaluationArtifactRef
 from mldb_v2.src.repository.resolution import CanonicalRepositoryResolver
-from mldb_v2.src.storage.artifact_reference import _validate_logical_object_uri
+from mldb_v2.src.storage.artifact_reference import _validate_logical_object_uri, _validate_artifact_ref
 from mldb_v2.src.storage.artifact_runtime import publish_candidate_artifact_file
 from mldb_v2.src.storage.corpus_runtime import materialize_sealed_corpus
 from mldb_v2.src.storage.object_bytes import _ObjectByteAccess
@@ -79,6 +81,7 @@ _EVALUATION_STAGE_FIELDS = {
     "evaluation_protocol",
     "parameters",
 }
+_EVALUATION_STAGE_OPTIONAL = {"inputs"}
 _RUNTIME_MODEL_FIELDS = {
     "model",
     "training_result",
@@ -114,7 +117,7 @@ def _validate_evaluation_stage_input(value: object) -> EvaluationStageInput:
         raise ValueError("invalid evaluation coordinate")
 
     stage = value["stage"]
-    if type(stage) is not dict or set(stage) != _EVALUATION_STAGE_FIELDS:
+    if type(stage) is not dict or not _EVALUATION_STAGE_FIELDS <= set(stage) or not set(stage) <= _EVALUATION_STAGE_FIELDS | _EVALUATION_STAGE_OPTIONAL:
         raise ValueError("EvaluationStage fields do not match schema")
     if type(stage["name"]) is not str or not stage["name"]:
         raise ValueError("EvaluationStage name must be a non-empty string")
@@ -123,6 +126,18 @@ def _validate_evaluation_stage_input(value: object) -> EvaluationStageInput:
     if type(stage["parameters"]) is not dict:
         raise ValueError("evaluation parameters must be a mapping")
     _validate_public_parameter_value(stage["parameters"])
+    inputs = stage.get("inputs", {})
+    if type(inputs) is not dict:
+        raise ValueError("EvaluationStage inputs must be a mapping")
+    for alias, item in inputs.items():
+        if type(alias) is not str or not alias or type(item) is not dict or set(item) != {
+            "source_evaluation_result", "artifact", "ref"
+        }:
+            raise ValueError("EvaluationStage artifact input fields do not match schema")
+        _validate_typed_reference(item["source_evaluation_result"])
+        if type(item["artifact"]) is not str or not item["artifact"]:
+            raise ValueError("EvaluationStage artifact input name must be nonempty")
+        _validate_artifact_ref(item["ref"])
     runtime_model = value["runtime_model"]
     if type(runtime_model) is not dict or set(runtime_model) != _RUNTIME_MODEL_FIELDS:
         raise ValueError("RuntimeModel fields do not match schema")
@@ -371,6 +386,35 @@ def _load_auxiliary_models(
     return loaded
 
 
+def _load_verified_onnx_input(
+    *,
+    runtime_root: Path,
+    source_evaluation_id: str,
+    model_id: str,
+    task_id: str,
+    object_bytes: _ObjectByteAccess,
+) -> bytes:
+    """Use only a completed, same-Model ONNX artifact from canonical evaluation history."""
+    source_id = _validate_typed_reference(source_evaluation_id)
+    result = CanonicalRepositoryResolver(runtime_root).resolve(
+        kind=EntityKind.EVALUATION_RESULT, entity_id=source_id
+    )
+    if (
+        result.get("status") != "completed"
+        or result.get("diagnostic") is not None
+        or result.get("model") != model_id
+        or result.get("task") != task_id
+    ):
+        raise ValueError("ONNX source EvaluationResult is incomplete or has different Model/Task")
+    payload = result.get("result")
+    if type(payload) is not dict or type(payload.get("artifacts")) is not dict:
+        raise ValueError("ONNX source EvaluationResult has no artifacts")
+    ref = payload["artifacts"].get("onnx_model")
+    if type(ref) is not dict or ref.get("format") != "onnx":
+        raise ValueError("ONNX source EvaluationResult has no ONNX model artifact")
+    return object_bytes.read_verified(ref)
+
+
 def _execute_evaluation_stage(
     stage_input: EvaluationStageInput,
     *,
@@ -420,31 +464,67 @@ def _execute_evaluation_stage(
     validated_artifact_uris = _validate_artifact_uris(
         artifact_uris, protocol["artifacts"]
     )
-    materialized_definition, materialized_root = materialize_sealed_corpus(
-        mldb_data_root=pinned_root,
-        corpus_id=stage["corpus"],
-        object_bytes=object_bytes,
-        destination_root=corpus_destination_root,
-    )
-    if materialized_definition != corpus:
-        raise ValueError("materialized Corpus does not match resolved Corpus")
-
-    weight_bytes = object_bytes.read_verified(runtime_model["weights"])
-    state = _load_canonical_state_dict_bytes(
-        weight_bytes,
-        ref=runtime_model["weights"],
-    )
-    module = _load_state_into_fresh_architecture(
-        pinned_root,
-        architecture["id"],
-        state,
-    )
-    loaded_model = LoadedModel(
-        definition=model,
-        training_result=training_result,
-        architecture=architecture,
-        module=module,
-    )
+    declared_inputs = protocol.get("artifact_inputs", {})
+    runtime_inputs = stage.get("inputs", {})
+    if set(declared_inputs) != set(runtime_inputs):
+        raise ValueError("stage artifact inputs do not match Evaluation Protocol")
+    loaded_inputs: dict[str, LoadedEvaluationArtifact] = {}
+    for alias, item in runtime_inputs.items():
+        ref = _validate_artifact_ref(item["ref"])
+        if ref.get("format") != declared_inputs[alias]:
+            raise ValueError(f"artifact input {alias!r} format mismatch")
+        loaded_inputs[alias] = LoadedEvaluationArtifact(
+            data=object_bytes.read_verified(ref),
+            source_evaluation_result=item["source_evaluation_result"],
+            artifact=item["artifact"],
+            ref=ref,
+        )
+    onnx_parameter = protocol.get("onnx_input_parameter")
+    onnx_source_id: str | None = None
+    onnx_input: bytes | None = None
+    loaded_model: LoadedModel | None = None
+    if onnx_parameter is not None:
+        raw_id = parameters[onnx_parameter]
+        if type(raw_id) is not str:
+            raise ValueError("ONNX input EvaluationResult id must be a string")
+        onnx_source_id = raw_id
+        onnx_input = _load_verified_onnx_input(
+            runtime_root=runtime_root,
+            source_evaluation_id=raw_id,
+            model_id=model["id"],
+            task_id=task["id"],
+            object_bytes=object_bytes,
+        )
+        # ONNX-only Evaluations do not fetch PyTorch weights or materialize corpora.
+        materialized_definition, materialized_root = corpus, Path(corpus_destination_root)
+    elif protocol.get("artifact_only"):
+        # All inputs are already verified; this path never touches PyTorch weights.
+        materialized_definition, materialized_root = corpus, Path(corpus_destination_root)
+    else:
+        materialized_definition, materialized_root = materialize_sealed_corpus(
+            mldb_data_root=pinned_root,
+            corpus_id=stage["corpus"],
+            object_bytes=object_bytes,
+            destination_root=corpus_destination_root,
+        )
+        if materialized_definition != corpus:
+            raise ValueError("materialized Corpus does not match resolved Corpus")
+        weight_bytes = object_bytes.read_verified(runtime_model["weights"])
+        state = _load_canonical_state_dict_bytes(
+            weight_bytes,
+            ref=runtime_model["weights"],
+        )
+        module = _load_state_into_fresh_architecture(
+            pinned_root,
+            architecture["id"],
+            state,
+        )
+        loaded_model = LoadedModel(
+            definition=model,
+            training_result=training_result,
+            architecture=architecture,
+            module=module,
+        )
     auxiliary_models = _load_auxiliary_models(
         protocol=protocol,
         parameters=parameters,
@@ -463,6 +543,9 @@ def _execute_evaluation_stage(
         parameters=parameters,
         telemetry=telemetry,
         work_dir=Path(work_dir),
+        onnx_input=onnx_input,
+        onnx_source_evaluation_result=onnx_source_id,
+        inputs=loaded_inputs,
     )
     evaluate = _load_evaluation_callable(
         pinned_root, stage["evaluation_protocol"]

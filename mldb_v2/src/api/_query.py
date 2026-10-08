@@ -26,6 +26,7 @@ from mldb_v2.src.repository.resolution import (
     CanonicalEntityId,
     CanonicalRepositoryResolver,
 )
+from mldb_v2.src.study.display_labels import build_condition_labels
 from mldb_v2.src.results.study_result import (
     StageDisposition,
     StudyResult,
@@ -432,6 +433,75 @@ class ReadOnlyQueryService:
             limit=limit,
         )
 
+    def _study_conditions(self, result: StudyResult) -> list[dict[str, object]]:
+        try:
+            plan = self._resolver.resolve(
+                kind=EntityKind.STUDY_PLAN, entity_id=result["plan"]
+            )
+        except (FileNotFoundError, ValueError) as error:
+            raise _InvalidQueryRequest(
+                "StudyResult condition traceability requires its canonical StudyPlan"
+            ) from error
+        raw_trials = plan.get("trials")
+        if type(raw_trials) is not list:
+            raise _InvalidQueryRequest("StudyPlan trials are malformed")
+
+        base_labels: dict[str, str] = {}
+        parameters_by_trial: dict[str, dict[str, object]] = {}
+        for raw_trial in raw_trials:
+            if not isinstance(raw_trial, Mapping) or type(raw_trial.get("trial")) is not str:
+                raise _InvalidQueryRequest("StudyPlan trial is malformed")
+            trial = str(raw_trial["trial"])
+            source = raw_trial.get("source")
+            if not isinstance(source, Mapping):
+                raise _InvalidQueryRequest("StudyPlan trial source is malformed")
+            params: dict[str, object] = {}
+            if source.get("kind") == "training":
+                architecture = source.get("architecture")
+                if type(architecture) is not str:
+                    raise _InvalidQueryRequest("training trial architecture is missing")
+                label = architecture.rsplit("/", 1)[-1]
+                try:
+                    architecture_doc = self._resolver.resolve(
+                        kind=EntityKind.ARCHITECTURE, entity_id=architecture
+                    )
+                except (FileNotFoundError, ValueError):
+                    architecture_doc = None
+                if isinstance(architecture_doc, Mapping) and type(architecture_doc.get("name")) is str and architecture_doc["name"]:
+                    label = str(architecture_doc["name"])
+                raw_params = source.get("parameters")
+                if isinstance(raw_params, Mapping):
+                    params.update({str(k): copy.deepcopy(v) for k, v in raw_params.items()})
+                if type(source.get("seed")) is int:
+                    params["seed"] = int(source["seed"])
+            elif source.get("kind") == "existing_model":
+                model = source.get("model")
+                if type(model) is not str:
+                    raise _InvalidQueryRequest("existing-model trial model is missing")
+                label = model.rsplit("/", 1)[-1]
+            else:
+                raise _InvalidQueryRequest("unsupported StudyPlan trial source")
+            base_labels[trial] = label
+            parameters_by_trial[trial] = params
+
+        result_trials = [str(item["trial"]) for item in result["trials"]]
+        if result_trials != list(base_labels):
+            raise _InvalidQueryRequest("StudyResult and StudyPlan trial order do not match")
+        try:
+            labels = build_condition_labels(
+                base_labels=base_labels, conditions=parameters_by_trial
+            )
+        except ValueError as error:
+            raise _InvalidQueryRequest(str(error)) from error
+        return [
+            {
+                "trial": _validate_trial_id(trial),
+                "label": labels[trial],
+                "parameters": copy.deepcopy(parameters_by_trial[trial]),
+            }
+            for trial in result_trials
+        ]
+
     def get_study_result(
         self,
         *,
@@ -442,7 +512,11 @@ class ReadOnlyQueryService:
             entity_id=study_result,
         )
         result = _validate_study_result(document)
-        return {"study_result": result, "progress": _derive_progress(result)}
+        return {
+            "study_result": result,
+            "progress": _derive_progress(result),
+            "conditions": self._study_conditions(result),
+        }
 
     def observe_study(
         self,
@@ -462,6 +536,7 @@ class ReadOnlyQueryService:
         return {
             "study_result": result,
             "progress": view["progress"],
+            "conditions": view["conditions"],
             "backend_observations": observations,
         }
 

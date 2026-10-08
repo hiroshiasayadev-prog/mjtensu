@@ -33,7 +33,7 @@ from mldb_v2.src.repository.listing import CanonicalRepositoryListing
 from mldb_v2.src.repository.resolution import CanonicalRepositoryResolver
 from mldb_v2.src.storage.corpus_manifest import _corpus_manifest_sha256, _parse_corpus_manifest
 from mldb_v2.src.storage.object_bytes import _ObjectByteAccess
-from mldb_v2.src.study._study_validation import _load_study_definition
+from mldb_v2.src.study._study_validation import _load_study_definition, _validate_study_artifact_contracts
 from mldb_v2.src.study.study import Study
 from mldb_v2.src.training.train_interface import _load_train_callable
 from mldb_v2.src.training.train_protocol import TrainProtocol, _load_train_protocol_definition
@@ -124,7 +124,9 @@ class _RepositoryDefinitionValidator:
         if kind is DefinitionKind.EVALUATION_PROTOCOL:
             return _load_evaluation_protocol_definition(self._root, EvaluationProtocolId(entity_id))
         if kind is DefinitionKind.STUDY:
-            return _load_study_definition(self._root, StudyId(entity_id))
+            study = _load_study_definition(self._root, StudyId(entity_id))
+            _validate_study_artifact_contracts(self._root, study)
+            return study
         raise ValueError("unsupported definition kind")
 
     def validate(self, *, request: DefinitionValidationRequest) -> DefinitionValidationResult:
@@ -138,14 +140,30 @@ class _RepositoryDefinitionValidator:
         try:
             self._load(kind, entity_id)
         except FileNotFoundError:
+            if kind is DefinitionKind.STUDY:
+                try:
+                    _load_study_definition(self._root, StudyId(entity_id))
+                except (FileNotFoundError, OSError, UnicodeError, ValueError, TypeError):
+                    pass
+                else:
+                    return {
+                        "valid": False,
+                        "diagnostics": [_diagnostic(
+                            "referenced_definition_missing",
+                            "Study references an Evaluation Protocol that is not present",
+                        )],
+                    }
             return {
                 "valid": False,
                 "diagnostics": [_diagnostic("definition_not_found", "canonical definition was not found")],
             }
-        except (OSError, UnicodeError, ValueError, TypeError):
+        except (OSError, UnicodeError, ValueError, TypeError) as error:
+            message = "canonical definition is invalid"
+            if kind is DefinitionKind.STUDY:
+                message += f": {error}"
             return {
                 "valid": False,
-                "diagnostics": [_diagnostic("definition_invalid", "canonical definition is invalid")],
+                "diagnostics": [_diagnostic("definition_invalid", message)],
             }
         return {"valid": True, "diagnostics": []}
 

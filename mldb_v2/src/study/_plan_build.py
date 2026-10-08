@@ -77,6 +77,7 @@ _EVALUATION_FIELDS = {
     "evaluation_protocol",
     "parameters",
 }
+_EVALUATION_OPTIONAL = {"inputs"}
 _PIN_KIND_ORDER = (
     "namespace",
     "task",
@@ -247,7 +248,9 @@ def _validate_existing_source(source: dict[str, object], refs: Mapping[str, set[
 
 
 def _validate_evaluation(value: object, expected_index: int, refs: Mapping[str, set[str]]) -> None:
-    record = _require_exact_dict(value, _EVALUATION_FIELDS, code="invalid_evaluation")
+    if type(value) is not dict or not _EVALUATION_FIELDS <= set(value) or not set(value) <= _EVALUATION_FIELDS | _EVALUATION_OPTIONAL:
+        raise _StudyPlanError("invalid_evaluation")
+    record = value
     expected = f"eval-{expected_index:04d}"
     try:
         actual = str(_validate_evaluation_coordinate_id(record["coordinate"]))
@@ -261,6 +264,15 @@ def _validate_evaluation(value: object, expected_index: int, refs: Mapping[str, 
     if type(record["stage"]) is not str or not record["stage"]:
         raise _StudyPlanError("invalid_evaluation")
     _validate_parameters(record["parameters"])
+    if "inputs" in record:
+        inputs = record["inputs"]
+        if type(inputs) is not dict:
+            raise _StudyPlanError("invalid_evaluation_inputs")
+        for alias, ref in inputs.items():
+            if (type(alias) is not str or type(ref) is not dict
+                or set(ref) != {"from_stage", "artifact"}
+                or any(type(v) is not str or not v for v in ref.values())):
+                raise _StudyPlanError("invalid_evaluation_inputs")
     _require_ref(refs, "task", task)
     _require_ref(refs, "corpus", corpus)
     _require_ref(refs, "evaluation_protocol", protocol)
@@ -293,8 +305,34 @@ def _validate_trials(value: object, refs: Mapping[str, set[str]]) -> None:
         evaluations = trial["evaluations"]
         if type(evaluations) is not list or not evaluations:
             raise _StudyPlanError("invalid_evaluations")
+        by_name: dict[str, list[dict[str, object]]] = {}
+        for e in evaluations:
+            if type(e) is dict and type(e.get("stage")) is str:
+                by_name.setdefault(e["stage"], []).append(e)
         for evaluation_index, evaluation in enumerate(evaluations, start=1):
             _validate_evaluation(evaluation, evaluation_index, refs)
+            for ref in evaluation.get("inputs", {}).values():
+                if ref["from_stage"] not in by_name:
+                    raise _StudyPlanError("unknown_from_stage")
+                if len(by_name[ref["from_stage"]]) != 1:
+                    raise _StudyPlanError("ambiguous_from_stage")
+                if ref["from_stage"] == evaluation["stage"]:
+                    raise _StudyPlanError("self_dependency")
+        # Study-level cycle detection is repeated here for pinned-plan integrity.
+        done: set[str] = set()
+        active: set[str] = set()
+        def check(name: str) -> None:
+            if name in active:
+                raise _StudyPlanError("evaluation_dependency_cycle")
+            if name in done:
+                return
+            active.add(name)
+            for edge in by_name[name][0].get("inputs", {}).values():
+                check(edge["from_stage"])
+            active.remove(name)
+            done.add(name)
+        for name in by_name:
+            check(name)
 
 
 def _digest_payload(record: Mapping[str, object]) -> dict[str, object]:
@@ -401,6 +439,7 @@ def _convert_trial(trial: _ExpandedTrial) -> dict[str, object]:
             "corpus": evaluation.corpus,
             "evaluation_protocol": evaluation.evaluation_protocol,
             "parameters": deepcopy(dict(evaluation.parameters)),
+            **({"inputs": deepcopy(dict(evaluation.inputs))} if evaluation.inputs else {}),
         }
         for evaluation in trial.evaluations
     ]

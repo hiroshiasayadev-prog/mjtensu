@@ -40,7 +40,9 @@ from mldb_v2.src.backend._clearml_pipeline import (
     ClearMLPipelineRecord,
 )
 from mldb_v2.src.backend._config import BackendConfig
-from mldb_v2.src.common.ids import EntityKind
+from mldb_v2.src.common.ids import EntityKind, _validate_typed_reference
+from mldb_v2.src.evaluation.evaluation_protocol import _load_evaluation_protocol_definition
+from mldb_v2.src.storage.artifact_reference import _validate_artifact_ref
 from mldb_v2.src.common.telemetry import _AcceptedScalarEvent
 from mldb_v2.src.repository.resolution import CanonicalRepositoryResolver
 from mldb_v2.src.runtime_registry import RuntimeRegistryClient, RuntimeRegistryError
@@ -449,6 +451,89 @@ def _pipeline_trial_labels(
         raise ClearMLSDKError(str(error)) from error
 
 
+def _onnx_source_id_for_stage(
+    pinned_root: Path, stage_input: Mapping[str, object]
+) -> str | None:
+    if stage_input["kind"] != "evaluation":
+        return None
+    stage = cast(Mapping[str, object], stage_input["stage"])
+    protocol = _load_evaluation_protocol_definition(
+        pinned_root, cast(str, stage["evaluation_protocol"])
+    )
+    parameter = protocol.get("onnx_input_parameter")
+    if parameter is None:
+        return None
+    parameters = cast(Mapping[str, object], stage["parameters"])
+    return _validate_typed_reference(parameters[parameter])
+
+
+def _validate_onnx_source_snapshot(
+    source: Mapping[str, object], *, source_id: str, model_id: str, task_id: str
+) -> None:
+    if (
+        source.get("schema") != "mjtensu.mldb-v2/evaluation-result/v1"
+        or source.get("id") != source_id
+        or source.get("status") != "completed"
+        or source.get("diagnostic") is not None
+        or source.get("model") != model_id
+        or source.get("task") != task_id
+    ):
+        raise ClearMLSDKError("ONNX source EvaluationResult identity/status/lineage mismatch")
+    payload = source.get("result")
+    if not isinstance(payload, Mapping):
+        raise ClearMLSDKError("ONNX source EvaluationResult has no result")
+    artifacts = payload.get("artifacts")
+    ref = artifacts.get("onnx_model") if isinstance(artifacts, Mapping) else None
+    if not isinstance(ref, dict) or ref.get("format") != "onnx":
+        raise ClearMLSDKError("ONNX source EvaluationResult has no formal ONNX artifact")
+    _validate_artifact_ref(ref)
+
+
+def _dependency_sources(stage_input: Mapping[str, object]) -> dict[str, dict[str, object]]:
+    if stage_input["kind"] != "evaluation":
+        return {}
+    stage = cast(Mapping[str, object], stage_input["stage"])
+    raw = stage.get("inputs", {})
+    if type(raw) is not dict:
+        raise ClearMLSDKError("EvaluationStage dependency input mapping is malformed")
+    sources: dict[str, dict[str, object]] = {}
+    for alias, entry in raw.items():
+        if (
+            type(alias) is not str or not alias
+            or type(entry) is not dict
+            or set(entry) != {"source_evaluation_result", "artifact", "ref"}
+        ):
+            raise ClearMLSDKError("EvaluationStage dependency input fields are malformed")
+        source_id = _validate_typed_reference(entry["source_evaluation_result"])
+        _validate_artifact_ref(entry["ref"])
+        if type(entry["artifact"]) is not str or not entry["artifact"]:
+            raise ClearMLSDKError("EvaluationStage dependency artifact is malformed")
+        sources[alias] = entry
+    return sources
+
+
+def _validate_dependency_snapshot(
+    source: Mapping[str, object], *, entry: Mapping[str, object],
+    model_id: str, task_id: str,
+) -> None:
+    source_id = entry["source_evaluation_result"]
+    if (
+        source.get("schema") != "mjtensu.mldb-v2/evaluation-result/v1"
+        or source.get("id") != source_id
+        or source.get("status") != "completed"
+        or source.get("diagnostic") is not None
+        or source.get("model") != model_id
+        or source.get("task") != task_id
+    ):
+        raise ClearMLSDKError("dependency source EvaluationResult is not accepted for same Model/Task")
+    payload = source.get("result")
+    artifacts = payload.get("artifacts") if isinstance(payload, Mapping) else None
+    actual = artifacts.get(entry["artifact"]) if isinstance(artifacts, Mapping) else None
+    if type(actual) is not dict or actual != entry["ref"]:
+        raise ClearMLSDKError("dependency source artifact does not match canonical EvaluationResult")
+    _validate_artifact_ref(actual)
+
+
 def _build_runtime_snapshots(
     settings: ClearMLSDKSettings, stage_input: Mapping[str, object]
 ) -> dict[str, object] | None:
@@ -499,6 +584,35 @@ def _build_runtime_snapshots(
             raise ClearMLSDKError("runtime TrainingResult architecture does not match StageInput")
         snapshots["training_result"] = dict(training_result)
         snapshots["model"] = dict(model)
+        pinned_root = _local_pinned_data_root(settings)
+        if pinned_root is None:
+            raise ClearMLSDKError("pinned Evaluation Protocol root is missing")
+        source_id = _onnx_source_id_for_stage(pinned_root, stage_input)
+        if source_id is not None:
+            source = dict(resolver.resolve(
+                kind=EntityKind.EVALUATION_RESULT, entity_id=source_id
+            ))
+            _validate_onnx_source_snapshot(
+                source, source_id=source_id, model_id=model_id,
+                task_id=cast(str, runtime_model["task"]),
+            )
+            snapshots["onnx_source_evaluation_result"] = source
+        deps = _dependency_sources(stage_input)
+        if deps:
+            records: dict[str, dict[str, object]] = {}
+            for entry in deps.values():
+                key = entry["source_evaluation_result"]
+                source = records.get(key)
+                if source is None:
+                    source = dict(resolver.resolve(
+                        kind=EntityKind.EVALUATION_RESULT, entity_id=key
+                    ))
+                    records[key] = source
+                _validate_dependency_snapshot(
+                    source, entry=entry, model_id=model_id,
+                    task_id=cast(str, runtime_model["task"])
+                )
+            snapshots["artifact_source_evaluation_results"] = records
     return snapshots
 
 
@@ -540,8 +654,14 @@ def _materialize_runtime_snapshots(
     snapshots: Mapping[str, object],
 ) -> None:
     expected = {"study_plan"}
+    source_id = _onnx_source_id_for_stage(pinned_root, stage_input)
     if stage_input["kind"] == "evaluation":
         expected |= {"training_result", "model"}
+    if source_id is not None:
+        expected.add("onnx_source_evaluation_result")
+    deps = _dependency_sources(stage_input)
+    if deps:
+        expected.add("artifact_source_evaluation_results")
     if set(snapshots) != expected:
         raise ClearMLSDKError("runtime snapshot bundle fields do not match stage kind")
 
@@ -602,6 +722,39 @@ def _materialize_runtime_snapshots(
         _snapshot_path(runtime_root, domain="models", entity_id=cast(str, model["id"])),
         model,
     )
+    if source_id is not None:
+        source = cast(Mapping[str, object], snapshots["onnx_source_evaluation_result"])
+        _validate_onnx_source_snapshot(
+            source, source_id=source_id, model_id=cast(str, model["id"]),
+            task_id=cast(str, runtime_model["task"]),
+        )
+        if source_id.split("/", 1)[0] != cast(str, model["id"]).split("/", 1)[0]:
+            raise ClearMLSDKError("ONNX source and Model must share a namespace")
+        _write_runtime_snapshot(
+            _snapshot_path(runtime_root, domain="evaluation_results", entity_id=source_id),
+            source,
+        )
+    if deps:
+        records = snapshots["artifact_source_evaluation_results"]
+        if type(records) is not dict or set(records) != {
+            entry["source_evaluation_result"] for entry in deps.values()
+        }:
+            raise ClearMLSDKError("artifact source snapshots do not match StageInput")
+        for entry in deps.values():
+            source = records[entry["source_evaluation_result"]]
+            if not isinstance(source, Mapping):
+                raise ClearMLSDKError("artifact source snapshot is malformed")
+            _validate_dependency_snapshot(
+                source, entry=entry, model_id=cast(str, model["id"]),
+                task_id=cast(str, runtime_model["task"]),
+            )
+            _write_runtime_snapshot(
+                _snapshot_path(
+                    runtime_root, domain="evaluation_results",
+                    entity_id=entry["source_evaluation_result"]
+                ),
+                source,
+            )
 
 
 def _load_task_class() -> Any:

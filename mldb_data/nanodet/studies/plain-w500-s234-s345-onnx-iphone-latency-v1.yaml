@@ -1,0 +1,49 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "nanodet/plain-w500-s234-s345-onnx-iphone-latency-v1",
+  "status": "sealed",
+  "name": "Plain W500 S234 vs S345 | ONNX export and iPhone latency",
+  "description": "Reuses the two accepted, untrained Plain W500 S234 and S345 NanoDet models; ONNX export and parity verification once per model on default queue, then accepted artifact-only Safari WASM-SIMD timing on latency-iphone. No training or accuracy claims.",
+  "model": {
+    "existing": [
+      "nanodet/run-1db5883ae8ba40c9b41e0c357fa4b968-trial-0001-model",
+      "nanodet/run-1db5883ae8ba40c9b41e0c357fa4b968-trial-0002-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "onnx-export",
+      "corpus": "nanodet/mahjong-composite-pathology-320-v1",
+      "protocol": "nanodet/nanodet-onnx-export-v1",
+      "parameters": {}
+    },
+    {
+      "stage": "ort-web-iphone-latency",
+      "corpus": "nanodet/mahjong-composite-pathology-320-v1",
+      "protocol": "nanodet/nanodet-ort-web-iphone-latency-v3",
+      "parameters": {
+        "warmup_runs": {
+          "values": [
+            5
+          ]
+        },
+        "runs_per_block": {
+          "values": [
+            10
+          ]
+        },
+        "measure_blocks": {
+          "values": [
+            10
+          ]
+        }
+      },
+      "inputs": {
+        "onnx_model": {
+          "from_stage": "onnx-export",
+          "artifact": "onnx_model"
+        }
+      }
+    }
+  ]
+}

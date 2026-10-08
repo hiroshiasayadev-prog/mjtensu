@@ -39,7 +39,9 @@ _TRAIN_GRID_FIELDS = {"corpus", "protocol", "architectures", "parameters", "seed
 _TRAIN_CASES_FIELDS = {"corpus", "protocol", "cases"}
 _TRAIN_CASE_FIELDS = {"architecture", "parameters", "seed"}
 _EVALUATION_FIELDS = {"stage", "corpus", "protocol", "parameters"}
+_EVALUATION_OPTIONAL = {"inputs"}
 _STAGE_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*", re.ASCII)
+_ARTIFACT_RE = re.compile(r"[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*", re.ASCII)
 
 
 def _validate_parameter_grid(value: object, *, label: str) -> dict[str, object]:
@@ -148,7 +150,8 @@ def _validate_evaluations(value: object) -> None:
     stages: list[str] = []
     for raw_stage in value:
         stage = _require_exact_mapping(raw_stage, label="Study evaluation stage")
-        _require_exact_fields(stage, _EVALUATION_FIELDS, label="Study evaluation stage")
+        if not _EVALUATION_FIELDS <= set(stage) or not set(stage) <= _EVALUATION_FIELDS | _EVALUATION_OPTIONAL:
+            raise ValueError("Study evaluation stage has missing or unknown fields")
         stage_id = _require_string(stage["stage"], label="Study evaluation stage", non_empty=True)
         if _STAGE_RE.fullmatch(stage_id) is None:
             raise ValueError("Study evaluation stage must be lowercase kebab-case")
@@ -158,6 +161,50 @@ def _validate_evaluations(value: object) -> None:
         _validate_parameter_grid(stage["parameters"], label=f"Study evaluation {stage_id} parameters")
     if len(stages) != len(set(stages)):
         raise ValueError("Study evaluation stage identifiers must be unique")
+    names = set(stages)
+    edges: dict[str, set[str]] = {}
+    for stage in value:
+        current = stage["stage"]
+        deps: set[str] = set()
+        if type(stage.get("inputs", {})) is not dict:
+            raise ValueError(f"Study stage {current}: inputs must be a mapping")
+        for alias, reference in stage.get("inputs", {}).items():
+            if type(alias) is not str or _ARTIFACT_RE.fullmatch(alias) is None:
+                raise ValueError(f"Study stage {current}: invalid input alias {alias!r}")
+            if type(reference) is not dict or set(reference) != {"from_stage", "artifact"}:
+                raise ValueError(f"Study stage {current}: input {alias} requires from_stage and artifact")
+            source, artifact = reference["from_stage"], reference["artifact"]
+            if type(source) is not str or source not in names:
+                raise ValueError(f"Study stage {current}: from_stage {source!r} does not exist")
+            if source == current:
+                raise ValueError(f"Study stage {current}: from_stage cannot refer to itself")
+            producer = next(candidate for candidate in value if candidate["stage"] == source)
+            coordinates = 1
+            for axis in producer["parameters"].values():
+                coordinates *= len(axis["values"])
+            if coordinates != 1:
+                raise ValueError(
+                    f"Study stage {current}: from_stage {source!r} has "
+                    f"{coordinates} producer coordinates; reference is ambiguous"
+                )
+            if type(artifact) is not str or _ARTIFACT_RE.fullmatch(artifact) is None:
+                raise ValueError(f"Study stage {current}: invalid artifact name {artifact!r}")
+            deps.add(source)
+        edges[current] = deps
+    visited: set[str] = set()
+    active: set[str] = set()
+    def visit(name: str) -> None:
+        if name in active:
+            raise ValueError(f"Study evaluation dependency cycle through {name!r}")
+        if name in visited:
+            return
+        active.add(name)
+        for upstream in edges[name]:
+            visit(upstream)
+        active.remove(name)
+        visited.add(name)
+    for name in stages:
+        visit(name)
 
 
 def _validate_study(value: object, *, expected_id: str | None = None) -> Study:
@@ -172,6 +219,49 @@ def _validate_study(value: object, *, expected_id: str | None = None) -> Study:
     _validate_model_source(document["model"])
     _validate_evaluations(document["evaluations"])
     return cast(Study, document)
+
+
+def _validate_study_artifact_contracts(
+    mldb_data_root: str | Path, study: Study
+) -> None:
+    """Fail at Study validation, not enqueue, for absent/ambiguous artifacts."""
+    from mldb_v2.src.evaluation.evaluation_protocol import _load_evaluation_protocol_definition
+
+    definitions = {
+        item["stage"]: _load_evaluation_protocol_definition(
+            mldb_data_root, item["protocol"]
+        )
+        for item in study["evaluations"]
+    }
+    for stage in study["evaluations"]:
+        target = stage["stage"]
+        refs = stage.get("inputs", {})
+        required = definitions[target].get("artifact_inputs", {})
+        if set(refs) != set(required):
+            raise ValueError(
+                f"Study stage {target}: input aliases {sorted(refs)} differ from "
+                f"Protocol artifact_inputs {sorted(required)}"
+            )
+        for alias, reference in refs.items():
+            upstream = reference["from_stage"]
+            artifact = reference["artifact"]
+            declaration = definitions[upstream]["artifacts"].get(artifact)
+            if declaration is None:
+                raise ValueError(
+                    f"Study stage {target}: from_stage {upstream!r} "
+                    f"does not declare artifact {artifact!r}"
+                )
+            if not declaration["required"]:
+                raise ValueError(
+                    f"Study stage {target}: artifact {artifact!r} of {upstream!r} "
+                    "is optional; only required artifacts may be depended upon"
+                )
+            if declaration["format"] != required[alias]:
+                raise ValueError(
+                    f"Study stage {target}: artifact {artifact!r} format "
+                    f"{declaration['format']!r} does not match input {alias!r} "
+                    f"format {required[alias]!r}"
+                )
 
 
 def _load_study_definition(

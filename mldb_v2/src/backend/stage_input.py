@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, TypeAlias, TypedDict
+from typing import Literal, NotRequired, TypeAlias, TypedDict
 
 from mldb_v2.src.common.ids import (
     ArchitectureId,
@@ -37,6 +37,7 @@ class EvaluationStage(TypedDict):
     corpus: CorpusId
     evaluation_protocol: EvaluationProtocolId
     parameters: ResolvedPublicParameters
+    inputs: NotRequired[dict[str, dict[str, object]]]
 
 
 class RuntimeModel(TypedDict):

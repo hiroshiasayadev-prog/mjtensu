@@ -746,7 +746,8 @@ def test_exact_loaded_model_and_evaluation_context(
     assert result == {"metrics": {"score": 1.0}, "artifacts": {}}
     context = captured["context"]
     assert set(context.__dict__) == {
-        "task", "corpus", "model", "models", "parameters", "telemetry", "work_dir"
+        "task", "corpus", "model", "models", "parameters", "telemetry", "work_dir",
+        "onnx_input", "onnx_source_evaluation_result", "inputs",
     }
     assert context.models == {}
     assert context.task["id"] == "demo/task-v1"
@@ -1195,3 +1196,257 @@ def test_runtime_source_contains_no_family_or_persistence_specialization() -> No
         "importlib",
     ):
         assert forbidden not in source
+
+
+_ONNX_SOURCE_RESULT = "demo/export-result-v1"
+_ONNX_SOURCE_URI = "s3://bucket/exported/model.onnx"
+
+
+def _onnx_only_fixture(tmp_path: Path):
+    pinned_root, runtime_root, corpus_bytes, weight_data = _default_roots(tmp_path)
+    protocol_path = pinned_root / "demo" / "evaluation_protocols" / "eval-v1.yaml"
+    protocol = json.loads(protocol_path.read_text())
+    protocol["parameters"]["onnx_source"] = {"default": "", "type": "string"}
+    protocol["onnx_input_parameter"] = "onnx_source"
+    _write_json(protocol_path, protocol)
+    onnx_data = b"fixture ONNX graph (integrity checked, not executed)"
+    artifact = {
+        "uri": _ONNX_SOURCE_URI, "sha256": _sha(onnx_data),
+        "bytes": len(onnx_data), "format": "onnx",
+        "schema": "mjtensu.recognition/tile-shape-onnx-model/v1",
+    }
+    source = {
+        "schema": "mjtensu.mldb-v2/evaluation-result/v1",
+        "id": _ONNX_SOURCE_RESULT, "status": "completed",
+        "diagnostic": None, "model": MODEL_ID, "task": "demo/task-v1",
+        "result": {"metrics": {}, "artifacts": {"onnx_model": artifact}},
+    }
+    source_path = runtime_root / "demo" / "evaluation_results" / "export-result-v1.yaml"
+    _write_json(source_path, source)
+    stage = _stage_input(weight_data, parameters={
+        "threshold": 0.25, "onnx_source": _ONNX_SOURCE_RESULT,
+    })
+    return pinned_root, runtime_root, corpus_bytes, weight_data, onnx_data, source_path, stage
+
+
+def test_onnx_only_eval_reads_only_verified_artifact_not_weights_or_corpus(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pinned, runtime, corpus, weights, onnx, _path, stage = _onnx_only_fixture(tmp_path)
+    observed = {}
+    def capture(context):
+        observed["context"] = context
+        return EvaluationCandidate(metrics={"score": 0.5}, artifacts={})
+    monkeypatch.setattr(evaluation_runtime, "_load_evaluation_callable",
+                        lambda *_a, **_k: capture)
+    result, transport, _ = _run(
+        tmp_path, pinned, runtime, corpus, weights, stage,
+        extra_objects={_ONNX_SOURCE_URI: onnx},
+    )
+    assert result["metrics"] == {"score": 0.5}
+    assert transport.reads == [_ONNX_SOURCE_URI]
+    context = observed["context"]
+    assert context.model is None
+    assert context.onnx_input == onnx
+    assert context.onnx_source_evaluation_result == _ONNX_SOURCE_RESULT
+    assert not (tmp_path / "corpus-runtime").exists()
+
+
+@pytest.mark.parametrize("change,expected", [
+    ({"status": "failed"}, "incomplete"),
+    ({"model": "demo/another-model-v1"}, "different Model"),
+    ({"task": "demo/another-task-v1"}, "different Model"),
+    ({"result": {"metrics": {}, "artifacts": {}}}, "no ONNX model artifact"),
+])
+def test_onnx_only_rejects_nonaccepted_or_cross_model_source(
+    tmp_path: Path, change: dict, expected: str
+) -> None:
+    pinned, runtime, corpus, weights, onnx, path, stage = _onnx_only_fixture(tmp_path)
+    source = json.loads(path.read_text())
+    source.update(change)
+    _write_json(path, source)
+    with pytest.raises(ValueError, match=expected):
+        _run(tmp_path, pinned, runtime, corpus, weights, stage,
+             extra_objects={_ONNX_SOURCE_URI: onnx})
+
+
+def test_onnx_only_rejects_corrupt_artifact_before_evaluate(tmp_path: Path) -> None:
+    pinned, runtime, corpus, weights, onnx, _path, stage = _onnx_only_fixture(tmp_path)
+    with pytest.raises(ValueError, match="sha256|hash|byte length|integrity"):
+        _run(tmp_path, pinned, runtime, corpus, weights, stage,
+             extra_objects={_ONNX_SOURCE_URI: onnx + b"corrupted"})
+
+
+def test_clearml_forwards_accepted_onnx_source_result_to_worker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from mldb_v2.src.backend import _clearml_sdk
+
+    pinned, runtime, corpus, weights, onnx, path, stage = _onnx_only_fixture(tmp_path)
+    plan = {
+        "schema": "mjtensu.mldb-v2/study-plan/v1",
+        "id": stage["plan"], "content_sha256": stage["plan_sha256"],
+        "source_commit": stage["source_commit"],
+    }
+    _write_json(runtime / "demo" / "study_plans" / "plan-v1.yaml", plan)
+    monkeypatch.setattr(_clearml_sdk, "_validate_study_plan", lambda value: value)
+    settings = SimpleNamespace(
+        local_repository_root=str(tmp_path), pinned_data_root="pinned",
+        runtime_data_root="runtime",
+    )
+    snapshots = _clearml_sdk._build_runtime_snapshots(settings, stage)
+    assert snapshots is not None
+    assert snapshots["onnx_source_evaluation_result"]["id"] == _ONNX_SOURCE_RESULT
+    worker_root = tmp_path / "worker-snapshots"
+    _clearml_sdk._materialize_runtime_snapshots(
+        runtime_root=worker_root, pinned_root=pinned,
+        stage_input=stage, snapshots=snapshots,
+    )
+    worker_source = worker_root / "demo" / "evaluation_results" / "export-result-v1.yaml"
+    assert json.loads(worker_source.read_text()) == json.loads(path.read_text())
+    monkeypatch.setattr(
+        evaluation_runtime, "_load_evaluation_callable",
+        lambda *_args, **_kwargs: lambda context: EvaluationCandidate(
+            metrics={"score": float(len(context.onnx_input))}, artifacts={}
+        ),
+    )
+    result, transport, _ = _run(
+        tmp_path, pinned, worker_root, corpus, weights, stage,
+        extra_objects={_ONNX_SOURCE_URI: onnx},
+    )
+    assert result["metrics"] == {"score": float(len(onnx))}
+    assert transport.reads == [_ONNX_SOURCE_URI]
+
+
+def test_clearml_onnx_snapshot_requires_same_model_and_verified_artifact():
+    from mldb_v2.src.backend._clearml_sdk import (
+        ClearMLSDKError, _validate_onnx_source_snapshot,
+    )
+    source = {
+        "schema": "mjtensu.mldb-v2/evaluation-result/v1",
+        "id": _ONNX_SOURCE_RESULT, "status": "completed",
+        "model": MODEL_ID, "task": "demo/task-v1", "diagnostic": None,
+        "result": {"artifacts": {"onnx_model": {
+            "uri": _ONNX_SOURCE_URI, "bytes": 4, "sha256": "a" * 64,
+            "format": "onnx", "schema": "demo/model/v1",
+        }}},
+    }
+    _validate_onnx_source_snapshot(
+        source, source_id=_ONNX_SOURCE_RESULT,
+        model_id=MODEL_ID, task_id="demo/task-v1",
+    )
+    with pytest.raises(ClearMLSDKError, match="lineage"):
+        _validate_onnx_source_snapshot(
+            source, source_id=_ONNX_SOURCE_RESULT,
+            model_id="demo/other-model-v1", task_id="demo/task-v1",
+        )
+
+def _generic_artifact_only_test_input(tmp_path: Path):
+    pinned, runtime, corpus, weights = _default_roots(tmp_path)
+    protocol_path = pinned / "demo" / "evaluation_protocols" / "eval-v1.yaml"
+    doc = json.loads(protocol_path.read_text())
+    doc["artifact_inputs"] = {"onnx_model": "onnx"}
+    doc["artifact_only"] = True
+    _write_json(protocol_path, doc)
+    onnx = b"received once from upstream"
+    ref = {
+        "uri": _ONNX_SOURCE_URI, "bytes": len(onnx), "sha256": _sha(onnx),
+        "format": "onnx", "schema": "demo/onnx/v1"
+    }
+    stage = _stage_input(weights, inputs={
+        "onnx_model": {
+            "source_evaluation_result": _ONNX_SOURCE_RESULT,
+            "artifact": "onnx_model", "ref": ref,
+        }
+    })
+    return pinned, runtime, corpus, weights, onnx, stage
+
+
+def test_generic_artifact_input_skips_pytorch_and_corpus(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    pinned, runtime, corpus, weights, onnx, stage = _generic_artifact_only_test_input(tmp_path)
+    captured = {}
+    def capture(context):
+        captured["inputs"] = context.inputs
+        assert context.model is None
+        return EvaluationCandidate(metrics={"score": 0.9}, artifacts={})
+    monkeypatch.setattr(evaluation_runtime, "_load_evaluation_callable",
+                        lambda *_a, **_k: capture)
+    result, transport, _ = _run(
+        tmp_path, pinned, runtime, corpus, weights, stage,
+        extra_objects={_ONNX_SOURCE_URI: onnx},
+    )
+    assert result["metrics"] == {"score": 0.9}
+    assert transport.reads == [_ONNX_SOURCE_URI]
+    assert captured["inputs"]["onnx_model"].data == onnx
+    assert captured["inputs"]["onnx_model"].source_evaluation_result == _ONNX_SOURCE_RESULT
+    assert not (tmp_path/"corpus-runtime").exists()
+
+
+@pytest.mark.parametrize(("mutation", "error"), [
+    ({"format": "json"}, "format mismatch"),
+    ({"sha256": "f" * 64}, "SHA|sha256|hash|mismatch"),
+])
+def test_generic_artifact_input_rejects_bad_ref_before_call(
+    tmp_path: Path, mutation, error
+):
+    pinned, runtime, corpus, weights, onnx, stage = _generic_artifact_only_test_input(tmp_path)
+    stage["stage"]["inputs"]["onnx_model"]["ref"].update(mutation)
+    with pytest.raises(ValueError, match=error):
+        _run(tmp_path, pinned, runtime, corpus, weights, stage,
+             extra_objects={_ONNX_SOURCE_URI: onnx})
+
+
+def test_clearml_forwards_same_study_generic_artifact_source_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from mldb_v2.src.backend import _clearml_sdk
+
+    pinned, runtime, corpus, weights, onnx, stage = _generic_artifact_only_test_input(tmp_path)
+    original_ref = stage["stage"]["inputs"]["onnx_model"]["ref"]
+    source_path = runtime / "demo" / "evaluation_results" / "export-result-v1.yaml"
+    _write_json(source_path, {
+        "schema": "mjtensu.mldb-v2/evaluation-result/v1",
+        "id": _ONNX_SOURCE_RESULT,
+        "model": MODEL_ID, "task": "demo/task-v1",
+        "status": "completed", "diagnostic": None,
+        "result": {"metrics": {}, "artifacts": {"onnx_model": original_ref}},
+    })
+    _write_json(runtime / "demo" / "study_plans" / "plan-v1.yaml", {
+        "schema": "mjtensu.mldb-v2/study-plan/v1",
+        "id": stage["plan"], "content_sha256": stage["plan_sha256"],
+        "source_commit": stage["source_commit"],
+    })
+    monkeypatch.setattr(_clearml_sdk, "_validate_study_plan", lambda value: value)
+    settings = SimpleNamespace(
+        local_repository_root=str(tmp_path), pinned_data_root="pinned",
+        runtime_data_root="runtime",
+    )
+    snapshots = _clearml_sdk._build_runtime_snapshots(settings, stage)
+    assert snapshots["artifact_source_evaluation_results"][_ONNX_SOURCE_RESULT]["id"] == _ONNX_SOURCE_RESULT
+
+    worker_root = tmp_path / "generic-worker"
+    _clearml_sdk._materialize_runtime_snapshots(
+        runtime_root=worker_root, pinned_root=pinned,
+        stage_input=stage, snapshots=snapshots,
+    )
+    copied = worker_root / "demo" / "evaluation_results" / "export-result-v1.yaml"
+    assert json.loads(copied.read_text()) == json.loads(source_path.read_text())
+
+    def evaluate(context):
+        return EvaluationCandidate(metrics={"score": float(len(context.inputs["onnx_model"].data))}, artifacts={})
+    monkeypatch.setattr(evaluation_runtime, "_load_evaluation_callable",
+                        lambda *_a, **_k: evaluate)
+    result, transport, _ = _run(
+        tmp_path, pinned, worker_root, corpus, weights, stage,
+        extra_objects={_ONNX_SOURCE_URI: onnx},
+    )
+    assert result["metrics"] == {"score": float(len(onnx))}
+    assert transport.reads == [_ONNX_SOURCE_URI]
+
+    bad = json.loads(source_path.read_text())
+    bad["result"]["artifacts"]["onnx_model"]["sha256"] = "0" * 64
+    _write_json(source_path, bad)
+    with pytest.raises(_clearml_sdk.ClearMLSDKError, match="artifact"):
+        _clearml_sdk._build_runtime_snapshots(settings, stage)

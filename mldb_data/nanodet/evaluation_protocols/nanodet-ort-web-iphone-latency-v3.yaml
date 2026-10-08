@@ -1,0 +1,61 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "nanodet/nanodet-ort-web-iphone-latency-v3",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "name": "NanoDet ONNX artifact only Safari latency v3",
+  "description": "Measure a verified ONNX artifact from the same-Study producer Export EvaluationResult; skip model state loading, export and corpus materialization on iPhone worker. Browser checks shape/finite samples; export parity is separately accepted.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "703b47df023d8499c1c3a91188f734783e0bc14cf14d0dda4d828a379fd6d248"
+  },
+  "parameters": {
+    "warmup_runs": {
+      "type": "integer",
+      "default": 5,
+      "minimum": 1,
+      "maximum": 100
+    },
+    "runs_per_block": {
+      "type": "integer",
+      "default": 10,
+      "minimum": 1,
+      "maximum": 100
+    },
+    "measure_blocks": {
+      "type": "integer",
+      "default": 10,
+      "minimum": 1,
+      "maximum": 100
+    }
+  },
+  "metrics": {
+    "latency_p50_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "latency_p95_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "latency_mean_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    }
+  },
+  "artifacts": {
+    "latency_report": {
+      "format": "json",
+      "schema": "mjtensu.nanodet/iphone-onnx-input-latency/v1",
+      "required": true,
+      "description": "Safari timing samples and immutable source ONNX identity"
+    }
+  },
+  "artifact_inputs": {
+    "onnx_model": "onnx"
+  },
+  "artifact_only": true
+}

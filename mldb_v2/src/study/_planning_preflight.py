@@ -246,6 +246,35 @@ class _StudyPlanningPreflight:
                     protocol=protocol,
                 )
             )
+        by_name = {item.stage["stage"]: item for item in result}
+        for target in result:
+            refs = target.stage.get("inputs", {})
+            required = target.protocol.get("artifact_inputs", {})
+            if set(refs) != set(required):
+                raise ValueError(
+                    f"Study stage {target.stage['stage']}: inputs {set(refs)} "
+                    f"do not match protocol artifact_inputs {set(required)}"
+                )
+            for alias, reference in refs.items():
+                source = by_name[reference["from_stage"]]
+                declaration = source.protocol["artifacts"].get(reference["artifact"])
+                if declaration is None:
+                    raise ValueError(
+                        f"Study stage {target.stage['stage']}: from_stage "
+                        f"{reference['from_stage']} has no artifact {reference['artifact']}"
+                    )
+                if not declaration["required"]:
+                    raise ValueError(
+                        f"Study stage {target.stage['stage']}: optional producer artifact "
+                        f"{reference['artifact']} is not supported"
+                    )
+                if declaration["format"] != required[alias]:
+                    raise ValueError(
+                        f"Study stage {target.stage['stage']}: input {alias} format mismatch "
+                        f"({declaration['format']} != {required[alias]})"
+                    )
+                if target.protocol.get("artifact_only") and not refs:
+                    raise ValueError("artifact_only stage requires inputs")
         return tuple(result)
 
 

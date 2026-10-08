@@ -56,13 +56,16 @@ class EvaluationProtocol(TypedDict):
     metrics: EvaluationMetricDeclarations
     artifacts: EvaluationArtifactDeclarations
     model_parameters: NotRequired[Mapping[str, str]]
+    onnx_input_parameter: NotRequired[str]
+    artifact_inputs: NotRequired[Mapping[str, str]]
+    artifact_only: NotRequired[bool]
 
 
 _REQUIRED_TOP_LEVEL = {
     "schema", "id", "status", "task", "name", "description",
     "implementation", "parameters", "metrics", "artifacts",
 }
-_OPTIONAL_TOP_LEVEL = {"model_parameters"}
+_OPTIONAL_TOP_LEVEL = {"model_parameters", "onnx_input_parameter", "artifact_inputs", "artifact_only"}
 
 
 def _validate_metric_declarations(value: object) -> dict[str, EvaluationMetricDeclaration]:
@@ -186,6 +189,31 @@ def _parse_evaluation_protocol_document(
         if "model_parameters" in mapping
         else {}
     )
+    onnx_input_parameter = mapping.get("onnx_input_parameter")
+    if onnx_input_parameter is not None:
+        onnx_input_parameter = _require_string(
+            onnx_input_parameter, label="onnx_input_parameter", nonempty=True
+        )
+        if onnx_input_parameter not in parameters:
+            raise ValueError("onnx_input_parameter must be a declared parameter")
+        declaration = parameters[onnx_input_parameter]
+        if declaration.get("type") != "string":
+            raise ValueError("onnx_input_parameter requires a string parameter")
+        if onnx_input_parameter in model_parameters.values():
+            raise ValueError("onnx_input_parameter cannot be a model parameter")
+    artifact_inputs = mapping.get("artifact_inputs", {})
+    if type(artifact_inputs) is not dict or any(
+        type(k) is not str or not k or type(v) is not str or not v
+        for k, v in artifact_inputs.items()
+    ):
+        raise ValueError("artifact_inputs must map input aliases to nonempty artifact formats")
+    artifact_only = mapping.get("artifact_only", False)
+    if type(artifact_only) is not bool:
+        raise ValueError("artifact_only must be a boolean")
+    if artifact_only and not artifact_inputs:
+        raise ValueError("artifact_only requires declared artifact_inputs")
+    if artifact_only and (model_parameters or onnx_input_parameter):
+        raise ValueError("artifact_only cannot use model_parameters or onnx_input_parameter")
     if not metrics and not artifacts:
         raise ValueError("Evaluation Protocol requires at least one metric or artifact")
     result: EvaluationProtocol = {
@@ -202,6 +230,12 @@ def _parse_evaluation_protocol_document(
     }
     if model_parameters:
         result["model_parameters"] = model_parameters
+    if onnx_input_parameter is not None:
+        result["onnx_input_parameter"] = onnx_input_parameter
+    if artifact_inputs:
+        result["artifact_inputs"] = artifact_inputs
+    if artifact_only:
+        result["artifact_only"] = True
     return result
 
 

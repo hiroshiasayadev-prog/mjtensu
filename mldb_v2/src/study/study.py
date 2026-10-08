@@ -1,4 +1,4 @@
-from typing import Literal, Mapping, TypeAlias, TypedDict
+from typing import Literal, Mapping, NotRequired, TypeAlias, TypedDict
 
 from mldb_v2.src.common.ids import (
     ArchitectureId,
@@ -59,6 +59,7 @@ class EvaluationStage(TypedDict):
     corpus: CorpusId
     protocol: EvaluationProtocolId
     parameters: EvaluationParameterGrid
+    inputs: NotRequired[Mapping[str, Mapping[str, str]]]
 
 
 class Study(TypedDict):

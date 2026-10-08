@@ -9,6 +9,7 @@ from typing import Literal, TypeAlias, TypedDict, cast
 
 from mldb_v2.src.backend.stage_input import EvaluationStageInput, RuntimeModel, StageInput
 from mldb_v2.src.common.ids import (
+    EntityKind,
     EvaluationCoordinateId,
     TrialId,
     _canonical_json_bytes,
@@ -16,6 +17,8 @@ from mldb_v2.src.common.ids import (
     _validate_trial_id,
 )
 from mldb_v2.src.results.study_result import StudyResult, StudyResultTrial, _validate_study_result
+from mldb_v2.src.repository.resolution import CanonicalRepositoryResolver
+from mldb_v2.src.storage.artifact_reference import _validate_artifact_ref
 from mldb_v2.src.study._plan_build import _validate_study_plan
 from mldb_v2.src.study.plan import PlanTrial, StudyPlan
 from mldb_v2.src.training.model import _ResolvedModelLineage, _resolve_model_lineage
@@ -332,7 +335,31 @@ class ExecutionReadinessResolver:
                 for coordinate, _slot in pending_evaluations
             )
 
-        return {"ready": ready, "skipped": skipped}
+        # Dependencies are resolved per trial, never across sweep/trial boundaries.
+        gated: list[PlannedStageRef] = []
+        for item in ready:
+            if item["kind"] == "training":
+                gated.append(item)
+                continue
+            plan_trial = _find_plan_trial(validated_plan, str(item["trial"]))
+            result_trial = _find_result_trial(validated_result, str(item["trial"]))
+            consumer = next(e for e in plan_trial["evaluations"] if e["coordinate"] == item["coordinate"])
+            upstream = {e["stage"]: slot for e, slot in zip(
+                plan_trial["evaluations"], result_trial["evaluations"]
+            )}
+            states = [upstream[ref["from_stage"]]["disposition"]
+                      for ref in consumer.get("inputs", {}).values()]
+            if any(status in {"failed", "cancelled", "skipped"} for status in states):
+                skipped.append({
+                    "stage": item,
+                    "reason": "upstream_failed" if any(
+                        status in {"failed", "skipped"} for status in states
+                    ) else "upstream_cancelled",
+                })
+            elif all(status == "completed" for status in states):
+                gated.append(item)
+            # pending dependency: do not enqueue, even if other workers are free.
+        return {"ready": gated, "skipped": skipped}
 
 
 def _validate_stage_ref(stage: object) -> PlannedStageRef:
@@ -445,11 +472,63 @@ def _materialize_stage_input(
                 "corpus": coordinate["corpus"],
                 "evaluation_protocol": coordinate["evaluation_protocol"],
                 "parameters": copy.deepcopy(coordinate["parameters"]),
+                **({"inputs": _resolved_artifact_inputs(
+                    plan_trial=plan_trial, result_trial=result_trial,
+                    planned=coordinate, mldb_data_root=mldb_data_root,
+                    model_id=runtime_model["model"],
+                )} if coordinate.get("inputs") else {}),
             },
             "runtime_model": runtime_model,
         },
     )
 
+
+
+def _resolved_artifact_inputs(
+    *,
+    plan_trial: PlanTrial,
+    result_trial: StudyResultTrial,
+    planned: Mapping[str, object],
+    mldb_data_root: str | Path,
+    model_id: str,
+) -> dict[str, dict[str, object]]:
+    requested = planned.get("inputs", {})
+    if not requested:
+        return {}
+    by_stage = {
+        e["stage"]: slot for e, slot in zip(
+            plan_trial["evaluations"], result_trial["evaluations"]
+        )
+    }
+    resolver = CanonicalRepositoryResolver(mldb_data_root)
+    resolved: dict[str, dict[str, object]] = {}
+    for alias, reference in requested.items():
+        upstream = by_stage[reference["from_stage"]]
+        if upstream["disposition"] != "completed" or not upstream["result"]:
+            raise ValueError(
+                f"artifact dependency {reference['from_stage']} not formally completed"
+            )
+        result_id = upstream["result"]
+        source = resolver.resolve(
+            kind=EntityKind.EVALUATION_RESULT, entity_id=result_id
+        )
+        if (source.get("id") != result_id or source.get("status") != "completed"
+                or source.get("model") != model_id or source.get("diagnostic") is not None):
+            raise ValueError("artifact producer result is incomplete or not the same Model")
+        payload = source.get("result")
+        artifacts = payload.get("artifacts") if isinstance(payload, dict) else None
+        ref = artifacts.get(reference["artifact"]) if isinstance(artifacts, dict) else None
+        if not isinstance(ref, dict):
+            raise ValueError(
+                f"artifact producer {reference['from_stage']} lacks {reference['artifact']}"
+            )
+        _validate_artifact_ref(ref)
+        resolved[alias] = {
+            "source_evaluation_result": result_id,
+            "artifact": reference["artifact"],
+            "ref": copy.deepcopy(ref),
+        }
+    return resolved
 
 
 def _materialize_evaluation_retry_stage_input(
@@ -517,6 +596,11 @@ def _materialize_evaluation_retry_stage_input(
                 "corpus": planned["corpus"],
                 "evaluation_protocol": planned["evaluation_protocol"],
                 "parameters": copy.deepcopy(planned["parameters"]),
+                **({"inputs": _resolved_artifact_inputs(
+                    plan_trial=plan_trial, result_trial=result_trial,
+                    planned=planned, mldb_data_root=mldb_data_root,
+                    model_id=runtime_model["model"],
+                )} if planned.get("inputs") else {}),
             },
             "runtime_model": runtime_model,
         },

@@ -579,3 +579,62 @@ def test_acceptance_source_has_no_skeleton_clearml_or_persistence_dependency() -
     assert "create_immutable" not in source
     assert "replace_nonterminal_study_result" not in source
     assert "publish_bytes" not in source
+
+def test_acceptance_verifies_same_study_artifact_provenance(tmp_path: Path):
+    req = _fixture(tmp_path)
+    plan = req["plan"]
+    result = req["study_result"]
+    stage_input = req["stage_input"]
+    candidate = req["candidate"]
+    original = copy.deepcopy(plan["trials"][0]["evaluations"][0])
+    upstream = {**original, "coordinate": "eval-0001", "stage": "onnx-export"}
+    downstream = {
+        **original,
+        "coordinate": "eval-0002",
+        "inputs": {"source_artifact": {
+            "from_stage": "onnx-export", "artifact": "predictions"
+        }},
+    }
+    plan["trials"][0]["evaluations"] = [upstream, downstream]
+    digest = hashlib.sha256(_canonical_json_bytes({
+        key: value for key, value in plan.items()
+        if key not in {"id", "content_sha256"}
+    })).hexdigest()
+    plan["content_sha256"] = digest
+    plan["id"] = _plan_id(plan["study"], digest)
+    result["plan"] = plan["id"]
+    result["trials"][0]["evaluations"] = [
+        {"coordinate": "eval-0001", "stage": "onnx-export",
+         "disposition": "completed",
+         "result": f"{STUDY_RESULT_ID}-trial-0001-eval-0001", "reason": None},
+        {"coordinate": "eval-0002", "stage": "holdout",
+         "disposition": "pending", "result": None, "reason": None},
+    ]
+    stage_input["coordinate"] = "eval-0002"
+    stage_input["plan"] = plan["id"]
+    stage_input["plan_sha256"] = digest
+    candidate["stage_key"]["coordinate"] = "eval-0002"
+    candidate["stage_key"]["plan"] = plan["id"]
+
+    artifact = candidate["result"]["artifacts"]["predictions"]
+    upstream_id = f"{STUDY_RESULT_ID}-trial-0001-eval-0001"
+    stage_input["stage"]["inputs"] = {"source_artifact": {
+        "source_evaluation_result": upstream_id,
+        "artifact": "predictions",
+        "ref": copy.deepcopy(artifact),
+    }}
+    root = tmp_path / "mldb_data"
+    _write_json(root / "demo" / "evaluation_results" /
+                f"{upstream_id.split('/',1)[1]}.yaml", {
+        "schema": "mjtensu.mldb-v2/evaluation-result/v1",
+        "id": upstream_id, "model": MODEL_ID, "task": "demo/task-v1",
+        "status": "completed", "diagnostic": None,
+        "result": {"metrics": {}, "artifacts": {"predictions": artifact}},
+    })
+    accepted = _accept(req)
+    assert accepted["status"] == "completed"
+    assert accepted["coordinate"] == "eval-0002"
+
+    stage_input["stage"]["inputs"]["source_artifact"]["ref"]["sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="artifact does not match canonical"):
+        _accept(req)

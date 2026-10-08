@@ -1,6 +1,6 @@
 """MLDB v2 immutable Study Plan public shapes."""
 
-from typing import Literal, TypeAlias, TypedDict
+from typing import Literal, NotRequired, TypeAlias, TypedDict
 
 from mldb_v2.src.common.ids import (
     ArchitectureId,
@@ -79,6 +79,7 @@ class EvaluationCoordinate(TypedDict):
     corpus: CorpusId
     evaluation_protocol: EvaluationProtocolId
     parameters: ResolvedPublicParameters
+    inputs: NotRequired[dict[str, dict[str, str]]]
 
 
 class PlanTrial(TypedDict):

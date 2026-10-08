@@ -36,6 +36,7 @@ from mldb_v2.src.evaluation.evaluation_result import (
     EvaluationResult,
 )
 from mldb_v2.src.storage.artifact_reference import _validate_artifact_ref
+from mldb_v2.src.repository.resolution import CanonicalRepositoryResolver
 from mldb_v2.src.storage.object_bytes import _ObjectByteAccess
 from mldb_v2.src.study._plan_build import _validate_study_plan
 from mldb_v2.src.study.plan import StudyPlan
@@ -64,6 +65,7 @@ _STAGE_INPUT_FIELDS = {
     "source_commit", "runtime_registry_version", "pins", "stage", "runtime_model",
 }
 _STAGE_FIELDS = {"name", "task", "corpus", "evaluation_protocol", "parameters"}
+_STAGE_OPTIONAL = {"inputs"}
 _RUNTIME_MODEL_FIELDS = {"model", "training_result", "task", "architecture", "weights"}
 _CANDIDATE_FIELDS = {"state", "stage_key", "attempts", "status", "diagnostic", "result"}
 _STAGE_KEY_FIELDS = {"study_result", "plan", "trial", "kind", "coordinate", "source_commit"}
@@ -238,7 +240,7 @@ def _validate_stage_input(
         raise ValueError("EvaluationStageInput pins do not exactly match Plan")
 
     stage = stage_input["stage"]
-    if type(stage) is not dict or set(stage) != _STAGE_FIELDS:
+    if type(stage) is not dict or not _STAGE_FIELDS <= set(stage) or not set(stage) <= _STAGE_FIELDS | _STAGE_OPTIONAL:
         raise ValueError("EvaluationStage fields do not match schema")
     expected_stage = {
         "name": coordinate["stage"],
@@ -247,6 +249,49 @@ def _validate_stage_input(
         "evaluation_protocol": coordinate["evaluation_protocol"],
         "parameters": coordinate["parameters"],
     }
+    if coordinate.get("inputs"):
+        resolved = stage.get("inputs")
+        required = coordinate["inputs"]
+        if type(resolved) is not dict or set(resolved) != set(required):
+            raise ValueError("EvaluationStage dependency aliases do not match Plan")
+        trial_evals = trial["evaluations"]
+        resolver = CanonicalRepositoryResolver(mldb_data_root)
+        for alias, reference in required.items():
+            producers = [
+                e for e in trial_evals if e["stage"] == reference["from_stage"]
+            ]
+            if len(producers) != 1:
+                raise ValueError("EvaluationStage dependency producer is ambiguous")
+            producer_id = (
+                f"{study_result['id']}-{trial['trial']}-{producers[0]['coordinate']}"
+            )
+            actual = resolved[alias]
+            if (
+                type(actual) is not dict
+                or set(actual) != {"source_evaluation_result", "artifact", "ref"}
+                or actual["source_evaluation_result"] != producer_id
+                or actual["artifact"] != reference["artifact"]
+            ):
+                raise ValueError("EvaluationStage dependency identity mismatch")
+            source = resolver.resolve(
+                kind=EntityKind.EVALUATION_RESULT, entity_id=producer_id
+            )
+            if (
+                source.get("status") != "completed"
+                or source.get("diagnostic") is not None
+                or source.get("model") != _expected_model_id(str(study_result["id"]), trial)
+            ):
+                raise ValueError("EvaluationStage dependency is not accepted for the same Model")
+            payload = source.get("result")
+            artifacts = payload.get("artifacts") if isinstance(payload, Mapping) else None
+            canonical_ref = (
+                artifacts.get(reference["artifact"])
+                if isinstance(artifacts, Mapping) else None
+            )
+            if canonical_ref is None or not _same_canonical_value(actual["ref"], canonical_ref):
+                raise ValueError("EvaluationStage dependency artifact does not match canonical result")
+            _validate_artifact_ref(actual["ref"])
+        expected_stage["inputs"] = resolved
     if not _same_canonical_value(stage, expected_stage):
         raise ValueError("EvaluationStage does not exactly match Plan coordinate")
 

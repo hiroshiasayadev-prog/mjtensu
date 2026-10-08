@@ -46,14 +46,25 @@ AuxiliaryModel: TypeAlias = LoadedModel | LoadedRuntimeModel
 
 
 @dataclass(frozen=True)
+class LoadedEvaluationArtifact:
+    data: bytes
+    source_evaluation_result: str
+    artifact: str
+    ref: Mapping[str, object]
+
+
+@dataclass(frozen=True)
 class EvaluationContext:
     task: Task
     corpus: MaterializedCorpus
-    model: LoadedModel
+    model: LoadedModel | None
     models: Mapping[str, AuxiliaryModel]
     parameters: ResolvedPublicParameters
     telemetry: TelemetryReporter
     work_dir: Path
+    onnx_input: bytes | None = None
+    onnx_source_evaluation_result: str | None = None
+    inputs: Mapping[str, LoadedEvaluationArtifact] | None = None
 
 
 @dataclass(frozen=True)

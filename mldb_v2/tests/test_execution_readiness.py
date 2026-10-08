@@ -612,3 +612,78 @@ def test_readiness_and_builder_do_not_write_or_import_backend_policy(tmp_path: P
     assert "admit(" not in source
     assert "collect(" not in source
     assert "cancel_study(" not in source
+
+def _with_onnx_dependency(plan: dict[str, object], result: dict[str, object]) -> None:
+    from mldb_v2.src.study._plan_build import _plan_id
+    for trial in plan["trials"]:
+        trial["evaluations"][1]["inputs"] = {
+            "onnx_model": {"from_stage": "holdout-a", "artifact": "onnx_model"}
+        }
+    digest = hashlib.sha256(_canonical_json_bytes({
+        key: value for key, value in plan.items()
+        if key not in {"id", "content_sha256"}
+    })).hexdigest()
+    plan["content_sha256"] = digest
+    plan["id"] = _plan_id(plan["study"], digest)
+    result["plan"] = plan["id"]
+
+
+def test_onnx_dependency_holds_downstream_and_materializes_accepted_ref(tmp_path: Path):
+    root, plan, result = _fixture(tmp_path)
+    _with_onnx_dependency(plan, result)
+    readiness = _resolver(root).derive(plan=plan, result=result)
+    assert readiness["ready"] == [
+        {"kind": "training", "trial": "trial-0001"},
+        {"kind": "evaluation", "trial": "trial-0002", "coordinate": "eval-0001"},
+    ]
+    assert readiness["skipped"] == []
+
+    producer_id = f"{STUDY_RESULT_ID}-trial-0002-eval-0001"
+    result["trials"][1]["evaluations"][0] = {
+        "coordinate": "eval-0001", "stage": "holdout-a",
+        "disposition": "completed", "result": producer_id, "reason": None,
+    }
+    ref = {
+        "uri": "s3://bucket/once.onnx", "bytes": 4, "sha256": "a" * 64,
+        "format": "onnx", "schema": "demo/onnx/v1",
+    }
+    _write_json(root / "demo" / "evaluation_results" / f"{producer_id.split('/', 1)[1]}.yaml", {
+        "schema": "mjtensu.mldb-v2/evaluation-result/v1",
+        "id": producer_id, "model": EXISTING_MODEL_ID,
+        "task": "demo/task-v1", "status": "completed", "diagnostic": None,
+        "result": {"metrics": {}, "artifacts": {"onnx_model": ref}},
+    })
+    ready = _resolver(root).derive(plan=plan, result=result)["ready"]
+    consumer = {"kind": "evaluation", "trial": "trial-0002", "coordinate": "eval-0002"}
+    assert consumer in ready
+    stage_input = _build_stage_input(
+        plan=plan, result=result, stage=consumer, mldb_data_root=root,
+    )
+    assert stage_input["stage"]["inputs"] == {
+        "onnx_model": {
+            "source_evaluation_result": producer_id,
+            "artifact": "onnx_model",
+            "ref": ref,
+        }
+    }
+
+
+@pytest.mark.parametrize(("upstream", "reason"), [
+    ("failed", "upstream_failed"), ("cancelled", "upstream_cancelled")
+])
+def test_failed_dependency_skips_only_downstream_same_trial(
+    tmp_path: Path, upstream: str, reason: str
+):
+    root, plan, result = _fixture(tmp_path)
+    _with_onnx_dependency(plan, result)
+    producer = result["trials"][1]["evaluations"][0]
+    producer.update({
+        "disposition": upstream,
+        "result": f"{STUDY_RESULT_ID}-trial-0002-eval-0001",
+        "reason": None,
+    })
+    readiness = _resolver(root).derive(plan=plan, result=result)
+    assert {
+        "stage": {"kind": "evaluation", "trial": "trial-0002", "coordinate": "eval-0002"},
+        "reason": reason,
+    } in readiness["skipped"]

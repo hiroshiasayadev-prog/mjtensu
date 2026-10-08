@@ -357,6 +357,30 @@ def _verify_stage_against_plan(stage_input: StageInput, plan: StudyPlan, stage_k
         "evaluation_protocol": coordinate["evaluation_protocol"],
         "parameters": coordinate["parameters"],
     }
+    if coordinate.get("inputs"):
+        resolved = stage_input["stage"].get("inputs")
+        if type(resolved) is not dict or set(resolved) != set(coordinate["inputs"]):
+            raise ValueError("evaluation StageInput dependency aliases do not match Plan")
+        for alias, reference in coordinate["inputs"].items():
+            producers = [
+                item for item in evaluations
+                if item["stage"] == reference["from_stage"]
+            ]
+            if len(producers) != 1:
+                raise ValueError("evaluation StageInput upstream stage is ambiguous")
+            actual = resolved[alias]
+            expected_source = (
+                f"{stage_input['study_result']}-{stage_input['trial']}-"
+                f"{producers[0]['coordinate']}"
+            )
+            if (
+                type(actual) is not dict
+                or set(actual) != {"source_evaluation_result", "artifact", "ref"}
+                or actual["source_evaluation_result"] != expected_source
+                or actual["artifact"] != reference["artifact"]
+            ):
+                raise ValueError("evaluation StageInput dependency lineage does not match Plan")
+        expected["inputs"] = resolved
     if stage_input["stage"] != expected:
         raise ValueError("evaluation StageInput stage does not match Plan coordinate")
 
