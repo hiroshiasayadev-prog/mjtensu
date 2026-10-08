@@ -2428,6 +2428,7 @@ class ClearMLSDKAdapter:
         report_plotly = getattr(logger, "report_plotly", None)
         report_image = getattr(logger, "report_image", None)
         report_table = getattr(logger, "report_table", None)
+        report_media = getattr(logger, "report_media", None)
         if not callable(report_plotly):
             return
 
@@ -2499,12 +2500,21 @@ class ClearMLSDKAdapter:
                                 figures.append((label, table_figure))
                         figure = _selectable_plotly_figure(figures)
                     elif artifact_format == "mp4":
-                        videos: list[tuple[str, str]] = []
-                        for label, child, _ref in loaded:
-                            source = _study_artifact_url(child, artifact_name)
-                            if source is not None:
-                                videos.append((label, source))
-                        figure = _selectable_video_figure(videos)
+                        if callable(report_media):
+                            for label, child, _ref in loaded:
+                                source = _study_artifact_url(child, artifact_name)
+                                if source is None:
+                                    continue
+                                try:
+                                    report_media(
+                                        title=f"Study Video - {stage}",
+                                        series=f"{artifact_name} | {label}",
+                                        iteration=0,
+                                        url=source,
+                                    )
+                                except Exception:
+                                    pass
+                        continue
                     if figure is not None:
                         try:
                             report_plotly(
@@ -2546,6 +2556,15 @@ class ClearMLSDKAdapter:
                                     series=label,
                                     iteration=0,
                                     csv=str(path),
+                                )
+                        elif artifact_format == "mp4" and callable(report_media):
+                            source = _study_artifact_url(child, artifact_name)
+                            if source is not None:
+                                report_media(
+                                    title=f"Study Video - {stage}",
+                                    series=f"{artifact_name} | {label}",
+                                    iteration=0,
+                                    url=source,
                                 )
                     except Exception:
                         pass
@@ -2661,10 +2680,7 @@ class ClearMLSDKAdapter:
                 raise ClearMLSDKError(
                     "stopped ClearML Pipeline cannot be reopened for MLDB resume"
                 )
-            mark_started(
-                force=True,
-                status_message="MLDB Study resumed after controller interruption",
-            )
+            mark_started(force=True)
         child_meta = _metadata(child)
         pipeline_meta = _metadata(pipeline)
         if child_meta.get("mldb.study_result") != pipeline_meta.get("mldb.study_result"):

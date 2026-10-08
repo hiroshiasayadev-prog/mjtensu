@@ -23,6 +23,8 @@ from mldb_v2.src.backend._clearml_sdk import (
     ClearMLSDKError,
     ClearMLSDKSettings,
     _comparison_bar_figure,
+    _native_pipeline_dag,
+    _pipeline_trial_labels,
     _selectable_image_figure,
     _selectable_plotly_figure,
     _selectable_video_figure,
@@ -222,6 +224,7 @@ class FakeSDKTask:
         self.single_values: dict[str, float] = {}
         self.plotly_reports: list[dict[str, object]] = []
         self.table_reports: list[dict[str, object]] = []
+        self.media_reports: list[dict[str, object]] = []
         self.flush_calls: list[bool] = []
         self.comment = ""
 
@@ -338,6 +341,9 @@ class FakeSDKTask:
 
     def report_table(self, **kwargs) -> None:
         self.table_reports.append(deepcopy(kwargs))
+
+    def report_media(self, **kwargs) -> None:
+        self.media_reports.append(deepcopy(kwargs))
 
     def set_comment(self, comment: str) -> None:
         self.comment = comment
@@ -1050,6 +1056,49 @@ def test_selectable_image_figure_keeps_large_study_projection_small() -> None:
     assert payload.count("https://web.example.test/files/contact-") == 43
 
 
+def test_study_select_mp4_projects_video_media_to_controller() -> None:
+    FakeSDKTask.reset()
+    plan = _plan()
+    result = _result(plan)
+    adapter = ClearMLSDKAdapter(ClearMLSDKSettings(), task_class=FakeSDKTask)
+    pipeline_id = cast(str, adapter.create_pipeline_run(_pipeline_request(plan, result)))
+    child = FakeSDKTask(project="mldb/demo", task_id="video-child")
+    child.status = "completed"
+    artifact = type("Artifact", (), {})()
+    artifact.url = "https://files.example.test/mldb/video-child/overlay.mp4"
+    child.artifacts["evaluation/overlay_video"] = artifact
+    FakeSDKTask.tasks.append(child)
+    summary = {
+        "schema": "mjtensu.mldb-v2/study-summary-projection/v4",
+        "study_result": result["id"],
+        "study": result["study"],
+        "status": "completed",
+        "rows": [],
+        "comparisons": [{
+            "stage": "recognition-functional-video",
+            "metrics": [],
+            "artifacts": {"overlay_video": {"format": "mp4", "study_view": "select"}},
+            "rows": [{
+                "trial": "trial-0001",
+                "trial_label": "jp_fraction=0.0",
+                "disposition": "completed",
+                "execution_id": child.id,
+                "metrics": {},
+                "artifacts": {"overlay_video": {"uri": "s3://example/overlay.mp4"}},
+            }],
+        }],
+    }
+    adapter.project_pipeline_summary(execution_id=pipeline_id, summary=summary)
+    controller = FakeSDKTask.get_task(task_id=pipeline_id)
+    assert controller is not None
+    assert controller.media_reports == [{
+        "title": "Study Video - recognition-functional-video",
+        "series": "overlay_video | jp_fraction=0.0",
+        "iteration": 0,
+        "url": "https://files.example.test/mldb/video-child/overlay.mp4",
+    }]
+
+
 def test_pipeline_summary_table_failure_is_observational() -> None:
     FakeSDKTask.reset()
     plan = _plan()
@@ -1180,6 +1229,65 @@ def test_retry_child_keeps_native_pipeline_owner_and_normal_bind_replay() -> Non
     )
     assert node["executed"] == owner_id
     assert node["job_id"] == owner_id
+
+
+def test_pipeline_trial_labels_expose_varying_source_parameter() -> None:
+    labels = _pipeline_trial_labels(
+        ClearMLSDKSettings(),
+        {"trials": [
+            {"trial": "trial-0001", "source": {"kind": "training", "architecture": "demo/arch-v1", "parameters": {"batch_size": 24, "jp_fraction": 0.0}, "seed": 42}},
+            {"trial": "trial-0002", "source": {"kind": "training", "architecture": "demo/arch-v1", "parameters": {"batch_size": 24, "jp_fraction": 0.25}, "seed": 42}},
+            {"trial": "trial-0003", "source": {"kind": "training", "architecture": "demo/arch-v1", "parameters": {"batch_size": 24, "jp_fraction": 0.5}, "seed": 42}},
+        ]},
+    )
+    assert len(set(labels.values())) == 3
+    assert labels["trial-0001"].endswith("jp_fraction=0")
+    assert labels["trial-0002"].endswith("jp_fraction=0.25")
+    assert labels["trial-0003"].endswith("jp_fraction=0.5")
+
+
+def test_native_pipeline_dag_rejects_indistinguishable_user_facing_labels() -> None:
+    steps = []
+    for trial in ("trial-0001", "trial-0002", "trial-0003"):
+        train = f"{trial}-train"
+        steps.append({"name": train, "parents": [], "stage": "training", "trial": trial, "kind": "training", "coordinate": None})
+        steps.append({"name": f"{trial}-eval-0001", "parents": [train], "stage": "quality", "trial": trial, "kind": "evaluation", "coordinate": "eval-0001"})
+    with pytest.raises(ClearMLSDKError, match="must not expose internal identifier"):
+        _native_pipeline_dag(
+            {"steps": steps},
+            queue="default",
+            trial_labels={trial: "same-label" for trial in ("trial-0001", "trial-0002", "trial-0003")},
+        )
+
+
+def test_bind_task_to_pipeline_reopens_stopped_controller_for_resume() -> None:
+    FakeSDKTask.reset()
+    plan = _plan()
+    result = _result(plan)
+    adapter = ClearMLSDKAdapter(
+        ClearMLSDKSettings(step_queue="gpu-a"),
+        task_class=FakeSDKTask,
+    )
+    pipeline_id = cast(str, adapter.create_pipeline_run(_pipeline_request(plan, result)))
+    controller = FakeSDKTask.get_task(task_id=pipeline_id)
+    assert controller is not None
+    controller.status = "stopped"
+
+    child = FakeSDKTask(project="mldb/demo", task_id="resume-child")
+    child.properties["mldb.study_result"] = str(result["id"])
+    FakeSDKTask.tasks.append(child)
+
+    adapter.bind_task_to_pipeline(
+        task_id=child.id,
+        pipeline_execution_id=pipeline_id,
+        pipeline_step="trial-0001-train",
+    )
+
+    assert controller.status == "in_progress"
+    assert child.parent == pipeline_id
+    node = controller.configs["Pipeline"]["arch-v1 | training"]
+    assert node["executed"] == child.id
+    assert node["job_id"] == child.id
 
 
 def test_generic_study_execution_seam_has_no_clearml_dependency() -> None:
