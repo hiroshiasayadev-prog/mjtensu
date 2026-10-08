@@ -226,7 +226,7 @@ def main() -> None:
             retained = clip_ratio(full_box, own_crop)
             min_retained = min(min_retained, retained)
             for region, crop in crops.items():
-                if region != tile["region"] and clip_ratio(full_box, crop) > 0.0:
+                if region != tile["region"] and clip_ratio(full_box, crop) >= 0.10:
                     foreign_crop_overlaps += 1
 
         for i in range(len(polys)):
@@ -266,7 +266,7 @@ def main() -> None:
         errors.append(f"missing meld types: {sorted(required_meld_types - set(meld_types))}")
     if white_meld_images == 0 or white_meld_verified != white_meld_images:
         errors.append("white-dragon meld coverage/verification failed")
-    if min_retained < 0.985 - 1e-6:
+    if min_retained < 1.0 - 1e-5:
         errors.append(f"minimum retained ratio too small: {min_retained:.6f}")
     if len(crop_geometries) != 1:
         errors.append(f"capture guide geometry varied across records: {len(crop_geometries)} unique geometries")

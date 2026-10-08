@@ -17,6 +17,12 @@ from mathutils import Matrix, Quaternion, Vector
 from bpy_extras.object_utils import world_to_camera_view
 from PIL import Image, ImageChops
 
+# Blender --python need not add the script directory to sys.path.
+_SCRIPT_DIR = str(Path(__file__).resolve().parent)
+if _SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPT_DIR)
+from layout_xy_optimizer import XYGuideOptimizer
+
 COMPOSITE_SIZE = (320, 320)
 PADDING_RGB = (0, 0, 0)
 REGIONS = {
@@ -54,7 +60,7 @@ def parse_args() -> argparse.Namespace:
     repo = Path(__file__).resolve().parents[3]
     p = argparse.ArgumentParser()
     p.add_argument("--config", type=Path, default=Path(__file__).with_name("config.production.json"))
-    p.add_argument("--output", type=Path, default=repo / ".local/recognition/blender_synthetic_nanodet/final")
+    p.add_argument("--output", type=Path, default=Path(__file__).resolve().parent / ".outputs/default")
     p.add_argument("--count", type=int, default=0)
     p.add_argument("--start-index", type=int, default=0)
     p.add_argument("--skip-assemble", action="store_true")
@@ -154,7 +160,8 @@ def tile_sort_key(tile: str) -> tuple[int, int, int]:
     return (3, HONORS.index(tile), 0)
 
 
-def build_hand(index: int, rng: random.Random, meld_count: int, force_white_meld: bool) -> dict[str, Any]:
+def build_hand(index: int, rng: random.Random, meld_count: int, force_white_meld: bool,
+               completed_hand_empty: bool, dora_indicators_empty: bool) -> dict[str, Any]:
     used: Counter[str] = Counter()
     kinds = rng.choices(["chi", "pon", "open-kan", "closed-kan"], weights=[0.34, 0.32, 0.19, 0.15], k=meld_count)
     if force_white_meld and meld_count:
@@ -177,30 +184,40 @@ def build_hand(index: int, rng: random.Random, meld_count: int, force_white_meld
             slots.append({"tile": tile, "face": face, "rotation": rotation})
         melds.append({"kind": kind, "tiles": slots})
     concealed: list[str] = []
-    for _ in range(4 - meld_count):
-        comp = pick_concealed_component(used, rng)
-        allocate(used, comp)
-        concealed.extend(comp)
-    pair = pick_pair(used, rng)
-    allocate(used, pair)
-    concealed.extend(pair)
-    concealed.sort(key=tile_sort_key)
-    indicator_count = rng.choices([1, 2, 3, 4, 5], weights=[0.46, 0.26, 0.16, 0.08, 0.04], k=1)[0]
+    if not completed_hand_empty:
+        # A nonempty completed hand is a standard winning hand: the exposed
+        # groups plus (4 - meld_count) concealed groups and one pair.
+        # Kans contain 4 physical tiles but count as one of the four groups.
+        for _ in range(4 - meld_count):
+            component = pick_concealed_component(used, rng)
+            allocate(used, component)
+            concealed.extend(component)
+        pair = pick_pair(used, rng)
+        allocate(used, pair)
+        concealed.extend(pair)
+        if len(concealed) != 14 - 3 * meld_count:
+            raise AssertionError("completed hand must contain 4 groups and 1 pair")
+        concealed.sort(key=tile_sort_key)
+
+    indicator_count = 0 if dora_indicators_empty else rng.choices(
+        [1, 2, 3, 4, 5], weights=[0.46, 0.26, 0.16, 0.08, 0.04], k=1
+    )[0]
     indicators: list[str] = []
-    coverage_tile = ALL_TILES[index % len(ALL_TILES)]
-    if can_allocate(used, [coverage_tile]):
-        indicators.append(coverage_tile)
-        allocate(used, [coverage_tile])
-    candidates = list(ALL_TILES)
-    rng.shuffle(candidates)
-    for tile in candidates:
-        if len(indicators) >= indicator_count:
-            break
-        if can_allocate(used, [tile]):
-            indicators.append(tile)
-            allocate(used, [tile])
-    if len(indicators) != indicator_count:
-        raise RuntimeError("could not allocate dora indicators")
+    if indicator_count:
+        coverage_tile = ALL_TILES[index % len(ALL_TILES)]
+        if can_allocate(used, [coverage_tile]):
+            indicators.append(coverage_tile)
+            allocate(used, [coverage_tile])
+        candidates = list(ALL_TILES)
+        rng.shuffle(candidates)
+        for tile in candidates:
+            if len(indicators) >= indicator_count:
+                break
+            if can_allocate(used, [tile]):
+                indicators.append(tile)
+                allocate(used, [tile])
+        if len(indicators) != indicator_count:
+            raise RuntimeError("could not allocate dora indicators")
     for tile, n in used.items():
         if n > capacity(tile):
             raise AssertionError((tile, n))
@@ -210,6 +227,9 @@ def build_hand(index: int, rng: random.Random, meld_count: int, force_white_meld
         "melds": melds,
         "inventory": dict(used),
         "force_white_meld": force_white_meld,
+        "completed_hand_empty": completed_hand_empty,
+        "winning_shape_complete": not completed_hand_empty,
+        "dora_indicators_empty": dora_indicators_empty,
     }
 
 
@@ -489,7 +509,8 @@ def create_tile(ctx: dict[str, Any], tile_id: str, identity: str, face: str, reg
 
 
 def linear_poses(slots: list[dict[str, Any]], center: tuple[float, float], base_angle: float,
-                 rng: random.Random, regime: str, separated_last: bool = False) -> list[tuple[float, float, float]]:
+                 rng: random.Random, regime: str, separated_last: bool = False,
+                 align_right: float | None = None, align_bottom: float | None = None) -> list[tuple[float, float, float]]:
     p = {"neat": (0.0015, 0.0028, 0.7, 0.7), "ordinary": (0.001, 0.0055, 1.8, 1.8), "messy": (0.0007, 0.008, 3.6, 3.2)}[regime]
     gap_lo, gap_hi, yaw_sigma, y_sigma_mm = p
     extents = [H/2 if abs(int(s.get("rotation", 0))) == 90 else W/2 for s in slots]
@@ -527,10 +548,54 @@ def linear_poses(slots: list[dict[str, Any]], center: tuple[float, float], base_
         wy = center[1] + lx*s + local_y*c
         yaw = base_angle + local_yaw + math.radians(float(slot.get("rotation", 0)))
         poses.append((wx, wy, yaw))
+    if poses and (align_right is not None or align_bottom is not None):
+        polys = [obb_corners(x, y, yaw) for x, y, yaw in poses]
+        dx = 0.0 if align_right is None else align_right - max(px for poly in polys for px, _ in poly)
+        dy = 0.0 if align_bottom is None else align_bottom - min(py for poly in polys for _, py in poly)
+        poses = [(x + dx, y + dy, yaw) for x, y, yaw in poses]
     return poses
 
 
-def place_scene(ctx: dict[str, Any], hand: dict[str, Any], index: int, rng: random.Random, regime: str) -> list[dict[str, Any]]:
+def world_xy_for_pixel(scene, camera, px: float, py: float, guess: tuple[float, float]) -> tuple[float, float]:
+    x, y = guess
+    eps = 0.001
+    for _ in range(10):
+        def uv(wx: float, wy: float) -> tuple[float, float]:
+            ndc = world_to_camera_view(scene, camera, Vector((wx, wy, 0.0)))
+            return ndc.x * scene.render.resolution_x, (1.0 - ndc.y) * scene.render.resolution_y
+        u, v = uv(x, y)
+        ex, ey = px - u, py - v
+        if abs(ex) + abs(ey) < 0.05:
+            break
+        ux, vx = uv(x + eps, y)
+        uy, vy = uv(x, y + eps)
+        j00, j10 = (ux - u) / eps, (vx - v) / eps
+        j01, j11 = (uy - u) / eps, (vy - v) / eps
+        det = j00 * j11 - j01 * j10
+        if abs(det) < 1e-9:
+            raise ValueError("camera projection inversion is singular")
+        x += (ex * j11 - j01 * ey) / det
+        y += (j00 * ey - ex * j10) / det
+    return x, y
+
+
+def black_frame_inner_faces(ctx: dict[str, Any]) -> tuple[float, float]:
+    """Get actual inner faces from instantiated bottom/right black-frame meshes."""
+    right = next(o for o in ctx["static"].objects if o.name.startswith("frame_v_+"))
+    bottom = next(o for o in ctx["static"].objects if o.name.startswith("frame_h_-"))
+    return (min(right.location.x + v.co.x for v in right.data.vertices),
+            max(bottom.location.y + v.co.y for v in bottom.data.vertices))
+
+
+def tile_body_xy_outline(ctx: dict[str, Any], x: float, y: float, yaw: float) -> list[tuple[float, float]]:
+    """Footprint of the real beveled tile body, rather than nominal OBB."""
+    c, s = math.cos(yaw), math.sin(yaw)
+    return [(x + v.co.x*c - v.co.y*s, y + v.co.x*s + v.co.y*c)
+            for v in ctx["meshes"]["tile_body"].vertices]
+
+
+def place_scene(ctx: dict[str, Any], hand: dict[str, Any], index: int, rng: random.Random, regime: str,
+                crops: dict[str, tuple[float, float, float, float]]) -> list[dict[str, Any]]:
     """Place a physically plausible one-player sector aligned to mjtensu capture guides.
 
     Player sits on world -Y.  Calls are anchored at the player's lower-right
@@ -540,16 +605,31 @@ def place_scene(ctx: dict[str, Any], hand: dict[str, Any], index: int, rng: rand
     """
     tiles: list[dict[str, Any]] = []
     footprints: list[tuple[str, list[tuple[float, float]]]] = []
+    frame_right, frame_bottom = black_frame_inner_faces(ctx)
 
     def add_slots(slots: list[dict[str, Any]], region: str, group: str, meld_type: str | None,
-                  center: tuple[float, float], angle: float, separated_last: bool = False):
-        poses = linear_poses(slots, center, angle, rng, regime, separated_last)
+                  center: tuple[float, float], angle: float, separated_last: bool = False,
+                  align_right: float | None = None, align_bottom: float | None = None):
+        poses = linear_poses(
+            slots, center, angle, rng, regime, separated_last,
+            align_right=align_right if region != "melds" else None,
+            align_bottom=align_bottom if region != "melds" else None,
+        )
+        if poses and region == "melds":
+            bodies = [tile_body_xy_outline(ctx, *pose) for pose in poses]
+            dx = align_right - max(px for poly in bodies for px, _ in poly) if align_right is not None else 0.0
+            dy = align_bottom - min(py for poly in bodies for _, py in poly) if align_bottom is not None else 0.0
+            poses = [(x + dx, y + dy, yaw) for x, y, yaw in poses]
         for si, (slot, pose) in enumerate(zip(slots, poses)):
             x, y, yaw = pose
             poly = obb_corners(x, y, yaw)
             if any(polygons_overlap(poly, old) for _, old in footprints):
                 raise ValueError(f"collision while placing {region}/{group}/{si}")
-            if max(abs(px) for px, _ in poly) > INNER_X/2 or max(abs(py) for _, py in poly) > INNER_Y/2:
+            if region == "melds":
+                body = tile_body_xy_outline(ctx, x, y, yaw)
+                if max(px for px, _ in body) > frame_right + 1e-7 or min(py for _, py in body) < frame_bottom - 1e-7:
+                    raise ValueError(f"meld outside frame: {group}/{si}")
+            elif max(abs(px) for px, _ in poly) > INNER_X/2 or max(abs(py) for _, py in poly) > INNER_Y/2:
                 raise ValueError(f"tile outside inner table: {region}/{group}/{si}")
             tile = create_tile(ctx, f"tile_{index:06d}_{region}_{group}_{si}", slot["tile"], slot.get("face", "front"),
                                region, group, meld_type, x, y, yaw, rng)
@@ -563,44 +643,45 @@ def place_scene(ctx: dict[str, Any], hand: dict[str, Any], index: int, rng: rand
     scene_dx = rng.uniform(-0.006, 0.006)
     scene_dy = rng.uniform(-0.004, 0.004)
 
+    # The bottommost and rightmost meld tile bodies touch the actual black frame.
+    # Align against frame meshes, not against the nominal inner-felt rectangle.
+    m = len(hand["melds"])
+    meld_left = None
+    if m:
+        stack_right = frame_right
+        stack_bottom = frame_bottom
+        step = rng.uniform(0.043, 0.047)
+        for mi, meld in enumerate(hand["melds"]):
+            add_slots(
+                meld["tiles"], "melds", f"meld-{mi}", meld["kind"], (0.0, 0.0),
+                0.0, False, align_right=stack_right, align_bottom=stack_bottom + mi * step,
+            )
+        meld_polys = [
+            obb_corners(tile["x"], tile["y"], math.radians(tile["yaw_deg"]))
+            for tile in tiles if tile["region"] == "melds"
+        ]
+        meld_left = min(px for poly in meld_polys for px, _ in poly)
+
     hand_slots = [{"tile": t, "face": "front", "rotation": 0} for t in hand["concealed"]]
     hand_center = (
-        -0.112 + scene_dx + rng.uniform(-0.005, 0.005),
+        -0.032 + scene_dx + rng.uniform(-0.005, 0.005),
         -0.368 + scene_dy + rng.uniform(-0.003, 0.003),
     )
     add_slots(
         hand_slots, "completed_hand", "concealed", None, hand_center,
         math.radians(rng.uniform(-3.0, 3.0)), rng.random() < 0.22,
+        align_right=(meld_left - 3.0 * W) if (hand_slots and meld_left is not None) else None,
     )
 
     dora_slots = [{"tile": t, "face": "front", "rotation": 0} for t in hand["dora"]]
     dora_center = (
-        rng.uniform(-0.165, -0.062) + scene_dx,
+        rng.uniform(-0.085, 0.018) + scene_dx,
         -0.255 + scene_dy + rng.uniform(-0.005, 0.005),
     )
     add_slots(
         dora_slots, "dora_indicators", "dora", None, dora_center,
         math.radians(rng.uniform(-5.0, 5.0)), False,
     )
-
-    # Calls start at lower-right from the seated player's viewpoint and stack
-    # upward.  Each group remains a real row with the called tile sideways;
-    # closed kans retain their two outer backs.
-    m = len(hand["melds"])
-    if m:
-        x_anchor = 0.228 + scene_dx + rng.uniform(-0.004, 0.004)
-        bottom_y = -0.366 + scene_dy + rng.uniform(-0.003, 0.003)
-        step = rng.uniform(0.043, 0.047)
-        for mi, meld in enumerate(hand["melds"]):
-            base_bias = -1.0 if m in {2, 3} else 0.0
-            center = (
-                x_anchor + rng.uniform(-0.0035, 0.0035),
-                bottom_y + mi * step + rng.uniform(-0.002, 0.002),
-            )
-            add_slots(
-                meld["tiles"], "melds", f"meld-{mi}", meld["kind"], center,
-                math.radians(base_bias + rng.uniform(-3.2, 3.2)), False,
-            )
     return tiles
 
 def set_material_variation(ctx: dict[str, Any], rng: random.Random) -> dict[str, Any]:
@@ -618,15 +699,19 @@ def rgb_for_temperature(kind: str) -> tuple[float, float, float]:
     return {"warm": (1.0, 0.63, 0.38), "neutral": (1.0, 0.90, 0.78), "cool": (0.66, 0.80, 1.0)}[kind]
 
 
-def setup_lighting(ctx: dict[str, Any], index: int, rng: random.Random) -> dict[str, Any]:
-    """Use room-like illumination; partial shadows come from an off-frame bar."""
+def setup_lighting(ctx: dict[str, Any], index: int, rng: random.Random,
+                   config: dict[str, Any]) -> dict[str, Any]:
+    """Diffuse overhead room lighting with fill, preserving soft tile contours."""
+    # Home ceiling illumination: large diffuse sources, never deliberately
+    # hard shadows or a fake off-frame shadow-blocking bar.
     profiles = [
         ("warm", "soft", "normal"), ("neutral", "soft", "normal"),
-        ("cool", "soft", "normal"), ("warm", "hard", "normal"),
-        ("neutral", "hard", "normal"), ("cool", "hard", "dim"),
-        ("neutral", "partial", "normal"), ("warm", "soft", "bright"),
+        ("cool", "soft", "normal"), ("warm", "soft", "normal"),
+        ("neutral", "soft", "normal"), ("cool", "soft", "dim"),
+        ("neutral", "soft", "normal"), ("warm", "soft", "bright"),
     ]
     temperature, shadow_style, brightness = profiles[index % len(profiles)]
+    lighting_cfg = config.get("lighting", {})
     scene = ctx["scene"]
     world = scene.world or bpy.data.worlds.new("World")
     scene.world = world
@@ -634,16 +719,18 @@ def setup_lighting(ctx: dict[str, Any], index: int, rng: random.Random) -> dict[
     bg = world.node_tree.nodes.get("Background")
     base = rgb_for_temperature(temperature)
     bg.inputs["Color"].default_value = (*[min(1.0, v * 0.56) for v in base], 1)
-    world_strength = rng.uniform(0.045, 0.085)
+    world_strength = rng.uniform(0.24, 0.38)
     if brightness == "dim":
-        world_strength = rng.uniform(0.032, 0.055)
+        world_strength = rng.uniform(0.20, 0.28)
+    world_strength *= float(lighting_cfg.get("world_multiplier", 1.0))
     bg.inputs["Strength"].default_value = world_strength
 
-    exposure = rng.uniform(-0.92, -0.48)
+    exposure = rng.uniform(-0.55, -0.31)
     if brightness == "dim":
-        exposure = rng.uniform(-1.05, -0.72)
+        exposure = rng.uniform(-0.72, -0.54)
     elif brightness == "bright":
-        exposure = rng.uniform(-0.62, -0.36)
+        exposure = rng.uniform(-0.28, -0.10)
+    exposure += float(lighting_cfg.get("exposure_shift_ev", 0.0))
     scene.view_settings.exposure = exposure
 
     lights = []
@@ -678,25 +765,26 @@ def setup_lighting(ctx: dict[str, Any], index: int, rng: random.Random) -> dict[
         else:
             az = rng.uniform(-math.pi, math.pi)
             radius = rng.uniform(0.70, 1.00)
+            sampled_z = rng.uniform(0.90, 1.25)
             obj.location = (
                 math.cos(az) * radius,
                 math.sin(az) * radius - 0.22,
-                rng.uniform(0.90, 1.25),
+                float(lighting_cfg.get("area_height_m", sampled_z)),
             )
             target = Vector((rng.uniform(-0.04, 0.06), rng.uniform(-0.34, -0.20), 0.01))
-            energy = rng.uniform(16, 31)
+            energy = rng.uniform(28, 40) if li == 0 else rng.uniform(19, 28)
             if brightness == "dim":
-                energy *= rng.uniform(0.65, 0.85)
+                energy *= rng.uniform(0.76, 0.88)
             elif brightness == "bright":
-                energy *= rng.uniform(1.05, 1.18)
+                energy *= rng.uniform(1.05, 1.14)
             if shadow_style == "soft":
                 data.shape = "DISK"
-                data.size = rng.uniform(0.48, 0.78)
+                data.size = rng.uniform(1.05, 1.45)
             else:
                 data.size = rng.uniform(0.14, 0.24)
 
         data.color = base if li == 0 else tuple(min(1.0, v * 0.94 + 0.06) for v in base)
-        data.energy = energy
+        data.energy = energy * float(lighting_cfg.get("energy_multiplier", 1.0))
         direction = target - obj.location
         obj.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
         lights.append({
@@ -705,32 +793,33 @@ def setup_lighting(ctx: dict[str, Any], index: int, rng: random.Random) -> dict[
         })
 
     return {
-        "temperature": temperature, "shadow_style": shadow_style, "brightness": brightness,
+        "profile": "diffuse-room-v1", "temperature": temperature,
+        "shadow_style": shadow_style, "brightness": brightness,
         "world_strength": world_strength, "exposure": exposure, "lights": lights,
         "off_frame_blocker": blocker_meta,
+        "area_height_m": lighting_cfg.get("area_height_m"),
+        "energy_multiplier": float(lighting_cfg.get("energy_multiplier", 1.0)),
+        "world_multiplier": float(lighting_cfg.get("world_multiplier", 1.0)),
+        "exposure_shift_ev": float(lighting_cfg.get("exposure_shift_ev", 0.0)),
     }
 
-def setup_camera(ctx: dict[str, Any], rng: random.Random, meld_count: int) -> dict[str, Any]:
-    """Frame one player's sector with a mild real camera perspective."""
+def setup_camera(ctx: dict[str, Any], rng: random.Random,
+                 completed_center_xy: tuple[float, float] | None = None,
+                 clockwise_deg_range: tuple[float, float] = (10.0, 10.0),
+                 camera_height_m: float = 0.40) -> dict[str, Any]:
+    """40 cm camera, clockwise roll sampled deterministically from config."""
     camera = ctx["camera"]
-    lens = rng.uniform(42.0, 50.0)
-    target_visible_width = rng.uniform(0.795, 0.835)
-    z = target_visible_width * lens / 36.0
+    z = camera_height_m
+    lens = 17.7
     camera.data.lens = lens
     camera.data.sensor_width = 36.0
 
-    target = Vector((rng.uniform(-0.006, 0.006), rng.uniform(-0.329, -0.321), 0.0))
-    if meld_count in {2, 3}:
-        # The long hand guide keeps the phone left/up-table of the lower-right
-        # call stack.  This is deliberately a small perspective angle.
-        offset_x = rng.uniform(-0.085, -0.050)
-        offset_y = rng.uniform(0.045, 0.075)
-    elif meld_count == 4:
-        offset_x = rng.uniform(-0.055, -0.015)
-        offset_y = rng.uniform(0.035, 0.065)
-    else:
-        offset_x = rng.uniform(-0.055, 0.015)
-        offset_y = rng.uniform(0.025, 0.060)
+    table_ccw_deg = rng.uniform(0.0, 30.0)
+    az = math.radians(table_ccw_deg)
+    radius = 0.095
+    target = Vector((*completed_center_xy, 0.0)) if completed_center_xy is not None else Vector((0.108, -0.296, 0.0))
+    offset_x = -radius * math.sin(az)
+    offset_y = -radius * math.cos(az)
     camera.location = (target.x + offset_x, target.y + offset_y, z)
 
     forward = (target - camera.location).normalized()
@@ -742,15 +831,17 @@ def setup_camera(ctx: dict[str, Any], rng: random.Random, meld_count: int) -> di
     right = forward.cross(up).normalized()
     z_axis = -forward
     q = Matrix((right, up, z_axis)).transposed().to_quaternion()
-    roll = math.radians(rng.uniform(-1.8, 1.8))
-    q = q @ Quaternion((0, 0, 1), roll)
+    camera_clockwise_deg = rng.uniform(*clockwise_deg_range)
+    q = q @ Quaternion((0, 0, 1), math.radians(-camera_clockwise_deg))
     camera.rotation_euler = q.to_euler()
-    tilt_deg = math.degrees(math.atan2(math.hypot(offset_x, offset_y), z))
+    tilt_deg = math.degrees(math.atan2(radius, z))
     return {
         "location": list(camera.location), "target": list(target), "lens_mm": lens,
-        "roll_deg": math.degrees(roll), "sensor_width_mm": 36.0,
-        "target_visible_width_m": target_visible_width, "tilt_deg": tilt_deg,
-        "view_offset_xy_m": [offset_x, offset_y],
+        "roll_deg": -camera_clockwise_deg,
+        "camera_clockwise_from_table_bottom_deg": camera_clockwise_deg,
+        "sensor_width_mm": 36.0,
+        "target_visible_width_m": z * 36.0 / lens, "tilt_deg": tilt_deg,
+        "view_offset_xy_m": [offset_x, offset_y], "table_ccw_deg": table_ccw_deg,
     }
 
 def object_bbox_pixels(children: list[Any], scene, camera) -> list[float] | None:
@@ -905,18 +996,34 @@ def compose_image(full_path: Path, crops: dict[str, tuple[float,float,float,floa
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out.save(out_path, optimize=True, compress_level=3)
 
+def balanced_meld_count(index: int, base_seed: int) -> int:
+    """Each five consecutive indices get all 0..4 counts in a seed-shuffled order."""
+    choices = list(range(5))
+    random.Random(base_seed + (index // 5) * 2654435761).shuffle(choices)
+    return choices[index % 5]
+
+
 def render_one(ctx: dict[str, Any], config: dict[str, Any], out: Path, index: int, base_seed: int,
-               save_full_views: bool) -> dict[str, Any]:
+               save_full_views: bool, retry_round: int = 0) -> dict[str, Any]:
     sample_seed = (base_seed + index*1000003) & 0x7fffffff
     # Coverage choices are index-deterministic and do not change on placement
     # rejection, so difficult 3/4-meld scenes are not silently under-sampled.
     coverage_rng = random.Random(sample_seed)
-    meld_count = coverage_rng.choices(
-        [0, 1, 2, 3, 4], weights=config["coverage"]["meld_count_weights"], k=1
-    )[0]
+    if config["coverage"].get("meld_count_sampling") == "balanced_shuffled_blocks":
+        meld_count = balanced_meld_count(index, base_seed)
+    else:
+        meld_count = coverage_rng.choices(
+            [0, 1, 2, 3, 4], weights=config["coverage"]["meld_count_weights"], k=1
+        )[0]
     force_white = (
         meld_count > 0
         and coverage_rng.random() < config["coverage"]["white_meld_probability_given_present"]
+    )
+    completed_hand_empty = (
+        coverage_rng.random() < config["coverage"].get("completed_hand_empty_probability", 0.0)
+    )
+    dora_indicators_empty = (
+        coverage_rng.random() < config["coverage"].get("dora_indicators_empty_probability", 0.0)
     )
     regime = coverage_rng.choices(
         ["neat", "ordinary", "messy"], weights=config["placement"]["regime_weights"], k=1
@@ -925,14 +1032,67 @@ def render_one(ctx: dict[str, Any], config: dict[str, Any], out: Path, index: in
     crops, capture_geometry = capture_source_rects(ctx["scene"], config, capture_rng)
     max_attempts = int(config["runtime"].get("max_attempts_per_image", 64))
     for attempt in range(max_attempts):
-        rng = random.Random(sample_seed + attempt*7919 + 104729)
+        rng = random.Random(sample_seed + attempt*7919 + 104729 + retry_round*15485863)
         clear_dynamic(ctx)
         try:
-            hand = build_hand(index, rng, meld_count, force_white)
+            hand = build_hand(
+                index, rng, meld_count, force_white,
+                completed_hand_empty, dora_indicators_empty,
+            )
             materials = set_material_variation(ctx, rng)
-            camera_meta = setup_camera(ctx, rng, meld_count)
-            tiles = place_scene(ctx, hand, index, rng, regime)
-            lighting = setup_lighting(ctx, index, rng)
+            tiles = place_scene(ctx, hand, index, rng, regime, crops)
+            hand_corners = [
+                point for tile in tiles if tile["region"] == "completed_hand"
+                for point in obb_corners(tile["x"], tile["y"], math.radians(tile["yaw_deg"]))
+            ]
+            completed_center = (
+                (min(p[0] for p in hand_corners) + max(p[0] for p in hand_corners)) / 2,
+                (min(p[1] for p in hand_corners) + max(p[1] for p in hand_corners)) / 2,
+            ) if hand_corners else None
+            camera_meta = setup_camera(
+                ctx, rng, completed_center,
+                tuple(config.get("camera", {}).get("clockwise_deg_range", (10.0, 10.0))),
+                float(config.get("camera", {}).get("height_m", 0.40)),
+            )
+            bpy.context.view_layer.update()
+            # Try wider fields of view before rejecting the scene. Rotating a
+            # long 14-tile hand can otherwise exceed a fixed guide at 17.7mm.
+            # Height, clockwise roll, tile positions and crops stay unchanged.
+            xy_values = None
+            for candidate_lens in config.get("camera", {}).get(
+                "lens_retry_mm", (17.7, 16.0, 14.0, 12.0, 10.0)
+            ):
+                ctx["camera"].data.lens = float(candidate_lens)
+                xy_solver = XYGuideOptimizer(
+                    ctx, tiles, crops, sys.modules[__name__],
+                    max_foreign_ratio=float(config["annotation"].get("max_foreign_area_ratio", 0.10)),
+                )
+                xy_score, xy_values, xy_result = xy_solver.solve()
+                if xy_values is not None and not (
+                    xy_result["bad_own"] or xy_result["bad_foreign"] or xy_result["physical_penalty"]
+                ):
+                    break
+            if xy_values is None or (
+                xy_result["bad_own"] or xy_result["bad_foreign"]
+                or xy_result["physical_penalty"]
+            ):
+                raise ValueError(f"XY layout cannot fit fixed capture guides: {xy_result}")
+            xy_solver.apply(xy_values)
+            camera_meta["lens_mm"] = float(ctx["camera"].data.lens)
+            camera_meta["target_visible_width_m"] = (
+                float(config.get("camera", {}).get("height_m", 0.40)) * 36.0 / camera_meta["lens_mm"]
+            )
+            camera_meta["location"] = list(ctx["camera"].location)
+            camera_meta["target"][0] += xy_values[0]
+            camera_meta["target"][1] += xy_values[1]
+            camera_meta["optimized_xy"] = {
+                "camera_m": [xy_values[0], xy_values[1]],
+                "dora_m": [xy_values[2], xy_values[3]],
+                "objective": xy_score,
+                "diagnostics": xy_result,
+            }
+            bpy.context.view_layer.update()
+            lighting = setup_lighting(ctx, index, rng, config)
             bpy.context.view_layer.update()
             for tile in tiles:
                 bbox = object_bbox_pixels(tile["children"], ctx["scene"], ctx["camera"])
@@ -940,17 +1100,57 @@ def render_one(ctx: dict[str, Any], config: dict[str, Any], out: Path, index: in
                     raise ValueError("unprojectable tile")
                 tile["bbox_full"] = bbox
 
-            # The crop rectangles are PWA guides mapped into source-video
-            # coordinates from a per-image synthetic viewport. They are fixed
-            # for this sample across retries and never chase generated tiles.
-            for crop_region, crop in crops.items():
-                for tile in tiles:
-                    _, retained = clip_intersection(tile["bbox_full"], crop)
-                    if tile["region"] == crop_region:
-                        if retained < config["annotation"]["min_retained_area_ratio"]:
-                            raise ValueError(f"{crop_region} tile missed sampled capture guide: {retained:.3f}")
-                    elif retained > 0.0:
-                        raise ValueError(f"foreign tile entered sampled {crop_region} guide")
+            # Every projected bbox must fit completely in its own fixed crop.
+            # A tile may overlap another region by strictly less than 10% of
+            # that tile's projected bbox area (not of the target crop area).
+            for tile in tiles:
+                b = tile["bbox_full"]
+                x, y, w, h = crops[tile["region"]]
+                if (b[0] < x - 1e-6 or b[1] < y - 1e-6
+                        or b[0] + b[2] > x + w + 1e-6
+                        or b[1] + b[3] > y + h + 1e-6):
+                    raise ValueError(f"{tile['region']} tile bbox not completely inside its own crop")
+                for other, other_crop in crops.items():
+                    if other == tile["region"]:
+                        continue
+                    _, foreign_fraction = clip_intersection(b, other_crop)
+                    if foreign_fraction >= float(config["annotation"].get("max_foreign_area_ratio", 0.10)):
+                        raise ValueError(
+                            f"{tile['region']} tile intrudes into {other} by "
+                            f"{foreign_fraction:.3%} of its bbox area"
+                        )
+
+            frame_contact = None
+            meld_tiles = [tile for tile in tiles if tile["region"] == "melds"]
+            if meld_tiles:
+                meld_polys = [obb_corners(tile["x"], tile["y"], math.radians(tile["yaw_deg"])) for tile in meld_tiles]
+                body_polys = [tile_body_xy_outline(ctx, tile["x"], tile["y"], math.radians(tile["yaw_deg"]))
+                              for tile in meld_tiles]
+                frame_right, frame_bottom = black_frame_inner_faces(ctx)
+                meld_right = max(px for poly in body_polys for px, _ in poly)
+                meld_bottom = min(py for poly in body_polys for _, py in poly)
+                right_clearance = frame_right - meld_right
+                bottom_clearance = meld_bottom - frame_bottom
+                if abs(right_clearance) > 1e-6 or abs(bottom_clearance) > 1e-6:
+                    raise ValueError(
+                        f"meld body not touching black frame meshes: "
+                        f"right={right_clearance*1000:.3f}mm bottom={bottom_clearance*1000:.3f}mm"
+                    )
+                frame_contact = {
+                    "right_clearance_mm": round(right_clearance * 1000, 6),
+                    "bottom_clearance_mm": round(bottom_clearance * 1000, 6),
+                    "right_tile_id": meld_tiles[max(range(len(body_polys)), key=lambda i: max(p[0] for p in body_polys[i]))]["id"],
+                    "bottom_tile_id": meld_tiles[min(range(len(body_polys)), key=lambda i: min(p[1] for p in body_polys[i]))]["id"],
+                }
+
+                hand_tiles = [tile for tile in tiles if tile["region"] == "completed_hand"]
+                if hand_tiles:
+                    hand_polys = [obb_corners(tile["x"], tile["y"], math.radians(tile["yaw_deg"])) for tile in hand_tiles]
+                    meld_left_world = min(px for poly in meld_polys for px, _ in poly)
+                    hand_right_world = max(px for poly in hand_polys for px, _ in poly)
+                    gap_tiles = (meld_left_world - hand_right_world) / W
+                    if abs(gap_tiles - 3.0) > 0.02:
+                        raise ValueError(f"completed-to-meld gap is not 3 tiles: {gap_tiles:.3f}")
             break
         except ValueError:
             if attempt == max_attempts - 1:
@@ -1010,6 +1210,7 @@ def render_one(ctx: dict[str, Any], config: dict[str, Any], out: Path, index: in
             "placement_regime": regime, "hand": hand, "crops": {k:[round(v,4) for v in rect] for k,rect in crops.items()},
             "capture_geometry": {k: round(v, 6) for k, v in capture_geometry.items()},
             "camera": camera_meta, "lighting": lighting, "materials": materials,
+            "black_frame_contact": frame_contact,
             "full_view": full_rel, "tiles": tile_meta,
         },
     }
@@ -1059,6 +1260,8 @@ def main() -> None:
         raise ValueError("start-index must be >=0")
     repo = Path(__file__).resolve().parents[3]
     config = json.loads(args.config.read_text(encoding="utf-8"))
+    if config.get("lighting", {}).get("profile", "diffuse-room-v1") != "diffuse-room-v1":
+        raise ValueError("unsupported lighting profile; must be diffuse-room-v1")
     out = args.output.resolve()
     for d in ("images","records","annotations","tmp"):
         (out/d).mkdir(parents=True, exist_ok=True)
@@ -1075,22 +1278,55 @@ def main() -> None:
     decals = ensure_decals(asset_dir, tooling/"glyph_decals")
     ctx = setup_world(config, decals)
     completed = 0
+    reused = 0
+    deferred: dict[int, str] = {}
     started = time.time()
     for index in range(args.start_index, args.start_index + args.count):
         rec = out/"records"/f"synthetic_{index:06d}.json"
         img = out/"images"/f"synthetic_{index:06d}.png"
         if args.resume and rec.is_file() and img.is_file():
+            reused += 1
             continue
-        render_one(ctx, config, out, index, args.seed, args.save_full_views)
+        try:
+            render_one(ctx, config, out, index, args.seed, args.save_full_views)
+        except ValueError as exc:
+            deferred[index] = str(exc)
+            print(json.dumps({"event":"deferred", "index":index, "error":str(exc)}, ensure_ascii=False), flush=True)
+            continue
         completed += 1
         if completed % int(config["runtime"]["progress_every"]) == 0:
             elapsed = time.time()-started
             print(json.dumps({"progress":completed,"last_index":index,"elapsed_s":round(elapsed,1),"images_per_s":round(completed/max(elapsed,0.001),3)}),flush=True)
+    # Do not abort the whole corpus on one difficult scene. Retry deferred
+    # indices with independent deterministic placement streams after the pass.
+    for retry_round in range(1, int(config["runtime"].get("deferred_retry_rounds", 3)) + 1):
+        if not deferred:
+            break
+        for index in list(deferred):
+            try:
+                render_one(ctx, config, out, index, args.seed, args.save_full_views,
+                           retry_round=retry_round)
+            except ValueError as exc:
+                deferred[index] = str(exc)
+                print(json.dumps({"event":"retry_deferred", "index":index,
+                                  "round":retry_round, "error":str(exc)}), flush=True)
+            else:
+                completed += 1
+                del deferred[index]
+    failed_path = out / f"failed_indices_{args.start_index:06d}_{args.start_index + args.count:06d}.json"
+    if deferred:
+        failed_path.write_text(json.dumps({"seed":args.seed,"failures":deferred},
+                                          indent=2,ensure_ascii=False)+"\n")
+    else:
+        failed_path.unlink(missing_ok=True)
+    status = "partial" if deferred else "completed"
     if args.skip_assemble:
-        print(json.dumps({"status":"generated","new_images":completed,"output":str(out)},indent=2),flush=True)
+        print(json.dumps({"status":status,"new_images":completed,"reused":reused,
+                          "failed_indices":list(deferred),"output":str(out)}, indent=2),flush=True)
         return
     summary = assemble(out, config, args, repo)
-    print(json.dumps({"status":"completed","new_images":completed,**summary},indent=2),flush=True)
+    print(json.dumps({"status":status,"new_images":completed,"reused":reused,
+                      "failed_indices":list(deferred),**summary},indent=2),flush=True)
 
 
 if __name__ == "__main__":

@@ -42,6 +42,48 @@ def tile_rank(tile: str) -> int | None:
     return None
 
 
+
+def is_standard_winning_shape(concealed: list[str], meld_count: int) -> bool:
+    """Independent normal-hand check: 4 total groups + one pair, treating red5 as 5."""
+    if len(concealed) != 14 - 3 * meld_count:
+        return False
+    normalized = [t[3:] if t.startswith("red5") else t for t in concealed]
+    tally = Counter(normalized)
+
+    def groups_left(groups: int) -> bool:
+        if groups == 0:
+            return not any(tally.values())
+        first = next((t for t in sorted(tally) if tally[t] > 0), None)
+        if first is None:
+            return False
+        if tally[first] >= 3:
+            tally[first] -= 3
+            if groups_left(groups - 1):
+                tally[first] += 3
+                return True
+            tally[first] += 3
+        if len(first) == 2 and first[0].isdigit() and first[1] in "mps" and int(first[0]) <= 7:
+            follow = [f"{int(first[0]) + d}{first[1]}" for d in (1, 2)]
+            if all(tally[x] > 0 for x in follow):
+                for x in (first, *follow):
+                    tally[x] -= 1
+                if groups_left(groups - 1):
+                    for x in (first, *follow):
+                        tally[x] += 1
+                    return True
+                for x in (first, *follow):
+                    tally[x] += 1
+        return False
+
+    for tile in list(tally):
+        if tally[tile] >= 2:
+            tally[tile] -= 2
+            if groups_left(4 - meld_count):
+                return True
+            tally[tile] += 2
+    return False
+
+
 def parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", type=Path, required=True)
@@ -309,6 +351,20 @@ def main() -> None:
         ):
             legal_inventory_violations += 1
 
+        hand = scene["hand"]
+        if hand["completed_hand_empty"]:
+            if hand["concealed"] or hand.get("winning_shape_complete", False):
+                problems.append(f"image {image['id']}: empty hand marked winning")
+        elif not (hand.get("winning_shape_complete") and is_standard_winning_shape(
+            hand["concealed"], image["meld_group_count"]
+        )):
+            problems.append(f"image {image['id']}: nonempty completed hand is not a winning hand")
+        contact = scene.get("black_frame_contact")
+        if image["meld_group_count"]:
+            if not contact or any(abs(contact[key]) > 0.001 for key in ("right_clearance_mm", "bottom_clearance_mm")):
+                problems.append(f"image {image['id']}: meld bodies are not touching the black frame")
+        elif contact is not None:
+            problems.append(f"image {image['id']}: unexpected black-frame contact")
         if len(scene["tiles"]) != len(record["annotations"]):
             record_annotation_mismatches += 1
         footprints = []
@@ -316,7 +372,10 @@ def main() -> None:
             tile_yaws.append(float(tile["transform"]["yaw_deg"]))
             tf = tile["transform"]
             corners = tile_corners(float(tf["x"]), float(tf["y"]), float(tf["yaw_deg"]))
-            if any(abs(x) > INNER_SIZE / 2 + 1e-7 or abs(y) > INNER_SIZE / 2 + 1e-7 for x, y in corners):
+            if tile["region"] != "melds" and any(
+                abs(x) > INNER_SIZE / 2 + 1e-7 or abs(y) > INNER_SIZE / 2 + 1e-7
+                for x, y in corners
+            ):
                 outside_table_tiles += 1
             for old in footprints:
                 if polygons_overlap(corners, old):
@@ -353,6 +412,14 @@ def main() -> None:
         problems.append(f"tiles outside inner table: {outside_table_tiles}")
     if record_annotation_mismatches:
         problems.append(f"scene/annotation count mismatches: {record_annotation_mismatches}")
+    profile_names = {r["scene"]["lighting"].get("profile") for r in records}
+    diffuse = "diffuse-room-v1" in profile_names
+    if diffuse and profile_names != {"diffuse-room-v1"}:
+        problems.append(f"mixed lighting provenance profiles: {profile_names}")
+    if diffuse and any(r["scene"]["lighting"].get("shadow_style") != "soft"
+                       or r["scene"]["lighting"].get("off_frame_blocker") is not None
+                       for r in records):
+        problems.append("diffuse lighting contains hard shadows or an artificial blocker")
     if args.min_images >= 100:
         if any(meld_groups[i] == 0 for i in range(5)):
             problems.append("one or more meld-count buckets 0..4 are missing")
@@ -365,8 +432,14 @@ def main() -> None:
             problems.append("sideways called-tile coverage is missing")
         if faces["back"] == 0:
             problems.append("closed-kan back-face coverage is missing")
-        if len(lighting) < 8:
-            problems.append(f"lighting profile coverage incomplete: {len(lighting)}/8")
+        if diffuse:
+            expected = {("warm", "soft", "normal"), ("neutral", "soft", "normal"),
+                        ("cool", "soft", "normal"), ("cool", "soft", "dim"),
+                        ("warm", "soft", "bright")}
+            if set(lighting) != expected:
+                problems.append(f"diffuse lighting profile coverage mismatch: {set(lighting) ^ expected}")
+        elif len(lighting) < 8:
+            problems.append(f"legacy lighting profile coverage incomplete: {len(lighting)}/8")
     allowed = np.zeros((320, 320), dtype=bool)
     for x, y, w, h in REGIONS.values():
         allowed[y:y+h, x:x+w] = True

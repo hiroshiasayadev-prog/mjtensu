@@ -60,3 +60,8 @@ product/frontend/test-results/
 
 # Local environment secrets
 .env
+
+# Blender synthetic experiments: source tracked, renders/QA outputs ignored
+/tools/blender/synthetic/.outputs/
+/tools/blender/synthetic/outputs/
+/tools/blender/synthetic/output/

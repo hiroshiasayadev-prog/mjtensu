@@ -6,28 +6,33 @@
   },
   "coverage": {
     "meld_count_weights": [
-      0.24,
-      0.18,
       0.2,
       0.2,
-      0.18
+      0.2,
+      0.2,
+      0.2
     ],
     "white_meld_probability_given_present": 0.22,
-    "meld_edge_near_probability": 0.18
+    "meld_edge_near_probability": 0.18,
+    "completed_hand_empty_probability": 0.2,
+    "dora_indicators_empty_probability": 0.2,
+    "meld_count_sampling": "balanced_shuffled_blocks"
   },
   "placement": {
     "regime_weights": [
-      0.25,
-      0.5,
-      0.25
+      0.2,
+      0.6,
+      0.2
     ]
   },
   "annotation": {
-    "min_retained_area_ratio": 0.985
+    "min_retained_area_ratio": 1.0,
+    "max_foreign_area_ratio": 0.1
   },
   "runtime": {
     "progress_every": 25,
-    "max_attempts_per_image": 1024
+    "max_attempts_per_image": 128,
+    "deferred_retry_rounds": 3
   },
   "capture_reference": {
     "reference_viewport": [
@@ -44,5 +49,24 @@
     ],
     "sampling": "fixed_real_runtime_geometry",
     "source_geometry_note": "128 valid real capture records use the same 750x334 video element and PWA guide geometry; source rectangles are ported from pwa_capture_dataset/src/layout.ts and object-fit:cover."
+  },
+  "camera": {
+    "height_m": 0.4,
+    "clockwise_deg_range": [
+      0.0,
+      15.0
+    ],
+    "lens_retry_mm": [
+      17.7,
+      16.0,
+      14.0,
+      12.0,
+      10.0
+    ]
+  },
+  "lighting": {
+    "profile": "diffuse-room-v1",
+    "area_height_m": 1.8,
+    "energy_multiplier": 1.0
   }
 }
