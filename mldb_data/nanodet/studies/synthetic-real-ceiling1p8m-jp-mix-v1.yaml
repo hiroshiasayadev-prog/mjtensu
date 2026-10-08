@@ -1,0 +1,200 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "nanodet/synthetic-real-ceiling1p8m-jp-mix-v1",
+  "status": "sealed",
+  "name": "NanoDet M320 Blender ceiling1p8m jp_v2 0 vs 25 full evaluation",
+  "description": "Hold NanoDet Plus M320 architecture, real-capture replay, training protocol parameters and external full evaluation fixed while measuring Blender final-delivery-v4-ceiling1p8m corpus effect versus prior final-delivery-v2; compare corrected jp_v2 fractions 0 and 0.25, seed 42, 60 epochs. Includes bbox pathology, held-out real capture quality and five-video recognition-functional semantics/overlay.",
+  "model": {
+    "train": {
+      "corpus": "nanodet/mahjong-training-synthetic-real-v3",
+      "protocol": "nanodet/nanodet-aabb-synthetic-real-mix-gpu-v2",
+      "architectures": [
+        "nanodet/nanodet-plus-m320-ghostpan-baseline-v1"
+      ],
+      "parameters": {
+        "epochs": {
+          "values": [
+            60
+          ]
+        },
+        "batch_size": {
+          "values": [
+            24
+          ]
+        },
+        "workers": {
+          "values": [
+            10
+          ]
+        },
+        "learning_rate": {
+          "values": [
+            0.001
+          ]
+        },
+        "weight_decay": {
+          "values": [
+            0.05
+          ]
+        },
+        "eta_min": {
+          "values": [
+            5e-05
+          ]
+        },
+        "warmup_steps": {
+          "values": [
+            500
+          ]
+        },
+        "warmup_ratio": {
+          "values": [
+            0.0001
+          ]
+        },
+        "validation_interval": {
+          "values": [
+            5
+          ]
+        },
+        "grad_clip": {
+          "values": [
+            35.0
+          ]
+        },
+        "amp": {
+          "values": [
+            true
+          ]
+        },
+        "log_interval": {
+          "values": [
+            50
+          ]
+        },
+        "source_budget": {
+          "values": [
+            9000
+          ]
+        },
+        "real_repeat": {
+          "values": [
+            20
+          ]
+        },
+        "jp_fraction": {
+          "values": [
+            0.0,
+            0.25
+          ]
+        }
+      },
+      "seeds": [
+        42
+      ]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "bbox-pathology",
+      "corpus": "nanodet/mahjong-composite-pathology-320-v1",
+      "protocol": "nanodet/bbox-pathology-v2",
+      "parameters": {
+        "split": {
+          "values": [
+            "val"
+          ]
+        },
+        "score_threshold": {
+          "values": [
+            0.35
+          ]
+        },
+        "nms_iou_threshold": {
+          "values": [
+            0.6
+          ]
+        },
+        "max_detections": {
+          "values": [
+            200
+          ]
+        },
+        "pathology_overlap_threshold": {
+          "values": [
+            0.25
+          ]
+        },
+        "duplicate_overlap_threshold": {
+          "values": [
+            0.8
+          ]
+        }
+      }
+    },
+    {
+      "stage": "real-capture-quality",
+      "corpus": "nanodet/mahjong-composite-pathology-320-v1",
+      "protocol": "nanodet/deployment-real-quality-v1",
+      "parameters": {
+        "split": {
+          "values": [
+            "val"
+          ]
+        },
+        "source_domain": {
+          "values": [
+            "real_capture"
+          ]
+        },
+        "score_threshold": {
+          "values": [
+            0.35
+          ]
+        },
+        "nms_iou_threshold": {
+          "values": [
+            0.6
+          ]
+        },
+        "match_iou_threshold": {
+          "values": [
+            0.5
+          ]
+        },
+        "duplicate_overlap_threshold": {
+          "values": [
+            0.8
+          ]
+        },
+        "max_detections": {
+          "values": [
+            200
+          ]
+        }
+      }
+    },
+    {
+      "stage": "recognition-functional-video",
+      "corpus": "nanodet/recognition-e2e-night-iphone13-v1",
+      "protocol": "nanodet/recognition-functional-video-detector-v2",
+      "parameters": {
+        "base_classifier_model": {
+          "values": [
+            "tile-classifier/run-bdcce50e63fb4665bebbd8d3b78ea243-trial-0003-model"
+          ]
+        },
+        "red_five_model": {
+          "values": [
+            "recognition-runtime/red-five-c8-rgb-warmaug-v1"
+          ]
+        },
+        "detector_score_threshold": {
+          "values": [
+            0.35
+          ]
+        }
+      }
+    }
+  ]
+}

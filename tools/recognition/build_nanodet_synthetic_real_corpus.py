@@ -113,6 +113,9 @@ def main() -> None:
     synthetic_train = synthetic / "annotations" / "instances_train.json"
     synthetic_val = synthetic / "annotations" / "instances_val.json"
     database = capture_root / "dataset.sqlite"
+    source_manifest = synthetic / "package_manifest.json"
+    if not source_manifest.is_file():
+        source_manifest = synthetic / "manifest.jsonl"
     layout_path = repo / "tools" / "recognition" / "capture_layout.v1.json"
     for path in (synthetic_train, synthetic_val, database, layout_path):
         if not path.is_file():
@@ -191,7 +194,8 @@ def main() -> None:
     provenance = {
         "schema": "mjtensu.nanodet-synthetic-real-corpus/v1",
         "synthetic_root": str(synthetic),
-        "synthetic_package_manifest_sha256": sha256(synthetic / "package_manifest.json"),
+        "synthetic_package_manifest_sha256": sha256(source_manifest),
+        "synthetic_manifest_name": source_manifest.name,
         "synthetic_validation_report_sha256": sha256(synthetic / "qa" / "validation_report.json"),
         "campaign_id": args.campaign_id,
         "real_split_unit": "layout_id",
@@ -236,8 +240,8 @@ def main() -> None:
             tf.add(src, arcname=f"images/real_capture/{name}", recursive=False)
 
         tf.add(
-            synthetic / "package_manifest.json",
-            arcname="source/synthetic_package_manifest.json",
+            source_manifest,
+            arcname=f"source/{source_manifest.name}",
             recursive=False,
         )
         tf.add(
