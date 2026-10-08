@@ -1,0 +1,57 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "nanodet/plain-w500-s234-s345-onnx-iphone-latency-v2",
+  "status": "sealed",
+  "name": "Plain W500 S234/S345 init-only | ONNX export → iPhone",
+  "description": "Latency topology comparison with deterministic seed42 initialization only (0 epochs, no optimizer/backprop). Two Plain 0.5x GhostPAN A/B architectures, accepted ONNX export on default and ONNX-only iPhone Safari WASM SIMD timing from the same per-trial artifact. Not an accuracy experiment.",
+  "model": {
+    "train": {
+      "corpus": "nanodet/mahjong-composite-pathology-320-v1",
+      "protocol": "nanodet/nanodet-architecture-initialize-only-v1",
+      "architectures": [
+        "nanodet/nanodet-plus-m320-plain-w500-s234-v1",
+        "nanodet/nanodet-plus-m320-plain-w500-s345-v1"
+      ],
+      "parameters": {},
+      "seeds": [
+        42
+      ]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "onnx-export",
+      "corpus": "nanodet/mahjong-composite-pathology-320-v1",
+      "protocol": "nanodet/nanodet-onnx-export-v1",
+      "parameters": {}
+    },
+    {
+      "stage": "ort-web-iphone-latency",
+      "corpus": "nanodet/mahjong-composite-pathology-320-v1",
+      "protocol": "nanodet/nanodet-ort-web-iphone-latency-v3",
+      "parameters": {
+        "warmup_runs": {
+          "values": [
+            5
+          ]
+        },
+        "runs_per_block": {
+          "values": [
+            10
+          ]
+        },
+        "measure_blocks": {
+          "values": [
+            10
+          ]
+        }
+      },
+      "inputs": {
+        "onnx_model": {
+          "from_stage": "onnx-export",
+          "artifact": "onnx_model"
+        }
+      }
+    }
+  ]
+}
