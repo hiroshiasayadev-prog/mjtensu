@@ -1,0 +1,110 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "nanodet/cpu-postprocess-trace-replay-v2",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "name": "NanoDet CPU-only 6-stage fixed-trace postprocess replay v2",
+  "description": "Replay existing jp25 detector+classifier output (already NMS 0.60 and coverage 0.80 filtered) across baseline, 2 stricter coverage gates, 2 stricter hard-NMS gates, and Gaussian Soft-NMS. No model inference. Recompute proxy ordered hand/meld/dora semantic metrics. Product stabilization and meld group structure are not recomputed. The helper module is import-only and cannot accidentally become a ClearML CLI entrypoint.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "cc97145166dbbffa9b6c6e9a329c33a4b7f3e98b7686dd1939221bd1861e6687",
+    "sources": [
+      {
+        "path": "mldb_data/nanodet/lib/nanodet_postprocess_trace_replay_v2.py",
+        "sha256": "0178dfed5b803b9a7b49c154bbccf2ea26c375a1bc4a0a4713bf91471476c67e"
+      }
+    ]
+  },
+  "parameters": {
+    "postprocess_condition": {
+      "type": "string",
+      "enum": [
+        "baseline",
+        "coverage_0.75",
+        "coverage_0.70",
+        "nms_iou_0.55",
+        "nms_iou_0.50",
+        "gaussian_soft_nms_sigma_0.50"
+      ],
+      "default": "baseline",
+      "description": "Select one replay postprocessing condition; labels are the full human-readable method and parameters."
+    }
+  },
+  "metrics": {
+    "hand_exact_rate_proxy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "hand_semantic_f1_proxy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "hand_overlap_frames": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower"
+    },
+    "hand_boxes_removed": {
+      "type": "integer",
+      "required": true,
+      "preference": "neutral"
+    },
+    "hand_exact_lost": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower"
+    },
+    "meld_exact_rate_proxy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "meld_semantic_f1_proxy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "meld_overlap_frames": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower"
+    },
+    "meld_exact_lost": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower"
+    },
+    "dora_exact_rate_proxy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "dora_exact_lost": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower"
+    }
+  },
+  "artifacts": {
+    "selected_result": {
+      "format": "json",
+      "schema": "mjtensu.nanodet/cpu-postprocess-trace-replay-result/v1",
+      "required": true,
+      "description": "Selected condition, exact results by region and explicit limitations."
+    },
+    "comparison_csv": {
+      "format": "csv",
+      "schema": "mjtensu.nanodet/cpu-postprocess-replay-comparison/v1",
+      "required": true,
+      "description": "All six conditions by three regions for direct comparison."
+    },
+    "exact_frame_changes": {
+      "format": "jsonl",
+      "schema": "mjtensu.nanodet/cpu-postprocess-replay-frame-changes/v1",
+      "required": true,
+      "description": "Frames where frozen classifier sequence becomes exact or inexact."
+    }
+  }
+}
