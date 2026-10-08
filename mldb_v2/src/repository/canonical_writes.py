@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -728,6 +729,74 @@ class CanonicalRepositoryWriter:
                 trial.pop("condition", None)
             if not _documents_equal(current_stripped, stripped):
                 raise ValueError("StudyResult condition migration changed non-condition data")
+            _atomic_replace_record(path, validated)
+            return validated
+
+    def recover_premature_global_failure(
+        self,
+        *,
+        entity_id: StudyResultId,
+        expected_sha256: str,
+        backend_evidence: Mapping[str, object],
+    ) -> CanonicalDocument:
+        """Audited, fail-closed recovery of a Study erroneously globally failed.
+
+        Reuse the same StudyResult/StageKeys and never enqueue another training
+        job. A pre-recovery snapshot is kept outside the canonical inventory.
+        """
+        path = _canonical_path(
+            data_root=self._data_root,
+            kind=EntityKind.STUDY_RESULT,
+            entity_id=entity_id,
+        )
+        key = str(path.relative_to(self._repository_root))
+        with _process_file_lock(lock_root=self._write_lock_root, key=key):
+            if not path.is_file():
+                raise FileNotFoundError(path)
+            current = _read_record(path)
+            _validate_study_result_record(current, entity_id=entity_id)
+            digest = hashlib.sha256(_canonical_json_bytes(current)).hexdigest()
+            if expected_sha256 != digest:
+                raise ValueError("recovery rejected: original StudyResult fingerprint differs")
+            if current["status"] != "failed" or current["diagnostic"] != {
+                "code": "study_progression_failed",
+                "message": "Study progression cannot continue from canonical inputs.",
+            }:
+                raise ValueError("recovery rejected: not the expected progression failure")
+            trials = current["trials"]
+            if type(trials) is not list or not trials:
+                raise ValueError("recovery rejected: missing trials")
+            task_ids = backend_evidence.get("training_task_ids")
+            if type(task_ids) is not dict or set(task_ids) != {
+                trial["trial"] for trial in trials
+            } or not all(type(v) is str and v for v in task_ids.values()):
+                raise ValueError("recovery rejected: training Task evidence is incomplete")
+
+            replacement = json.loads(json.dumps(current))
+            for trial in replacement["trials"]:
+                stages = ([trial["training"]] if trial["training"] is not None else [])
+                stages.extend(trial["evaluations"])
+                for slot in stages:
+                    if slot != {
+                        **{k: v for k, v in slot.items() if k in {"coordinate", "stage"}},
+                        "disposition": "skipped", "result": None, "reason": "global_failure",
+                    }:
+                        raise ValueError("recovery rejected: canonical stage is not globally skipped")
+                    slot.update(disposition="pending", result=None, reason=None)
+            replacement["status"] = "submitted"
+            replacement["diagnostic"] = None
+            validated = _validate_study_result_record(replacement, entity_id=entity_id)
+            audit_dir = self._repository_root / ".local" / "mldb_v2" / "recovery_audit"
+            audit = audit_dir / f"{entity_id.split('/', 1)[1]}-{digest}.json"
+            if audit.exists():
+                raise ValueError("recovery rejected: audit snapshot already exists")
+            _atomic_replace_record(audit, {
+                "study_result": str(entity_id),
+                "prior_sha256": digest,
+                "prior_record": current,
+                "backend_evidence": dict(backend_evidence),
+                "reason": "acceptance code rejected valid StudyResult.condition",
+            })
             _atomic_replace_record(path, validated)
             return validated
 

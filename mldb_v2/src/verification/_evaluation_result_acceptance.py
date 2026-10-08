@@ -155,7 +155,8 @@ def _validate_parent_plan_lineage(study_result: dict[str, object], plan: StudyPl
     if len(result_trials) != len(plan["trials"]):
         raise ValueError("StudyResult trial topology does not match Plan")
     for result_trial, plan_trial in zip(result_trials, plan["trials"]):
-        if type(result_trial) is not dict or set(result_trial) != {"trial", "training", "evaluations"}:
+        legacy_fields = {"trial", "training", "evaluations"}
+        if type(result_trial) is not dict or set(result_trial) not in (legacy_fields, legacy_fields | {"condition"}):
             raise ValueError("StudyResult trial fields do not match schema")
         if result_trial["trial"] != plan_trial["trial"]:
             raise ValueError("StudyResult trial identity does not match Plan")

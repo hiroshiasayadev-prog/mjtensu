@@ -2674,11 +2674,11 @@ class ClearMLSDKAdapter:
     ) -> None:
         child = self._get_task(task_id)
         pipeline = self._get_task(pipeline_execution_id)
-        if _status(pipeline) == "stopped":
+        if _status(pipeline) in {"stopped", "failed"}:
             mark_started = getattr(pipeline, "mark_started", None)
             if not callable(mark_started):
                 raise ClearMLSDKError(
-                    "stopped ClearML Pipeline cannot be reopened for MLDB resume"
+                    "terminal ClearML Pipeline cannot be reopened for MLDB resume"
                 )
             mark_started(force=True)
         child_meta = _metadata(child)

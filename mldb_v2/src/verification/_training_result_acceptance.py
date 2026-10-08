@@ -134,7 +134,8 @@ def _validate_study_result_anchor(value: object) -> dict[str, object]:
     if type(trials) is not list:
         raise ValueError("StudyResult trials must be a list")
     for index, trial in enumerate(trials, start=1):
-        if type(trial) is not dict or set(trial) != {"trial", "training", "evaluations"}:
+        legacy_fields = {"trial", "training", "evaluations"}
+        if type(trial) is not dict or set(trial) not in (legacy_fields, legacy_fields | {"condition"}):
             raise ValueError("StudyResult trial fields do not match schema")
         if _validate_trial_id(trial["trial"]) != f"trial-{index:04d}":
             raise ValueError("StudyResult trial order does not match canonical sequence")

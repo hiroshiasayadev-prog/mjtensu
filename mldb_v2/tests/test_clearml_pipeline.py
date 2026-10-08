@@ -1260,7 +1260,8 @@ def test_native_pipeline_dag_rejects_indistinguishable_user_facing_labels() -> N
         )
 
 
-def test_bind_task_to_pipeline_reopens_stopped_controller_for_resume() -> None:
+@pytest.mark.parametrize("previous_status", ["stopped", "failed"])
+def test_bind_task_to_pipeline_reopens_terminal_controller_for_resume(previous_status: str) -> None:
     FakeSDKTask.reset()
     plan = _plan()
     result = _result(plan)
@@ -1271,7 +1272,7 @@ def test_bind_task_to_pipeline_reopens_stopped_controller_for_resume() -> None:
     pipeline_id = cast(str, adapter.create_pipeline_run(_pipeline_request(plan, result)))
     controller = FakeSDKTask.get_task(task_id=pipeline_id)
     assert controller is not None
-    controller.status = "stopped"
+    controller.status = previous_status
 
     child = FakeSDKTask(project="mldb/demo", task_id="resume-child")
     child.properties["mldb.study_result"] = str(result["id"])
