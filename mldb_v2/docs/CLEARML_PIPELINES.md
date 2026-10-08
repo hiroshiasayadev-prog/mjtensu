@@ -36,7 +36,7 @@ ClearML owns the operational mechanics that are not the scientific meaning of th
 
 MLDB should not grow a second queue, retry scheduler, heartbeat service, worker registry, or resource scheduler beside ClearML.
 
-Stage-specific placement is still allowed at the adapter boundary. Production composition accepts an operational stage-route map; for example `onnx-cpu-latency` can be routed to `latency-cpu` with `docker_gpu: null` and `runtime_image_profile: null`, while unlisted GPU stages inherit the global `gpu-cu124` runtime-image profile. Queue names, worker topology, and image profiles remain deployment concerns and do not enter Study or Evaluation Protocol YAML.
+Stage-specific placement is still allowed at the adapter boundary. Production composition accepts an operational stage-route map; for example `onnx-cpu-latency` is routed to `latency-cpu` with `docker_gpu: null`, inheriting the same global `gpu-cu124` runtime-image profile as ordinary GPU stages but with no GPU passed to Docker. Queue names, worker topology, and image profiles remain deployment concerns and do not enter Study or Evaluation Protocol YAML.
 
 For the validated deployment, `old-gpu3090` serves `default` plus `recognition-functional`, while the CPU-only `old-cpu` serves `latency-cpu`. Concurrent work on the same physical old host can perturb CPU timing; runs affected by host contention are not directly comparable. Heterogeneous GPU workers may join `default`, but they must not join `latency-cpu`.
 

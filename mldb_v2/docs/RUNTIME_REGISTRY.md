@@ -128,7 +128,7 @@ All three GPU parent workers use the same digest-pinned ClearML worker image wit
 
 Stage routing is independent of registry version pinning. A route may set `runtime_image_profile: null` to opt out of baked GPU materialization.
 
-Current routing keeps CPU/iPhone-specialized stages on the existing static image while normal GPU stages and `recognition-functional-video` use `gpu-cu124`.
+Current routing uses `gpu-cu124` for GPU stages, `recognition-functional-video`, and the `onnx-cpu-latency` stage. CPU latency inherits the pinned Registry image with `docker_gpu: null` so only CPU providers run; iPhone-specialized stages retain `runtime_image_profile: null` and the existing static-image/device-runner path.
 
 ## 8. GPU worker rollout
 
