@@ -1,0 +1,13 @@
+{
+  "schema": "mjtensu.mldb-v2/train-protocol/v1",
+  "id": "nanodet/nanodet-architecture-initialize-only-v1",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "name": "NanoDet architecture initialization only (no training)",
+  "description": "Create the architecture default initialized state for topology and inference-latency comparisons; does not access training samples, use GPU, optimize weights or make an accuracy claim. Telemetry initialization/parameters reports the count once at step 0.",
+  "implementation": {
+    "entrypoint": "train",
+    "sha256": "937b23078e095ae27719f65063b12c505648a56eb5aa9d9ad53bfbf523a9cf10"
+  },
+  "parameters": {}
+}

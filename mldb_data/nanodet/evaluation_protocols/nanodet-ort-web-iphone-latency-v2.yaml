@@ -1,0 +1,63 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "nanodet/nanodet-ort-web-iphone-latency-v2",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "name": "NanoDet full detector Safari ORT Web latency - idle tunnel compatible",
+  "description": "320x320 RGB physical iPhone Safari ORT Web wasm-simd 1-thread benchmark of complete backbone, GhostPAN and NanoDet head. Excludes NMS, preprocessing, model/session loading. Measures 10-run blocks and reports p50/p95 with output/parity checks. The runner activates its tunnel per job; idle tunnel_ready=false is not an execution blocker.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "660a9c64ce5f865f345582ce3c2df681e75d2f5574a256f6f80365dc4c58527d"
+  },
+  "parameters": {
+    "warmup_runs": {
+      "type": "integer",
+      "default": 5,
+      "minimum": 1,
+      "maximum": 100
+    },
+    "runs_per_block": {
+      "type": "integer",
+      "default": 10,
+      "minimum": 1,
+      "maximum": 100
+    },
+    "measure_blocks": {
+      "type": "integer",
+      "default": 10,
+      "minimum": 1,
+      "maximum": 100
+    }
+  },
+  "metrics": {
+    "latency_p50_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "latency_p95_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "latency_mean_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    }
+  },
+  "artifacts": {
+    "onnx_model": {
+      "format": "onnx",
+      "schema": "mjtensu.nanodet/onnx-detector/v1",
+      "required": true,
+      "description": "Exact ONNX detector graph benchmarked in Safari"
+    },
+    "latency_report": {
+      "format": "json",
+      "schema": "mjtensu.nanodet/iphone-detector-ort-web-latency/v1",
+      "required": true,
+      "description": "Runner environment, shape and parity checks, raw samples and latency metrics"
+    }
+  }
+}

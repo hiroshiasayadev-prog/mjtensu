@@ -1,0 +1,69 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "nanodet/nanodet-plus-m320-plain-w500-s345-v1",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "name": "NanoDet Plus M320 Plain 0.5x late DW/PW256 GhostPAN S345",
+  "family": "nanodet-plus-m320-plain-pyramid",
+  "description": "Plain 0.5x late DW3x3+PW256 detector with GhostPAN and feature strides 4/8/16; RGB stem adaptation, optional DW/PW Stage 5; head strides scaled consistently.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sources": [
+      {
+        "path": "mldb_data/nanodet/lib/nanodet_plus_aabb_v1.py",
+        "sha256": "24d87befabf580d14126ce8284695f9a77603944f2ecd9dcd7be10c22c688cc8"
+      },
+      {
+        "path": "mldb_data/nanodet/lib/plain_m320_ghostpan_backbone_v1.py",
+        "sha256": "8455a77b445a8a7d86f23240d8f5e25fd63b8359331aee4dd058b64e3b08646d"
+      }
+    ],
+    "sha256": "0a8b8417c69651f10969fabf54c52272f50a2c72a23fd15f185434ca0df9a0f3"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        3,
+        320,
+        320
+      ]
+    },
+    "output": {
+      "kind": "nanodet-dense-aabb",
+      "shape": [
+        "N",
+        8500,
+        33
+      ]
+    }
+  },
+  "structure": {
+    "summary": "Plain Conv16/32/64/96 + DW3x3+PW256; stage5 DW3 stride2+PW128; GhostPAN96 4 levels; strides [4, 8, 16, 32]",
+    "traits": [
+      "rgb",
+      "plain-cnn",
+      "late-depthwise-refine",
+      "ghostpan",
+      "nanodet-plus",
+      "first-feature-stride-4"
+    ]
+  },
+  "parameters": {
+    "feature_start_stride": 4,
+    "ghostpan_in_channels": [
+      64,
+      256,
+      128
+    ],
+    "ghostpan_out_channels": 96,
+    "strides": [
+      4,
+      8,
+      16,
+      32
+    ],
+    "reg_max": 7
+  }
+}

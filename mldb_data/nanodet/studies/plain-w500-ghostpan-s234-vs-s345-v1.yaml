@@ -1,0 +1,45 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "nanodet/plain-w500-ghostpan-s234-vs-s345-v1",
+  "status": "sealed",
+  "name": "NanoDet Plain W500 S234 vs S345 - iPhone untrained latency",
+  "description": "Pure architecture latency screen, no GPU training, no accuracy test. Compare newly initialized Plain 0.5x late DW/PW256 S234 vs S345; exact full detector ONNX ORT Web wasm-simd 1-thread on iPhone.",
+  "model": {
+    "train": {
+      "corpus": "nanodet/mahjong-composite-pathology-320-v1",
+      "protocol": "nanodet/nanodet-architecture-initialize-only-v1",
+      "architectures": [
+        "nanodet/nanodet-plus-m320-plain-w500-s234-v1",
+        "nanodet/nanodet-plus-m320-plain-w500-s345-v1"
+      ],
+      "parameters": {},
+      "seeds": [
+        42
+      ]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "ort-web-iphone-latency",
+      "corpus": "nanodet/mahjong-composite-pathology-320-v1",
+      "protocol": "nanodet/nanodet-ort-web-iphone-latency-v2",
+      "parameters": {
+        "warmup_runs": {
+          "values": [
+            5
+          ]
+        },
+        "runs_per_block": {
+          "values": [
+            10
+          ]
+        },
+        "measure_blocks": {
+          "values": [
+            10
+          ]
+        }
+      }
+    }
+  ]
+}
