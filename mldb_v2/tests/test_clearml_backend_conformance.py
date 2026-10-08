@@ -727,6 +727,52 @@ def test_sdk_runtime_image_profile_uses_digest_and_cpu_route_can_disable(
     assert "--gpus" not in FakeSDKTask.docker_calls[-1]["docker_arguments"]
 
 
+def test_cpu_latency_task_inherits_pinned_registry_image_without_gpu(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeRuntimeRegistryClient:
+        def __init__(self, _url: str, *, ca_bundle=None, **_kwargs) -> None:
+            pass
+
+        def runtime_image(self, version: int, profile: str, *, wait_seconds: int):
+            assert (version, profile) == (8, "gpu-cu124")
+            return SimpleNamespace(
+                image_ref="registry.example/mjtensu/gpu-runtime@sha256:" + "a" * 64
+            )
+
+    monkeypatch.setattr(clearml_sdk_module, "RuntimeRegistryClient", FakeRuntimeRegistryClient)
+    FakeSDKTask.reset()
+    settings = ClearMLSDKSettings(
+        docker_image="fallback:tag",
+        docker_gpu="all",
+        runtime_registry_url="https://registry.invalid/",
+        runtime_image_profile="gpu-cu124",
+        stage_routes={
+            "onnx-cpu-latency": {"queue": "latency-cpu", "docker_gpu": None}
+        },
+        prebuilt_runtime=True,
+    )
+    stage_input = _evaluation_stage_input()
+    stage_input["runtime_registry_version"] = 8
+    stage_input["stage"]["name"] = "onnx-cpu-latency"
+    task_id = ClearMLSDKAdapter(settings, task_class=FakeSDKTask).create_task(
+        _sdk_request(stage_input)
+    )
+
+    assert task_id == "sdk-1"
+    image = FakeSDKTask.docker_calls[0]
+    assert image["docker_image"] == (
+        "registry.example/mjtensu/gpu-runtime@sha256:" + "a" * 64
+    )
+    assert "--gpus" not in image["docker_arguments"]
+    assert "-e" in image["docker_arguments"]
+    assert "MLDB_RUNTIME_REGISTRY_VERSION=8" in image["docker_arguments"]
+    assert (
+        "CLEARML_AGENT_SKIP_PIP_VENV_INSTALL=/opt/conda/bin/python"
+        in image["docker_arguments"]
+    )
+
+
 def test_sdk_retry_task_is_not_owner_and_owner_projection_aggregates_attempts() -> None:
     FakeSDKTask.reset()
     adapter = ClearMLSDKAdapter(task_class=FakeSDKTask)

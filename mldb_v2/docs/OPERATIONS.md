@@ -47,6 +47,7 @@ Explicit process environment wins over `.env`. This makes normal use zero-bootst
 `mldb.cmd` also sets `MLDB_REPO_ROOT` itself. Do not put another repository root in `.env`.
 
 The loader intentionally expects simple dotenv entries of the form `KEY=value`, with blank lines and `#` comments allowed. Keep secrets unquoted unless there is a concrete need to extend the loader. Never commit `.env`.
+The checked-in root `.env.example` provides the current non-secret Registry/CPU/iPhone routing defaults. Merge its values into the Git-ignored `.env` and provide secrets separately; the example itself is not loaded automatically.
 
 Environment variables consumed by the production composition include:
 

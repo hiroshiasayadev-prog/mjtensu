@@ -107,7 +107,7 @@ def test_existing_runtime_configuration_mapping_matches_consumers() -> None:
         "CLEARML_API_ACCESS_KEY": "test-access",
         "CLEARML_API_SECRET_KEY": "test-secret",
         "MLDB_V2_CLEARML_QUEUE": "default",
-        "MLDB_V2_CLEARML_STAGE_ROUTES_JSON": '{"onnx-cpu-latency":{"queue":"latency-cpu","docker_gpu":null,"runtime_image_profile":null}}',
+        "MLDB_V2_CLEARML_STAGE_ROUTES_JSON": '{"onnx-cpu-latency":{"queue":"latency-cpu","docker_gpu":null}}',
         "MLDB_V2_CLEARML_PREBUILT_RUNTIME": "true",
         "MLDB_V2_RUNTIME_REGISTRY_URL": "https://runtime-registry.example.invalid/",
         "MLDB_RUNTIME_REGISTRY_CA_BUNDLE": "/tmp/runtime-registry-ca.pem",
@@ -140,7 +140,6 @@ def test_existing_runtime_configuration_mapping_matches_consumers() -> None:
         "onnx-cpu-latency": {
             "queue": "latency-cpu",
             "docker_gpu": None,
-            "runtime_image_profile": None,
         }
     }
     assert settings.stage_routes == backend_config.options["stage_routes"]
@@ -180,6 +179,34 @@ def test_existing_runtime_configuration_mapping_matches_consumers() -> None:
         "MINIO_ROOT_PASSWORD",
     ):
         assert existing_name in sdk_source
+
+
+def test_tracked_runtime_routes_keep_cpu_on_global_registry_and_iphone_isolated() -> None:
+    # This is the deployable, non-secret example used to populate the local .env.
+    path = Path(__file__).resolve().parents[2] / ".env.example"
+    config = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line and not line.startswith("#"):
+            key, sep, value = line.partition("=")
+            assert sep and key and value
+            config[key] = value
+
+    backend = composition._clearml_backend_config(config)
+    settings = ClearMLSDKAdapter.from_backend_config(backend)._settings
+    assert settings.runtime_image_profile == "gpu-cu124"
+    assert settings.runtime_registry_url
+    assert settings.prebuilt_runtime
+    assert settings.docker_gpu == "all"
+
+    cpu = settings.stage_routes["onnx-cpu-latency"]
+    assert cpu == {"queue": "latency-cpu", "docker_gpu": None}
+    assert "runtime_image_profile" not in cpu
+    for stage in ("ort-web-iphone-latency", "recognition-e2e-iphone",
+                  "recognition-iphone-latency"):
+        route = settings.stage_routes[stage]
+        assert route["queue"] == "latency-iphone"
+        assert route["docker_gpu"] is None
+        assert route["runtime_image_profile"] is None
 
 
 def test_composition_does_not_serialize_operational_config(tmp_path: Path) -> None:
