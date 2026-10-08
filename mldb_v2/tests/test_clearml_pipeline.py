@@ -20,6 +20,7 @@ from mldb_v2.src.backend._clearml_pipeline import (
 )
 from mldb_v2.src.backend._clearml_sdk import (
     ClearMLSDKAdapter,
+    ClearMLSDKError,
     ClearMLSDKSettings,
     _comparison_bar_figure,
     _selectable_image_figure,
@@ -375,6 +376,21 @@ def _pipeline_request(plan: StudyPlan, result: StudyResult) -> ClearMLPipelineCr
     )
 
 
+def test_pipeline_display_gate_rejects_trial_identifier_before_controller_creation() -> None:
+    FakeSDKTask.reset()
+    plan = deepcopy(_plan())
+    source = cast(dict[str, object], cast(list[object], plan["trials"])[0])["source"]
+    assert isinstance(source, dict)
+    source["architecture"] = "demo/trial-unsafe-architecture"
+    result = _result(_plan())
+    adapter = ClearMLSDKAdapter(ClearMLSDKSettings(), task_class=FakeSDKTask)
+
+    with pytest.raises(ClearMLSDKError, match="trial-"):
+        adapter.create_pipeline_run(_pipeline_request(cast(StudyPlan, plan), result))
+
+    assert FakeSDKTask.create_calls == []
+
+
 def test_sdk_adapter_creates_native_controller_task_without_enqueuing_children() -> None:
     FakeSDKTask.reset()
     plan = _plan()
@@ -496,6 +512,13 @@ def test_comparison_bar_colors_follow_metric_preference_without_reordering() -> 
     assert accuracy["layout"]["hoverlabel"]["font"]["color"] == "#FFFFFF"
 
 
+def test_user_facing_display_name_rejects_internal_trial_identifier() -> None:
+    from mldb_v2.src.study.display_labels import validate_user_facing_display_name
+
+    with pytest.raises(ValueError, match="trial-"):
+        validate_user_facing_display_name("NanoDet | trial-0001")
+
+
 def test_comparison_bar_uses_visible_source_condition_instead_of_trial_id() -> None:
     figure = _comparison_bar_figure(
         stage="quality",
@@ -505,14 +528,14 @@ def test_comparison_bar_uses_visible_source_condition_instead_of_trial_id() -> N
         rows=[
             {
                 "trial": "trial-0001",
-                "trial_label": "NanoDet baseline · trial-0001",
+                "trial_label": "NanoDet baseline | batch_size=6",
                 "source_parameters": {"batch_size": 6, "seed": 42},
                 "parameters": {"split": "val"},
                 "metrics": {"score": 0.8},
             },
             {
                 "trial": "trial-0002",
-                "trial_label": "NanoDet baseline · trial-0002",
+                "trial_label": "NanoDet baseline | batch_size=12",
                 "source_parameters": {"batch_size": 12, "seed": 42},
                 "parameters": {"split": "val"},
                 "metrics": {"score": 0.9},
@@ -522,8 +545,8 @@ def test_comparison_bar_uses_visible_source_condition_instead_of_trial_id() -> N
 
     assert figure is not None
     assert figure["data"][0]["y"] == [
-        "NanoDet baseline · batch_size=6",
-        "NanoDet baseline · batch_size=12",
+        "NanoDet baseline | batch_size=6",
+        "NanoDet baseline | batch_size=12",
     ]
     assert "trial-0001" not in json.dumps(figure)
     assert "trial-0002" not in json.dumps(figure)
@@ -661,7 +684,7 @@ def test_sdk_adapter_projects_numeric_evaluation_parameter_sweep_as_lines() -> N
     rows = [
         {
             "trial": "trial-0001",
-            "trial_label": "NanoDet baseline · trial-0001",
+            "trial_label": "NanoDet baseline | batch_size=24",
             "architecture": "demo/nanodet-v1",
             "model": "demo/model-v1",
             "source_parameters": {"batch_size": 24, "seed": 42},
@@ -709,9 +732,9 @@ def test_sdk_adapter_projects_numeric_evaluation_parameter_sweep_as_lines() -> N
         "Condition / model", "score_threshold", "Status", "f1", "recall"
     ]
     assert [row[:2] for row in table["table_plot"][1:]] == [
-        ["NanoDet baseline", 0.45],
-        ["NanoDet baseline", 0.4],
-        ["NanoDet baseline", 0.5],
+        ["NanoDet baseline | batch_size=24", 0.45],
+        ["NanoDet baseline | batch_size=24", 0.4],
+        ["NanoDet baseline | batch_size=24", 0.5],
     ]
 
     sweeps = [

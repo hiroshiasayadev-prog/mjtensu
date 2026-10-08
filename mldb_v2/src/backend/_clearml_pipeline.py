@@ -16,6 +16,7 @@ from mldb_v2.src.backend.study_execution import (
 from mldb_v2.src.common.ids import _canonical_json_bytes, _validate_typed_reference
 from mldb_v2.src.results.study_result import StudyResult, _validate_study_result
 from mldb_v2.src.study._plan_build import _validate_study_plan
+from mldb_v2.src.common.display_names import validate_user_facing_display_name
 from mldb_v2.src.study.plan import StudyPlan
 
 
@@ -289,9 +290,13 @@ class ClearMLPipelineService:
         if existing is not None:
             return _observation(record=existing, plan=plan, result=study_result)
 
+        task_name = validate_user_facing_display_name(
+            f"{str(plan['study']).split('/', 1)[1]} | {study_result['id'].split('/', 1)[1]}",
+            field="ClearML Pipeline Run display name",
+        )
         request = ClearMLPipelineCreateRequest(
             project=project,
-            task_name=f"{str(plan['study']).split('/', 1)[1]} | {study_result['id'].split('/', 1)[1]}",
+            task_name=task_name,
             metadata=metadata,
             configuration=configuration,
             source_commit=plan["source_commit"],

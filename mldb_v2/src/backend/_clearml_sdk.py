@@ -45,6 +45,8 @@ from mldb_v2.src.common.telemetry import _AcceptedScalarEvent
 from mldb_v2.src.repository.resolution import CanonicalRepositoryResolver
 from mldb_v2.src.runtime_registry import RuntimeRegistryClient, RuntimeRegistryError
 from mldb_v2.src.study._plan_build import _validate_study_plan
+from mldb_v2.src.common.display_names import validate_user_facing_display_name
+from mldb_v2.src.study.display_labels import build_plan_condition_labels
 from mldb_v2.src.training.model import _validate_model
 from mldb_v2.src.training.training_result import _validate_training_result
 
@@ -441,103 +443,10 @@ def _pipeline_trial_labels(
 ) -> dict[str, str]:
     root = _local_pinned_data_root(settings)
     resolver = CanonicalRepositoryResolver(root) if root is not None else None
-    raw_trials = plan.get("trials")
-    if type(raw_trials) is not list:
-        return {}
-    base_labels: dict[str, str] = {}
-    for raw_trial in raw_trials:
-        if type(raw_trial) is not dict or type(raw_trial.get("trial")) is not str:
-            continue
-        trial_id = str(raw_trial["trial"])
-        source = raw_trial.get("source")
-        architecture_id: str | None = None
-        fallback: str = trial_id
-        if isinstance(source, Mapping) and source.get("kind") == "training":
-            if type(source.get("architecture")) is str:
-                architecture_id = str(source["architecture"])
-                fallback = _local_reference_name(architecture_id)
-        elif isinstance(source, Mapping) and source.get("kind") == "existing_model":
-            if type(source.get("model")) is str:
-                model_id = str(source["model"])
-                fallback = _local_reference_name(model_id)
-                if resolver is not None:
-                    try:
-                        model = resolver.resolve(kind=EntityKind.MODEL, entity_id=model_id)
-                        training_result_id = model.get("training_result")
-                        if type(training_result_id) is str:
-                            training_result = resolver.resolve(
-                                kind=EntityKind.TRAINING_RESULT,
-                                entity_id=training_result_id,
-                            )
-                            if type(training_result.get("architecture")) is str:
-                                architecture_id = str(training_result["architecture"])
-                    except (FileNotFoundError, ValueError):
-                        pass
-        label = fallback
-        if architecture_id is not None and resolver is not None:
-            try:
-                architecture = resolver.resolve(
-                    kind=EntityKind.ARCHITECTURE,
-                    entity_id=architecture_id,
-                )
-                if type(architecture.get("name")) is str and architecture["name"]:
-                    label = str(architecture["name"])
-                else:
-                    label = _local_reference_name(architecture_id)
-            except (FileNotFoundError, ValueError):
-                label = _local_reference_name(architecture_id)
-        base_labels[trial_id] = label
-
-    groups: dict[str, list[str]] = {}
-    trial_sources: dict[str, object] = {}
-    for raw_trial in raw_trials:
-        if type(raw_trial) is not dict or type(raw_trial.get("trial")) is not str:
-            continue
-        trial_id = str(raw_trial["trial"])
-        groups.setdefault(base_labels[trial_id], []).append(trial_id)
-        trial_sources[trial_id] = raw_trial.get("source")
-
-    def source_conditions(trial: str) -> dict[str, object]:
-        source = trial_sources.get(trial)
-        if not isinstance(source, Mapping):
-            return {}
-        conditions: dict[str, object] = {}
-        parameters = source.get("parameters")
-        if isinstance(parameters, Mapping):
-            conditions.update({str(key): value for key, value in parameters.items()})
-        if "seed" in source:
-            conditions["seed"] = source["seed"]
-        return conditions
-
-    labels: dict[str, str] = {}
-    used: set[str] = set()
-    for trial, label in base_labels.items():
-        peers = groups[label]
-        candidate = label
-        if len(peers) > 1:
-            peer_conditions = {peer: source_conditions(peer) for peer in peers}
-            keys = sorted({key for values in peer_conditions.values() for key in values})
-            varying = [
-                key
-                for key in keys
-                if len({
-                    json.dumps(values.get(key, "<missing>"), sort_keys=True, default=str)
-                    for values in peer_conditions.values()
-                }) > 1
-            ]
-            values = peer_conditions[trial]
-            fragments = [
-                f"{key}={values.get(key, '<unset>')}"
-                for key in varying
-            ]
-            candidate = f"{label} | {', '.join(fragments)}" if fragments else f"{label} | {trial}"
-        if candidate in used:
-            candidate = f"{candidate} | {trial}"
-        if candidate in used:
-            raise ClearMLSDKError("ClearML Pipeline trial labels are not unique")
-        labels[trial] = candidate
-        used.add(candidate)
-    return labels
+    try:
+        return build_plan_condition_labels(plan=plan, resolver=resolver)
+    except ValueError as error:
+        raise ClearMLSDKError(str(error)) from error
 
 
 def _build_runtime_snapshots(
@@ -874,14 +783,19 @@ def _native_pipeline_dag(
         ):
             raise ClearMLSDKError("MLDB Pipeline topology step fields are malformed")
         suffix = "training" if kind == "training" else stage
-        display = f"{labels.get(trial, trial)} | {suffix}"
+        trial_label = labels.get(trial)
+        if type(trial_label) is not str:
+            raise ClearMLSDKError("ClearML Pipeline trial is missing a user-facing condition label")
+        display = f"{trial_label} | {suffix}"
         if display in used_display_names:
             extra = coordinate if type(coordinate) is str else name
             display = f"{display} | {extra}"
         if display in used_display_names:
-            display = f"{display} | {name}"
-        if display in used_display_names:
             raise ClearMLSDKError("ClearML Pipeline node display names are not unique")
+        try:
+            validate_user_facing_display_name(display, field="ClearML Pipeline node display name")
+        except ValueError as error:
+            raise ClearMLSDKError(str(error)) from error
         used_display_names.add(display)
         display_names[name] = display
         prepared.append(raw)
@@ -932,6 +846,28 @@ def _native_pipeline_node(
     if len(matches) > 1:
         raise ClearMLSDKError("ClearML Pipeline logical step is ambiguous")
     return matches[0] if matches else None
+
+
+def _native_pipeline_node_display_name(
+    native: Mapping[str, object], logical_step: str
+) -> str | None:
+    matches = [
+        name
+        for name, raw in native.items()
+        if type(name) is str
+        and type(raw) is dict
+        and raw.get("mldb.logical_step") == logical_step
+    ]
+    if len(matches) > 1:
+        raise ClearMLSDKError("ClearML Pipeline logical step display name is ambiguous")
+    if not matches:
+        return None
+    try:
+        return validate_user_facing_display_name(
+            matches[0], field="ClearML Pipeline node display name"
+        )
+    except ValueError as error:
+        raise ClearMLSDKError(str(error)) from error
 
 
 _COMPARISON_RANK_PALETTE = ("#2F6FED", "#9CC7FF", "#F6B0B0", "#D9534F")
@@ -1056,37 +992,15 @@ def _comparison_parameter_fragment(
 
 
 def _comparison_base_label(row: Mapping[str, object]) -> str:
-    raw = row.get("trial_label") or row.get("trial")
-    base = raw if type(raw) is str else ""
-    if " · trial-" in base:
-        base = base.split(" · trial-", 1)[0]
-    if base.startswith("trial-"):
-        model = row.get("model")
-        architecture = row.get("architecture")
-        if type(model) is str and model:
-            base = model.rsplit("/", 1)[-1]
-        elif type(architecture) is str and architecture:
-            base = architecture.rsplit("/", 1)[-1]
-    return base
+    raw = row.get("trial_label")
+    try:
+        return validate_user_facing_display_name(raw, field="Study comparison condition label")
+    except ValueError as error:
+        raise ClearMLSDKError(str(error)) from error
 
 
 def _comparison_series_labels(rows: Sequence[Mapping[str, object]]) -> list[str]:
-    source_names = _comparison_varying_parameter_names(rows, field="source_parameters")
-    labels: list[str] = []
-    for row in rows:
-        base = _comparison_base_label(row)
-        source = _comparison_parameter_fragment(
-            row,
-            field="source_parameters",
-            names=source_names,
-        )
-        if source is not None and base:
-            labels.append(f"{base} · {source}")
-        elif source is not None:
-            labels.append(source)
-        else:
-            labels.append(base)
-    return labels
+    return [_comparison_base_label(row) for row in rows]
 
 
 def _comparison_row_labels(rows: Sequence[Mapping[str, object]]) -> list[str]:
@@ -2004,10 +1918,23 @@ class ClearMLSDKAdapter:
             logical_project=request.project,
             task=mldb_task,
         )
+        trial_labels = _pipeline_trial_labels(self._settings, plan_config)
+        native_dag = _native_pipeline_dag(
+            topology,
+            queue=self._settings.step_queue,
+            stage_routes=self._settings.stage_routes,
+            trial_labels=trial_labels,
+        )
         Task = self._Task()
+        try:
+            controller_task_name = validate_user_facing_display_name(
+                request.task_name, field="ClearML Pipeline Run display name"
+            )
+        except ValueError as error:
+            raise ClearMLSDKError(str(error)) from error
         kwargs: dict[str, object] = {
             "project_name": pipeline_project,
-            "task_name": request.task_name,
+            "task_name": controller_task_name,
             "task_type": "controller",
             "commit": request.source_commit,
             "script": self._settings.pipeline_script,
@@ -2046,13 +1973,6 @@ class ClearMLSDKAdapter:
         task.set_configuration_object(
             name=_PIPELINE_CONFIG,
             config_dict=dict(request.configuration),
-        )
-        trial_labels = _pipeline_trial_labels(self._settings, plan_config)
-        native_dag = _native_pipeline_dag(
-            topology,
-            queue=self._settings.step_queue,
-            stage_routes=self._settings.stage_routes,
-            trial_labels=trial_labels,
         )
         _set_native_pipeline_configuration(task, native_dag)
         version = "1.0.0"
@@ -2531,7 +2451,7 @@ class ClearMLSDKAdapter:
                     if not isinstance(row, Mapping) or row.get("disposition") != "completed":
                         continue
                     execution_id = row.get("execution_id")
-                    trial_label = row.get("trial_label") or row.get("trial")
+                    trial_label = row.get("trial_label")
                     accepted_artifacts = row.get("artifacts")
                     if (type(execution_id) is not str or type(trial_label) is not str
                             or not isinstance(accepted_artifacts, Mapping)
@@ -2541,6 +2461,12 @@ class ClearMLSDKAdapter:
                         child = self._get_task(execution_id)
                     except Exception:
                         continue
+                    try:
+                        trial_label = validate_user_facing_display_name(
+                            trial_label, field="Study artifact condition label"
+                        )
+                    except ValueError as error:
+                        raise ClearMLSDKError(str(error)) from error
                     loaded.append((trial_label, child, accepted_artifacts[artifact_name]))
                 if not loaded:
                     continue
@@ -2860,9 +2786,32 @@ class ClearMLSDKAdapter:
         stage_input = _restore_stage_input(request.launch.stage_input_json)
         runtime_snapshots = _build_runtime_snapshots(self._settings, stage_input)
         Task = self._Task()
+        task_name = request.task_name
+        if request.launch.pipeline_execution_id is not None:
+            if request.launch.pipeline_step is None:
+                raise ClearMLSDKError("Pipeline-bound Task is missing pipeline step identity")
+            pipeline = self._get_task(request.launch.pipeline_execution_id)
+            native = _configuration(pipeline, _NATIVE_PIPELINE_CONFIG)
+            if native is None:
+                raise ClearMLSDKError("ClearML Pipeline native DAG configuration is missing")
+            node_display = _native_pipeline_node_display_name(
+                native, request.launch.pipeline_step
+            )
+            if node_display is None:
+                raise ClearMLSDKError("ClearML Pipeline step display name is missing")
+            study_id = request.metadata.get("mldb.study")
+            if type(study_id) is not str:
+                raise ClearMLSDKError("ClearML Task Study identity is missing")
+            task_name = f"{node_display} | {_local_reference_name(study_id)}"
+        try:
+            task_name = validate_user_facing_display_name(
+                task_name, field="ClearML child Task display name"
+            )
+        except ValueError as error:
+            raise ClearMLSDKError(str(error)) from error
         kwargs: dict[str, object] = {
             "project_name": request.project,
-            "task_name": request.task_name,
+            "task_name": task_name,
             "task_type": "custom",
             "commit": request.launch.source_commit,
             "script": self._settings.script,

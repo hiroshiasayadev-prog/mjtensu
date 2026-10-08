@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Literal, Protocol, TypeAlias
 
 from mldb_v2.src.common.diagnostic import _validate_diagnostic
+from mldb_v2.src.common.display_names import validate_user_facing_display_name
 from mldb_v2.src.common.ids import (
     EntityKind,
     EvaluationResultId,
@@ -226,6 +227,19 @@ def _validate_slot(
     return slot
 
 
+def _validate_study_condition(value: object) -> dict[str, object]:
+    if type(value) is not dict or set(value) != {"label", "parameters"}:
+        raise ValueError("StudyResult condition fields do not match schema")
+    label = validate_user_facing_display_name(
+        value["label"], field="StudyResult condition label"
+    )
+    parameters = value["parameters"]
+    if type(parameters) is not dict:
+        raise ValueError("StudyResult condition parameters must be an object")
+    _canonical_json_bytes(parameters)
+    return {"label": label, "parameters": dict(parameters)}
+
+
 def _validate_created_at(value: object) -> None:
     if type(value) is not str or _RFC3339_UTC_RE.fullmatch(value) is None:
         raise ValueError("created_at must be RFC3339 UTC using Z")
@@ -296,8 +310,12 @@ def _validate_study_result_record(
 
     dispositions: list[str] = []
     for trial_index, trial in enumerate(trials, start=1):
-        if type(trial) is not dict or set(trial) != {"trial", "training", "evaluations"}:
+        legacy_trial_fields = {"trial", "training", "evaluations"}
+        current_trial_fields = legacy_trial_fields | {"condition"}
+        if type(trial) is not dict or set(trial) not in (legacy_trial_fields, current_trial_fields):
             raise ValueError("StudyResult trial fields do not match schema")
+        if "condition" in trial:
+            _validate_study_condition(trial["condition"])
         actual_trial_id = _validate_trial_id(trial["trial"])
         trial_id = f"trial-{trial_index:04d}"
         if actual_trial_id != trial_id:
@@ -425,6 +443,11 @@ def _validate_study_result_transition(
     for current_trial, replacement_trial in zip(current_trials, replacement_trials):
         if current_trial["trial"] != replacement_trial["trial"]:
             raise ValueError("StudyResult trial identity is immutable")
+        if not _documents_equal(
+            {"condition": current_trial.get("condition")},
+            {"condition": replacement_trial.get("condition")},
+        ):
+            raise ValueError("StudyResult condition snapshot is immutable")
         if (current_trial["training"] is None) != (replacement_trial["training"] is None):
             raise ValueError("StudyResult training topology is immutable")
         current_evaluations = current_trial["evaluations"]
@@ -528,6 +551,11 @@ def _validate_study_result_retry_transition(
     ):
         if current_trial["trial"] != replacement_trial["trial"]:
             raise ValueError("StudyResult trial identity is immutable")
+        if not _documents_equal(
+            {"condition": current_trial.get("condition")},
+            {"condition": replacement_trial.get("condition")},
+        ):
+            raise ValueError("StudyResult condition snapshot is immutable during retry")
         if not _documents_equal(
             {"training": current_trial["training"]},
             {"training": replacement_trial["training"]},
@@ -642,6 +670,64 @@ class CanonicalRepositoryWriter:
                     return existing
                 raise ValueError("lifecycle conflict: StudyResult identity already exists")
             _validate_initial_study_result(validated)
+            _atomic_replace_record(path, validated)
+            return validated
+
+    def migrate_study_result_conditions(
+        self,
+        *,
+        entity_id: StudyResultId,
+        conditions: Mapping[str, Mapping[str, object]],
+    ) -> CanonicalDocument:
+        """Add immutable condition snapshots to one legacy StudyResult in place.
+
+        This migration is intentionally narrower than lifecycle replacement: it
+        may add only the missing per-trial `condition` field and cannot change
+        execution identity, status, or any stage slot.
+        """
+        path = _canonical_path(
+            data_root=self._data_root,
+            kind=EntityKind.STUDY_RESULT,
+            entity_id=entity_id,
+        )
+        key = str(path.relative_to(self._repository_root))
+        with _process_file_lock(lock_root=self._write_lock_root, key=key):
+            if not path.exists():
+                raise FileNotFoundError(path)
+            current = _read_record(path)
+            _validate_study_result_record(current, entity_id=entity_id)
+            replacement = json.loads(json.dumps(current))
+            trials = replacement.get("trials")
+            if type(trials) is not list:
+                raise ValueError("StudyResult trials are malformed")
+            if len(conditions) != len(trials):
+                raise ValueError("StudyResult condition migration is incomplete")
+            for trial in trials:
+                if type(trial) is not dict or type(trial.get("trial")) is not str:
+                    raise ValueError("StudyResult trial is malformed")
+                trial_id = trial["trial"]
+                raw_condition = conditions.get(trial_id)
+                if not isinstance(raw_condition, Mapping):
+                    raise ValueError("StudyResult condition migration is missing a trial")
+                condition = _validate_study_condition(dict(raw_condition))
+                existing = trial.get("condition")
+                if existing is not None and not _documents_equal(
+                    {"condition": existing}, {"condition": condition}
+                ):
+                    raise ValueError("lifecycle conflict: StudyResult condition snapshot differs")
+                trial["condition"] = condition
+            validated = _validate_study_result_record(replacement, entity_id=entity_id)
+            if _documents_equal(current, validated):
+                return current
+            # Prove this is a schema enrichment only.
+            stripped = json.loads(json.dumps(validated))
+            for trial in stripped["trials"]:
+                trial.pop("condition", None)
+            current_stripped = json.loads(json.dumps(current))
+            for trial in current_stripped["trials"]:
+                trial.pop("condition", None)
+            if not _documents_equal(current_stripped, stripped):
+                raise ValueError("StudyResult condition migration changed non-condition data")
             _atomic_replace_record(path, validated)
             return validated
 

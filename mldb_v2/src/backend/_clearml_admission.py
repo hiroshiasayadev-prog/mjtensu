@@ -11,6 +11,7 @@ from typing import Protocol, cast
 from mldb_v2.src.backend._clearml_project_routing import _clearml_project_for_namespace
 from mldb_v2.src.backend.execution_harness import CommonExecutionHarness
 from mldb_v2.src.backend.stage_input import StageInput
+from mldb_v2.src.common.display_names import validate_user_facing_display_name
 from mldb_v2.src.common.ids import (
     _canonical_json_bytes,
     _validate_evaluation_coordinate_id,
@@ -225,7 +226,10 @@ def _task_name(stage_input: StageInput, *, study_id: str) -> str:
         stage_label = stage.get("name")
         if type(stage_label) is not str or not stage_label:
             raise ValueError("evaluation stage name must be non-empty")
-    return f"{architecture} | {stage_label} | {_local_id(study_id)} | {stage_input['trial']}"
+    return validate_user_facing_display_name(
+        f"{architecture} | {stage_label} | {_local_id(study_id)}",
+        field="ClearML child Task display name",
+    )
 
 
 def _pipeline_step_name(stage_input: StageInput) -> str:

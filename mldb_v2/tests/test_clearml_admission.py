@@ -349,7 +349,7 @@ def test_task_name_is_human_readable_but_not_recovery_identity() -> None:
     stage_input = _training_stage_input()
     ClearMLAdmissionService(client=client).admit(stage_input=stage_input)
     request = client.requests[0]
-    assert request.task_name == "architecture | train | study-a | trial-0001"
+    assert request.task_name == "architecture | train | study-a"
 
     client.requests.clear()
     replay = ClearMLAdmissionService(client=client).admit(stage_input=stage_input)
@@ -363,7 +363,7 @@ def test_evaluation_task_name_shows_architecture_and_stage() -> None:
     ClearMLAdmissionService(client=client).admit(stage_input=stage_input)
 
     assert client.requests[0].task_name == (
-        "architecture | final-holdout | study-a | trial-0001"
+        "architecture | final-holdout | study-a"
     )
 
 

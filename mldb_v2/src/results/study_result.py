@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Literal, NotRequired, TypeAlias, TypedDict, cast
 
 from mldb_v2.src.common.diagnostic import Diagnostic, _validate_diagnostic
+from mldb_v2.src.common.display_names import validate_user_facing_display_name
 from mldb_v2.src.common.ids import (
     EvaluationCoordinateId,
     EvaluationResultId,
@@ -60,8 +61,14 @@ class EvaluationSlot(TypedDict):
     reason: SkipReason | None
 
 
+class StudyResultCondition(TypedDict):
+    label: str
+    parameters: dict[str, object]
+
+
 class StudyResultTrial(TypedDict):
     trial: TrialId
+    condition: NotRequired[StudyResultCondition]
     training: TrainingSlot | None
     evaluations: list[EvaluationSlot]
 
@@ -96,7 +103,8 @@ _LEGACY_TOP_LEVEL_FIELDS = {
     "trials",
 }
 _TOP_LEVEL_FIELDS = _LEGACY_TOP_LEVEL_FIELDS | {"runtime_registry_version"}
-_TRIAL_FIELDS = {"trial", "training", "evaluations"}
+_LEGACY_TRIAL_FIELDS = {"trial", "training", "evaluations"}
+_TRIAL_FIELDS = _LEGACY_TRIAL_FIELDS | {"condition"}
 _TRAINING_SLOT_FIELDS = {"disposition", "result", "reason"}
 _EVALUATION_SLOT_FIELDS = {"coordinate", "stage", "disposition", "result", "reason"}
 _STATUSES = {
@@ -180,6 +188,19 @@ def _validate_slot_payload(
     if type(reason) is not str or reason not in _SKIP_REASONS:
         raise ValueError("skipped StudyResult slot requires a stable reason")
     return cast(StageDisposition, disposition), None, cast(SkipReason, reason)
+
+
+def _validate_condition(value: object) -> StudyResultCondition:
+    if type(value) is not dict or set(value) != {"label", "parameters"}:
+        raise ValueError("StudyResult condition fields do not match schema")
+    label = validate_user_facing_display_name(
+        value["label"], field="StudyResult condition label"
+    )
+    parameters = value["parameters"]
+    if type(parameters) is not dict:
+        raise ValueError("StudyResult condition parameters must be an object")
+    _validate_canonical_json_value(parameters)
+    return {"label": label, "parameters": dict(parameters)}
 
 
 def _validate_training_slot(
@@ -302,7 +323,7 @@ def _validate_study_result(value: object) -> StudyResult:
         raise ValueError("StudyResult trials must be a non-empty list")
     trials: list[StudyResultTrial] = []
     for index, raw_trial in enumerate(raw_trials, start=1):
-        if type(raw_trial) is not dict or set(raw_trial) != _TRIAL_FIELDS:
+        if type(raw_trial) is not dict or set(raw_trial) not in (_TRIAL_FIELDS, _LEGACY_TRIAL_FIELDS):
             raise ValueError("StudyResult trial fields do not match schema")
         trial_id = _validate_trial_id(raw_trial["trial"])
         if trial_id != f"trial-{index:04d}":
@@ -329,13 +350,14 @@ def _validate_study_result(value: object) -> StudyResult:
             )
             for evaluation_index, raw_slot in enumerate(raw_evaluations, start=1)
         ]
-        trials.append(
-            {
-                "trial": trial_id,
-                "training": training,
-                "evaluations": evaluations,
-            }
-        )
+        trial_record: dict[str, object] = {
+            "trial": trial_id,
+            "training": training,
+            "evaluations": evaluations,
+        }
+        if "condition" in raw_trial:
+            trial_record["condition"] = _validate_condition(raw_trial["condition"])
+        trials.append(cast(StudyResultTrial, trial_record))
 
     _validate_closure(status, trials)
     result: dict[str, object] = {

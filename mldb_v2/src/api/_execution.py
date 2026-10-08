@@ -23,6 +23,7 @@ from mldb_v2.src.repository.canonical_writes import CanonicalRepositoryWriter
 from mldb_v2.src.repository.resolution import CanonicalRepositoryResolver
 from mldb_v2.src.results.study_result import StudyResult, StudyResultStatus, _validate_study_result
 from mldb_v2.src.study._plan_build import _validate_study_plan
+from mldb_v2.src.study.display_labels import build_plan_conditions
 from mldb_v2.src.study.plan import StudyPlan
 
 from ._errors import _ApplicationBoundaryError, _application_error
@@ -160,6 +161,7 @@ def _initial_study_result(
     execution_key: ExecutionKey,
     created_at: str,
     runtime_registry_version: int,
+    conditions: Mapping[str, Mapping[str, object]],
 ) -> StudyResult:
     result_id = _study_result_id(plan, execution_key)
     trials: list[dict[str, object]] = []
@@ -178,8 +180,23 @@ def _initial_study_result(
             }
             for item in plan_trial["evaluations"]
         ]
+        trial_id = str(plan_trial["trial"])
+        condition = conditions.get(trial_id)
+        if not isinstance(condition, Mapping):
+            raise ValueError("StudyPlan condition snapshot is missing")
+        raw_parameters = condition.get("parameters")
+        if type(condition.get("label")) is not str or not isinstance(raw_parameters, Mapping):
+            raise ValueError("StudyPlan condition snapshot is malformed")
         trials.append(
-            {"trial": plan_trial["trial"], "training": training, "evaluations": evaluations}
+            {
+                "trial": plan_trial["trial"],
+                "condition": {
+                    "label": str(condition["label"]),
+                    "parameters": dict(raw_parameters),
+                },
+                "training": training,
+                "evaluations": evaluations,
+            }
         )
 
     return _validate_study_result(
@@ -279,6 +296,9 @@ class _ExecutionCompositionShell:
         runtime_registry_version: int | None = None,
     ) -> StudyResult:
         result_id = _study_result_id(exact_plan, key)
+        # Fail before allocating a StudyResult or touching the backend if the
+        # experiment conditions cannot be represented without internal trial IDs.
+        conditions = build_plan_conditions(plan=exact_plan, resolver=self._resolver)
 
         try:
             existing = self._load_result(result_id)
@@ -310,6 +330,7 @@ class _ExecutionCompositionShell:
             execution_key=key,
             created_at=self._created_at_factory(),
             runtime_registry_version=runtime_registry_version,
+            conditions=conditions,
         )
         try:
             stored = self._writer.create_study_result(

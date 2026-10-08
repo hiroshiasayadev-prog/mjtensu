@@ -156,6 +156,47 @@ def test_application_delegates_execution_to_t007_03() -> None:
     assert calls == [("demo/study-v1", "fake")]
 
 
+def test_start_rejects_internal_trial_token_in_display_condition_before_result_write(
+    tmp_path: Path,
+) -> None:
+    root, plan = execution_fx._install_plan(tmp_path)
+    backend = FakeBackend()
+    app = _application(tmp_path, backend)
+    unsafe = copy.deepcopy(plan)
+    source = unsafe["trials"][0]["source"]
+    assert source["kind"] == "training"
+    source["architecture"] = "demo/trial-unsafe-architecture"
+
+    with pytest.raises(ValueError, match="trial-"):
+        app._execution._start_study_validated(
+            exact_plan=unsafe,
+            backend_name="fake",
+            key=execution_fx.SOURCE_KEY,
+            runtime_registry_version=1,
+        )
+
+    assert list((root / "mldb_data" / "demo" / "study_results").glob("*.yaml")) == []
+    assert backend.admit_calls == []
+    assert backend.observe_calls == []
+    assert backend.collect_calls == []
+
+
+def test_start_embeds_human_readable_condition_snapshot_in_study_result(tmp_path: Path) -> None:
+    _root, plan = execution_fx._install_plan(tmp_path)
+    app = _application(tmp_path, FakeBackend())
+
+    result = app.start_study(
+        plan=plan["id"], backend="fake", execution_key=execution_fx.SOURCE_KEY
+    )
+
+    condition = result["trials"][0]["condition"]
+    assert "trial-" not in condition["label"].lower()
+    assert condition["parameters"] == {
+        **plan["trials"][0]["source"]["parameters"],
+        "seed": plan["trials"][0]["source"]["seed"],
+    }
+
+
 def test_start_has_zero_backend_calls_then_actual_w006_advance_admits(tmp_path: Path) -> None:
     root, plan = execution_fx._install_plan(tmp_path)
     backend = FakeBackend()

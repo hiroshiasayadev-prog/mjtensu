@@ -311,6 +311,54 @@ def test_immutable_create_replay_and_conflict_preserves_existing(tmp_path) -> No
     assert path.read_bytes() == original
 
 
+def test_terminal_study_result_condition_migration_is_narrow_and_idempotent(tmp_path) -> None:
+    repo = _repo(tmp_path)
+    writer = _writer(repo)
+    document = _study_result()
+    entity_id = StudyResultId(document["id"])
+    writer.create_study_result(entity_id=entity_id, document=document)
+    terminal = _complete(document)
+    writer.replace_nonterminal_study_result(entity_id=entity_id, replacement=terminal)
+    conditions = {
+        "trial-0001": {
+            "label": "NanoDet baseline | jp_fraction=0.25",
+            "parameters": {"batch_size": 24, "jp_fraction": 0.25, "seed": 42},
+        }
+    }
+
+    migrated = writer.migrate_study_result_conditions(
+        entity_id=entity_id, conditions=conditions
+    )
+
+    assert migrated["status"] == "completed"
+    assert migrated["trials"][0]["condition"] == conditions["trial-0001"]
+    stripped = copy.deepcopy(migrated)
+    stripped["trials"][0].pop("condition")
+    assert stripped == terminal
+    assert writer.migrate_study_result_conditions(
+        entity_id=entity_id, conditions=conditions
+    ) == migrated
+
+
+def test_study_result_condition_migration_rejects_trial_id_in_display_label(tmp_path) -> None:
+    repo = _repo(tmp_path)
+    writer = _writer(repo)
+    document = _study_result()
+    entity_id = StudyResultId(document["id"])
+    writer.create_study_result(entity_id=entity_id, document=document)
+
+    with pytest.raises(ValueError, match="trial-"):
+        writer.migrate_study_result_conditions(
+            entity_id=entity_id,
+            conditions={
+                "trial-0001": {
+                    "label": "NanoDet baseline | trial-0001",
+                    "parameters": {"batch_size": 24},
+                }
+            },
+        )
+
+
 def test_study_result_initial_replay_and_identity_mismatch(tmp_path) -> None:
     repo = _repo(tmp_path)
     writer = _writer(repo)

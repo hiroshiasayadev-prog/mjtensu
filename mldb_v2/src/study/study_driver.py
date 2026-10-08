@@ -34,6 +34,7 @@ from mldb_v2.src.study.execution_readiness import (
     _materialize_stage_input,
     _validate_result_plan_lineage,
 )
+from mldb_v2.src.study.display_labels import build_plan_conditions
 from mldb_v2.src.study.plan import StudyPlan
 from mldb_v2.src.verification.result_acceptance import (
     AcceptedResultRecordValidator,
@@ -387,27 +388,41 @@ def _study_summary_projection(
     }
 
     contexts: dict[str, tuple[str, str | None, str | None, dict[str, object]]] = {}
-    base_counts: dict[str, int] = {}
     for trial in result["trials"]:
         trial_id = str(trial["trial"])
-        context = _trial_projection_context(
+        contexts[trial_id] = _trial_projection_context(
             resolver=resolver,
             plan_trial=plan_trials.get(trial_id),
             result_trial=trial,
         )
-        contexts[trial_id] = context
-        base_counts[context[0]] = base_counts.get(context[0], 0) + 1
+    if plan is None:
+        raise ValueError("Study summary requires its immutable StudyPlan for user-facing condition labels")
+    plan_conditions = build_plan_conditions(plan=plan, resolver=resolver)
+    projected_conditions: dict[str, dict[str, object]] = {}
+    for result_trial in result["trials"]:
+        trial_id = str(result_trial["trial"])
+        expected = plan_conditions.get(trial_id)
+        if not isinstance(expected, Mapping):
+            raise ValueError("StudyPlan condition projection is incomplete")
+        stored = result_trial.get("condition")
+        if stored is not None:
+            if not isinstance(stored, Mapping) or dict(stored) != dict(expected):
+                raise ValueError("StudyResult condition snapshot does not match immutable StudyPlan")
+            projected_conditions[trial_id] = copy.deepcopy(dict(stored))
+        else:
+            projected_conditions[trial_id] = copy.deepcopy(dict(expected))
 
     rows: list[dict[str, object]] = []
     comparisons_by_stage: dict[tuple[str, str | None], dict[str, object]] = {}
     for trial in result["trials"]:
         trial_id = str(trial["trial"])
-        base_label, architecture_id, model_id, source_parameters = contexts[trial_id]
-        trial_label = (
-            base_label
-            if base_counts[base_label] == 1
-            else f"{base_label} · {trial_id}"
-        )
+        _base_label, architecture_id, model_id, _source_parameters = contexts[trial_id]
+        condition = projected_conditions[trial_id]
+        trial_label = str(condition["label"])
+        raw_source_parameters = condition["parameters"]
+        if not isinstance(raw_source_parameters, Mapping):
+            raise ValueError("StudyResult condition parameters are malformed")
+        source_parameters = copy.deepcopy(dict(raw_source_parameters))
         training = trial["training"]
         if training is not None:
             rows.append(
