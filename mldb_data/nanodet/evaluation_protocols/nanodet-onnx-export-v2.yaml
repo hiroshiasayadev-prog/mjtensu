@@ -1,0 +1,34 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "nanodet/nanodet-onnx-export-v2",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "name": "NanoDet ONNX export with class-sigmoid parity v2",
+  "description": "Export NanoDet with ONNX-specific sigmoid for class logits and verify complete [1,N,33] predictions against a matching sigmoid-transformed PyTorch reference; CPU parity without iPhone.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "d1021a744448ce3a420188f08fa88c046c5d8aaf99fdab6796b1aee4ca10473a"
+  },
+  "parameters": {},
+  "metrics": {
+    "onnx_parity_max_abs_error": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    }
+  },
+  "artifacts": {
+    "onnx_model": {
+      "format": "onnx",
+      "schema": "mjtensu.nanodet/onnx-detector/v1",
+      "required": true,
+      "description": "Accepted parity-checked full NanoDet detector graph"
+    },
+    "export_report": {
+      "format": "json",
+      "schema": "mjtensu.nanodet/onnx-export-report/v1",
+      "required": true,
+      "description": "ONNX SHA-256, shape, bytes and CPU parity evidence"
+    }
+  }
+}
