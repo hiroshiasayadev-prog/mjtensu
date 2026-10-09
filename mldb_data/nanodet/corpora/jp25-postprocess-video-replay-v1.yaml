@@ -1,0 +1,29 @@
+{
+  "schema": "mjtensu.mldb-v2/corpus/v1",
+  "id": "nanodet/jp25-postprocess-video-replay-v1",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "description": "CPU-only sixway postprocessing replay from immutable already-NMS jp25 trace and five original iPhone13 video/capture/ground-truth sources. Eleven original source files are reused byte-for-byte from the sealed original video corpus; only prediction_trace is a new S3 object. Source NanoDet model and original evaluation are fixed.",
+  "storage": {
+    "root_uri": "s3://mldb-corpora/tile-classifier/recognition-e2e-night-iphone13-v1"
+  },
+  "manifest": {
+    "file": "jp25-postprocess-video-replay-v1.manifest.jsonl",
+    "sha256": "dab23ae2727fd83a7ef18fe861f06cf059adadab5bbc2814a7714cd6c91c805b",
+    "entries": 12
+  },
+  "representation": {
+    "kind": "recognition-video-fixed-detector-trace",
+    "frames": 1497,
+    "fps": 10,
+    "video_count": 5,
+    "video_input_corpus": "nanodet/recognition-e2e-night-iphone13-v1",
+    "trace": "prediction_trace",
+    "source_evaluation_result": "nanodet/run-09b6de7dfb7e4add819a4eef0047bf81-trial-0002-eval-0003",
+    "source_model": "nanodet/run-09b6de7dfb7e4add819a4eef0047bf81-trial-0002-model",
+    "detector_input": "already postprocessed NMS 0.60 and overlap coverage 0.80; this study applies additional filtering only"
+  },
+  "splits": {
+    "eval": 5
+  }
+}
