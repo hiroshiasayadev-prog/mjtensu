@@ -1,0 +1,90 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "nanodet/t4-head-candidate-origin-v1",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "name": "t4 NanoDet head origin: stride, position, NMS and 發 duplicate",
+  "description": "Run the existing jp25 NanoDet model on only iPhone13 t4 video. Capture actual head [2125,33] output per frame with stride/row/column/point_index and raw class logit, sigmoid score, decoded boxes, hard NMS and product duplicate filter decisions. Particular focus: classified as 發 (6z) in prior fixed-classifier trace, three detector head point IDs 112/114/116 on t4 19.0s (frame 190). Head is one tile class; tile identity attribution is a link to earlier classifier trace, not inferred here. 299 source-timed frames, no training, no classifier.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "c0be4f39522efd6b22ef473903b7c8b9a3ac5d46b21732c09f08b5c5c5c0e131"
+  },
+  "parameters": {},
+  "metrics": {
+    "t4_frames_processed": {
+      "type": "integer",
+      "required": true,
+      "preference": "neutral"
+    },
+    "raw_completed_candidates": {
+      "type": "integer",
+      "required": true,
+      "preference": "neutral"
+    },
+    "nms_completed_candidates": {
+      "type": "integer",
+      "required": true,
+      "preference": "neutral"
+    },
+    "product_completed_candidates": {
+      "type": "integer",
+      "required": true,
+      "preference": "neutral"
+    },
+    "focus_distinct_strides": {
+      "type": "integer",
+      "required": true,
+      "preference": "neutral"
+    },
+    "focus_candidates_kept_after_nms": {
+      "type": "integer",
+      "required": true,
+      "preference": "neutral"
+    },
+    "focus_candidates_kept_after_product": {
+      "type": "integer",
+      "required": true,
+      "preference": "neutral"
+    }
+  },
+  "artifacts": {
+    "candidate_origins": {
+      "format": "jsonl",
+      "schema": "mjtensu.nanodet/t4-head-candidates/v1",
+      "required": true,
+      "description": "Per completed-hand candidate: output position, stride, row, column, class logit, confidence, predicted box, post-NMS/product fate."
+    },
+    "focus_details": {
+      "format": "json",
+      "schema": "mjtensu.nanodet/t4-head-origin-focus/v1",
+      "required": true,
+      "description": "t4 frame 190 three 發 candidate original point IDs 112/114/116 and pairwise overlaps."
+    },
+    "stride_counts": {
+      "format": "csv",
+      "schema": "mjtensu.nanodet/t4-head-stride-count/v1",
+      "required": true,
+      "description": "Summary of raw completed-hand candidates by stride."
+    },
+    "stride_heatmap": {
+      "format": "png",
+      "schema": "mjtensu.nanodet/t4-head-heatmap/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "Four stride-specific class-score maps at t4 frame 190."
+    },
+    "focus_overlay": {
+      "format": "png",
+      "schema": "mjtensu.nanodet/t4-head-focus-overlay/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "Real t4 frame 190 with box/head origin index and stride overlays."
+    },
+    "t4_origin_video": {
+      "format": "mp4",
+      "schema": "mjtensu.nanodet/t4-head-origin-video/v1",
+      "required": true,
+      "description": "t4 head predictions per sampled frame, colored by stride (ten frames per second)."
+    }
+  }
+}

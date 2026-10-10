@@ -1,0 +1,30 @@
+{
+  "schema": "mjtensu.mldb-v2/corpus/v1",
+  "id": "nanodet/recognition-t4-head-origin-v1",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "description": "Only the immutable iPhone13 t4 video and capture metadata for NanoDet Plus head point/stride provenance. Reuses original S3 objects without copying or re-capturing video.",
+  "storage": {
+    "root_uri": "s3://mldb-corpora/tile-classifier/recognition-e2e-night-iphone13-v1"
+  },
+  "manifest": {
+    "file": "recognition-t4-head-origin-v1.manifest.jsonl",
+    "sha256": "04da72c262cffe31efe7fffe9142ee7934e6adf5e0e7b373529e4bd07bf206da",
+    "entries": 2
+  },
+  "representation": {
+    "kind": "recognition-t4-head-origin-video",
+    "source": "nanodet/recognition-e2e-night-iphone13-v1",
+    "take": "t4",
+    "source_frames": 897,
+    "fps": 30,
+    "sample_fps": 10,
+    "resolution": [
+      720,
+      1280
+    ]
+  },
+  "splits": {
+    "eval": 1
+  }
+}

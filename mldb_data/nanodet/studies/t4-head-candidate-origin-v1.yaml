@@ -1,0 +1,20 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "nanodet/t4-head-candidate-origin-v1",
+  "status": "sealed",
+  "name": "t4 NanoDet head candidate origin (jp25, 4 stride levels)",
+  "description": "Probe known completed-hand 發 duplicate on t4 19.0 s with original jp25 NanoDet model. Capture class-score heatmaps and (stride,row,column) provenance for all t4 completed-hand box candidates through hard NMS and product filter. No training.",
+  "model": {
+    "existing": [
+      "nanodet/run-09b6de7dfb7e4add819a4eef0047bf81-trial-0002-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "t4-head-stride-origin-focus-6z",
+      "corpus": "nanodet/recognition-t4-head-origin-v1",
+      "protocol": "nanodet/t4-head-candidate-origin-v1",
+      "parameters": {}
+    }
+  ]
+}
