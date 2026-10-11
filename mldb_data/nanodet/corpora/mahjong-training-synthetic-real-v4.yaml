@@ -1,0 +1,44 @@
+{
+  "schema": "mjtensu.mldb-v2/corpus/v1",
+  "id": "nanodet/mahjong-training-synthetic-real-v4",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "description": "Frozen multi-source NanoDet corpus for Blender v6 randomized-appearance 10,000-image corpus plus annotated real iPhone captures. Real capture split is layout-disjoint and preserves historical pathology holdouts layout-001/layout-002 outside training. Corrected jp_v2 is reused from the sealed baseline archive. The legacy synthetic validator reports two capture-guide geometries because v6 intentionally mixes 1280x720 and 2560x1440 renders; the two guides are exact 1x/2x equivalents, while bbox invalid/OOB, foreign overlap, physical interpenetration, black-padding violations, and duplicate checks are zero.",
+  "storage": {
+    "root_uri": "s3://mldb-corpora"
+  },
+  "manifest": {
+    "file": "mahjong-training-synthetic-real-v4.manifest.jsonl",
+    "sha256": "d5650c1c6c7d987c9b231f003b8b89c3cafddeb28604712e75c3dd166361385a",
+    "entries": 2
+  },
+  "representation": {
+    "kind": "multi-archive-coco-axis-aligned-object-detection",
+    "base_archive": "nanodet/mahjong-training-baseline-v1/nanodet-training-baseline-v1.tar",
+    "synthetic_real_archive": "nanodet/mahjong-training-synthetic-real-v4/nanodet-synthetic-real-v6-randomized-lighting.tar",
+    "detector_class": "mahjong_tile",
+    "geometry": "x-y-width-height",
+    "input_size": [
+      320,
+      320
+    ],
+    "sources": {
+      "synthetic": "blender-v6-randomized-lighting",
+      "real": "initial-120-complete-layouts",
+      "optional_base": "corrected-coco-mahjong-jp-v2"
+    },
+    "reserved_real_holdouts": [
+      "layout-001",
+      "layout-002"
+    ]
+  },
+  "splits": {
+    "synthetic_train": 9500,
+    "synthetic_val": 500,
+    "real_train": 92,
+    "real_val": 24,
+    "jp_train": 12144,
+    "jp_valid": 722,
+    "jp_test": 370
+  }
+}
