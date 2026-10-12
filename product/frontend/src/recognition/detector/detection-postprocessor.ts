@@ -10,6 +10,7 @@ import {
   type NanoDetDecodeOptions,
 } from './nanodet';
 import { suppressDetectorDuplicates } from './duplicate-suppression';
+import { suppressDetectorSoftUnion } from './soft-union-suppression';
 import {
   decodeRotatedFcosOutputs,
   orientedRectToAabb,
@@ -23,6 +24,8 @@ import type {
 
 interface DetectorPostprocessConfiguration extends NanoDetDecodeOptions {
   readonly duplicateOverlapThreshold: number;
+  readonly softNmsSigma: number;
+  readonly unionCoverageThreshold: number;
 }
 
 type DetectorOutput = TensorOutput | readonly TensorOutput[];
@@ -32,6 +35,8 @@ const PRODUCTION_CONFIGURATION: DetectorPostprocessConfiguration = Object.freeze
   nmsIouThreshold: 0.6,
   maximumDetections: 200,
   duplicateOverlapThreshold: 0.8,
+  softNmsSigma: 0.5,
+  unionCoverageThreshold: 0.7,
 });
 
 const ROTATED_FCOS_PRODUCTION_CONFIGURATION: RotatedFcosDecodeOptions = Object.freeze({
@@ -77,10 +82,15 @@ export function createNanoDetPostprocessor(
           sourceBox: compositeRectToSource(detection.box, region, captureRegions),
         });
       }
-      return suppressDetectorDuplicates(
+      const productFiltered = suppressDetectorDuplicates(
         assigned,
         fixedConfiguration.duplicateOverlapThreshold,
       );
+      return suppressDetectorSoftUnion(productFiltered, {
+        minimumScore: fixedConfiguration.confidenceThreshold,
+        softNmsSigma: fixedConfiguration.softNmsSigma,
+        unionCoverageThreshold: fixedConfiguration.unionCoverageThreshold,
+      });
     },
   };
 }

@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "modelSetVersion": "recognition-v9-2026-09-30",
+  "modelSetVersion": "recognition-v10-2026-10-12",
   "models": {
     "detector": {
       "role": "detector",
-      "url": "nanodet-plus-m-320-real-capture-ft10-l10.onnx?sha256=9587a02dd1bbccfc14a925dc69c66b3c4a34ab628552b840ec113f7899dbf883",
-      "sha256": "9587a02dd1bbccfc14a925dc69c66b3c4a34ab628552b840ec113f7899dbf883",
+      "url": "nanodet-plus-m-320-blender-v6-jp0.onnx?sha256=4a88a7d09bb5dd505ee87fc66b9d6e078afe3d3208031583e29f4e3970d0c7c9",
+      "sha256": "4a88a7d09bb5dd505ee87fc66b9d6e078afe3d3208031583e29f4e3970d0c7c9",
       "runtimeSpec": "nanodet-plus-m-320-v1",
       "providerPreference": [
         "wasm-simd",
@@ -15,8 +15,8 @@
     },
     "tile-classifier": {
       "role": "tile-classifier",
-      "url": "tile-plain-gray35-w500-late256-late-dw3-pw1-v1.onnx?sha256=0d2768f89a93f41b4e20f3000c4017733413a5f65f9d5f2f77c8325ef8e4f951",
-      "sha256": "0d2768f89a93f41b4e20f3000c4017733413a5f65f9d5f2f77c8325ef8e4f951",
+      "url": "tile-c8-gray35-narrow-stage234-dw-m2-m2-m2-v1.onnx?sha256=ede3fc3ee099415a616c5f526a3643de44f6706ad15a72fd464d73dcada1c4c0",
+      "sha256": "ede3fc3ee099415a616c5f526a3643de44f6706ad15a72fd464d73dcada1c4c0",
       "runtimeSpec": "gray64-tile-35-v1",
       "providerPreference": [
         "wasm-simd",

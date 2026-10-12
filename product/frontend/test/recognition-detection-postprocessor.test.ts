@@ -39,6 +39,8 @@ describe('production NanoDet detection postprocess', () => {
       nmsIouThreshold: 0.6,
       maximumDetections: 200,
       duplicateOverlapThreshold: 0.8,
+      softNmsSigma: 0.5,
+      unionCoverageThreshold: 0.7,
     });
     const retained = postprocessor.process(tensor(values), captureRegions);
 
