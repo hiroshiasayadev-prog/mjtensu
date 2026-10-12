@@ -1,0 +1,48 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "nanodet/synthetic-real-v6-jp25-soft-union-addon-v1",
+  "status": "sealed",
+  "name": "NanoDet Blender v6 jp_fraction=0.25 Soft-NMS plus union add-on",
+  "description": "Add-on functional evaluation for the completed Blender v6 jp_fraction=0.25 model. Recreates the canonical five-video prediction trace, then applies the INV-041 Gaussian Soft-NMS sigma 0.50 plus confidence-gated union coverage 0.70 condition without retraining.",
+  "model": {
+    "existing": [
+      "nanodet/run-994bcd119779447ea85a98a050f387c3-trial-0002-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "functional-video-baseline",
+      "corpus": "nanodet/recognition-e2e-night-iphone13-v1",
+      "protocol": "nanodet/recognition-functional-video-detector-v2",
+      "parameters": {
+        "base_classifier_model": {
+          "values": [
+            "tile-classifier/run-bdcce50e63fb4665bebbd8d3b78ea243-trial-0003-model"
+          ]
+        },
+        "red_five_model": {
+          "values": [
+            "recognition-runtime/red-five-c8-rgb-warmaug-v1"
+          ]
+        },
+        "detector_score_threshold": {
+          "values": [
+            0.35
+          ]
+        }
+      }
+    },
+    {
+      "stage": "soft-nms-sigma050-union-coverage070",
+      "corpus": "nanodet/recognition-e2e-night-iphone13-v1",
+      "protocol": "nanodet/cpu-postprocess-soft-union-replay-v1",
+      "parameters": {},
+      "inputs": {
+        "prediction_trace": {
+          "from_stage": "functional-video-baseline",
+          "artifact": "prediction_trace"
+        }
+      }
+    }
+  ]
+}

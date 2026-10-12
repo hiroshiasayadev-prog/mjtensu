@@ -1,0 +1,125 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "nanodet/cpu-postprocess-soft-union-replay-v1",
+  "status": "sealed",
+  "task": "nanodet/mahjong-tile-detection-v1",
+  "name": "NanoDet Gaussian Soft-NMS 0.50 plus confidence-gated union coverage 0.70",
+  "description": "Canonical CPU replay of the INV-041 supplemental condition on a same-Study functional prediction_trace. Applies Gaussian Soft-NMS sigma 0.50, then suppresses a candidate only when the union of intersections with all active intersecting boxes covers at least 70% of it and every intersecting box has higher detector confidence. Higher-confidence candidates are processed first; already-suppressed boxes are excluded.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "269592ef4c57ac4abc5e2586e7e307c7894e6eef1914022cdd6dd50c7725e225",
+    "sources": [
+      {
+        "path": "mldb_data/nanodet/lib/nanodet_postprocess_overlay_v2.py",
+        "sha256": "5f9e83c938eb6477b17859ac5d8e100d2499385e2708882816df30f82c4c0e73"
+      },
+      {
+        "path": "mldb_data/nanodet/lib/nanodet_postprocess_soft_union_v1.py",
+        "sha256": "ccbf3457a0e271055c739dc882a0bba6fa03ac3d78a743d2c44b400207c302ad"
+      },
+      {
+        "path": "mldb_data/nanodet/lib/nanodet_postprocess_trace_replay_v3.py",
+        "sha256": "ec8fb0c2de6f2fd69e69dbb40b7dfc565127c1a8e97d242049fcc5a28d0930f8"
+      }
+    ]
+  },
+  "artifact_inputs": {
+    "prediction_trace": "jsonl"
+  },
+  "parameters": {},
+  "metrics": {
+    "hand_exact_rate_proxy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "hand_semantic_f1_proxy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "hand_overlap_frames": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower"
+    },
+    "hand_boxes_removed": {
+      "type": "integer",
+      "required": true,
+      "preference": "neutral"
+    },
+    "hand_exact_lost": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower"
+    },
+    "meld_exact_rate_proxy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "meld_semantic_f1_proxy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "meld_overlap_frames": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower"
+    },
+    "meld_exact_lost": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower"
+    },
+    "dora_exact_rate_proxy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher"
+    },
+    "dora_exact_lost": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower"
+    },
+    "t4_hatsu_overcount_frames": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower"
+    },
+    "union_suppression_count": {
+      "type": "integer",
+      "required": true,
+      "preference": "neutral"
+    }
+  },
+  "artifacts": {
+    "selected_result": {
+      "format": "json",
+      "schema": "mjtensu.nanodet/soft-union-trace-replay-result/v1",
+      "required": true
+    },
+    "comparison_csv": {
+      "format": "csv",
+      "schema": "mjtensu.nanodet/soft-union-trace-replay-comparison/v1",
+      "required": true
+    },
+    "exact_frame_changes": {
+      "format": "jsonl",
+      "schema": "mjtensu.nanodet/soft-union-frame-changes/v1",
+      "required": true
+    },
+    "union_suppressions": {
+      "format": "jsonl",
+      "schema": "mjtensu.nanodet/union-coverage-suppressions/v1",
+      "required": true
+    },
+    "overlay_video": {
+      "format": "mp4",
+      "schema": "mjtensu.nanodet/cpu-postprocess-overlay-video/v1",
+      "required": true,
+      "study_view": "all"
+    }
+  }
+}
