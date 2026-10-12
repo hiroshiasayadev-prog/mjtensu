@@ -1,12 +1,14 @@
 {
   "schemaVersion": 1,
-  "modelSetVersion": "recognition-v9-2026-09-30",
+  "modelSetVersion": "recognition-v10-2026-10-12",
   "models": {
     "detector": {
-      "artifact": "nanodet-plus-m-320-real-capture-ft10-l10.onnx",
-      "sourceRun": ".local/recognition/nanodet_runs/E1_plus_m_320_real_capture_ft10_l10_seed42/model_best",
-      "sha256": "9587a02dd1bbccfc14a925dc69c66b3c4a34ab628552b840ec113f7899dbf883",
-      "bytes": 5597449,
+      "artifact": "nanodet-plus-m-320-blender-v6-jp0.onnx",
+      "sourceRun": "nanodet/run-994bcd119779447ea85a98a050f387c3-trial-0001-train",
+      "sourceModel": "nanodet/run-994bcd119779447ea85a98a050f387c3-trial-0001-model",
+      "weightsSha256": "3a5c3e0905ec1dde3db680bcb92fa8849fa0c25b8b0655b388e1025f9a722a39",
+      "sha256": "4a88a7d09bb5dd505ee87fc66b9d6e078afe3d3208031583e29f4e3970d0c7c9",
+      "bytes": 4734123,
       "runtimeSpec": "nanodet-plus-m-320-v1",
       "inputShape": [
         1,
@@ -20,46 +22,36 @@
         33
       ],
       "selectionEvidence": {
-        "runtimeThreshold": 0.35,
-        "realVal": {
-          "productionBaseline": {
-            "truePositives": 124,
-            "falsePositives": 3,
-            "falseNegatives": 4,
-            "f1": 0.9725,
-            "meldF1": 0.7273
-          },
-          "selectedFineTune": {
-            "truePositives": 128,
-            "falsePositives": 3,
-            "falseNegatives": 0,
-            "f1": 0.9884,
-            "meldF1": 0.96
-          }
+        "investigation": "PRODUCT-INV-RECOGNITION-042",
+        "corpus": "nanodet/mahjong-training-synthetic-real-v4",
+        "jpFraction": 0.0,
+        "functionalVideoBaseline": {
+          "completedHandExactRate": 0.6279225116900468,
+          "meldExactRate": 0.663994655978624,
+          "allRegionSemanticF1": 0.9053262829473854
         },
-        "compositeVal": {
-          "productionBaseline": {
-            "truePositives": 1044,
-            "falsePositives": 28,
-            "falseNegatives": 8,
-            "f1": 0.9831,
-            "meldF1": 0.9968
-          },
-          "selectedFineTune": {
-            "truePositives": 1045,
-            "falsePositives": 23,
-            "falseNegatives": 7,
-            "f1": 0.9858,
-            "meldF1": 0.9968
-          }
+        "postprocess": {
+          "sequence": [
+            "hard-nms-iou-0.60",
+            "coverage-bridge-0.80",
+            "gaussian-soft-nms-sigma-0.50",
+            "confidence-gated-union-coverage-0.70"
+          ],
+          "completedHandExactRateProxy": 0.7401469605878424,
+          "completedHandSemanticF1Proxy": 0.9417895188153425,
+          "meldExactRateProxy": 0.6927187708750835,
+          "meldSemanticF1Proxy": 0.8410001908761214,
+          "t4HatsuOvercountFrames": 0
         }
       }
     },
     "tile-classifier": {
-      "artifact": "tile-plain-gray35-w500-late256-late-dw3-pw1-v1.onnx",
-      "sourceRun": "tile-classifier/run-01fc07b6027d4f00a1c8dd15119779ce-trial-0002-train",
-      "sha256": "0d2768f89a93f41b4e20f3000c4017733413a5f65f9d5f2f77c8325ef8e4f951",
-      "bytes": 723213,
+      "artifact": "tile-c8-gray35-narrow-stage234-dw-m2-m2-m2-v1.onnx",
+      "sourceRun": "tile-classifier/run-bdcce50e63fb4665bebbd8d3b78ea243-trial-0003-train",
+      "sourceModel": "tile-classifier/run-bdcce50e63fb4665bebbd8d3b78ea243-trial-0003-model",
+      "onnxSourceEvaluation": "nanodet/run-052160904ed7487cb03758e4722d8f6a-trial-0001-eval-0001",
+      "sha256": "ede3fc3ee099415a616c5f526a3643de44f6706ad15a72fd464d73dcada1c4c0",
+      "bytes": 522705,
       "runtimeSpec": "gray64-tile-35-v1",
       "inputShape": [
         "batch",
@@ -80,15 +72,13 @@
         ]
       },
       "selectionEvidence": {
-        "investigation": "PRODUCT-INV-RECOGNITION-021",
-        "architecture": "tile-plain-gray35-w500-late256-late-dw3-pw1-v1",
-        "studyResult": "tile-classifier/run-01fc07b6027d4f00a1c8dd15119779ce",
-        "manualAngleMean": 0.9622222222222223,
-        "fullFrontAccuracy": 0.9666666388511658,
-        "fullMeanConditionAccuracy": 0.9062222202618917,
-        "fullWorstConditionAccuracy": 0.7022222280502319,
-        "cpuP50Ms": 0.316051,
-        "iphoneV2P50Ms": 1.12
+        "architecture": "tile-classifier/tile-c8-gray35-narrow-stage234-dw-m2-m2-m2-v1",
+        "stageDepthMultipliers": [
+          2,
+          2,
+          2
+        ],
+        "functionalVideoReference": "PRODUCT-INV-RECOGNITION-042"
       }
     },
     "red-five-classifier": {
