@@ -1,0 +1,5 @@
+{
+  "schema": "mjtensu.mldb-v2/model/v1",
+  "id": "nanodet/run-994bcd119779447ea85a98a050f387c3-trial-0002-model",
+  "training_result": "nanodet/run-994bcd119779447ea85a98a050f387c3-trial-0002-train"
+}
