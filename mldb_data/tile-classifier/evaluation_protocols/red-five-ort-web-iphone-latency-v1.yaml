@@ -1,0 +1,75 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/red-five-ort-web-iphone-latency-v1",
+  "status": "sealed",
+  "task": "tile-classifier/red-five-binary-classification-v1",
+  "name": "Red-five iPhone latency from accepted ONNX artifact v1",
+  "description": "Benchmark a SHA-256-verified RGB red-five ONNX artifact from the same Study producer EvaluationResult in Safari ORT Web 1.27.0. The dedicated iPhone stage never loads PyTorch weights or exports ONNX; it measures 1-thread wasm-simd InferenceSession.run latency for [N,3,64,64] input and validates a 2-logit output.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "8b66eca527d31a41f269da81f6ebcfc81e857b8e66407e86cba5c8c6143083bc"
+  },
+  "parameters": {
+    "batch_size": {
+      "default": 1,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64,
+      "description": "ORT Web inference batch size."
+    },
+    "warmup_runs": {
+      "default": 25,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000,
+      "description": "Untimed Safari ORT Web session.run calls."
+    },
+    "runs_per_block": {
+      "default": 100,
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 1000,
+      "description": "Sequential awaited ORT Web session.run calls per timed block."
+    },
+    "measure_blocks": {
+      "default": 40,
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 1000,
+      "description": "Timed blocks used for p50/p95/mean per-run block-average latency."
+    }
+  },
+  "metrics": {
+    "latency_p50_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Median per-run block-average Safari ORT Web InferenceSession.run latency in milliseconds."
+    },
+    "latency_p95_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Nearest-rank p95 per-run block-average latency in milliseconds."
+    },
+    "latency_mean_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Arithmetic mean per-run block-average latency in milliseconds."
+    }
+  },
+  "artifacts": {
+    "latency_report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/red-five-ort-web-iphone-onnx-input/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "Per-block Safari timings, ONNX identity, source EvaluationResult, runtime and device evidence."
+    }
+  },
+  "artifact_inputs": {
+    "onnx_model": "onnx"
+  },
+  "artifact_only": true
+}

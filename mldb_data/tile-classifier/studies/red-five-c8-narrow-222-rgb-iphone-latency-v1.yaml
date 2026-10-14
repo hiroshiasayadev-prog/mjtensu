@@ -1,0 +1,53 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/red-five-c8-narrow-222-rgb-iphone-latency-v1",
+  "status": "sealed",
+  "name": "Red-five C8 narrow 2/2/2 RGB iPhone latency",
+  "description": "Re-evaluate the completed RGB C8 narrow stage2/3/4 2/2/2 red-five Model without retraining. Export the canonical PyTorch model to a parity-checked dynamic-batch ONNX artifact, then benchmark that exact accepted artifact on the iPhone Safari ORT Web 1.27.0 single-thread wasm-simd path.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-37f800bca38847249de200e894295dbd-trial-0001-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "onnx-export",
+      "corpus": "tile-classifier/red-five-rgb64-jp5000-seed42-v1",
+      "protocol": "tile-classifier/red-five-onnx-export-v1",
+      "parameters": {}
+    },
+    {
+      "stage": "ort-web-iphone-latency",
+      "corpus": "tile-classifier/red-five-rgb64-jp5000-seed42-v1",
+      "protocol": "tile-classifier/red-five-ort-web-iphone-latency-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "runs_per_block": {
+          "values": [
+            100
+          ]
+        },
+        "measure_blocks": {
+          "values": [
+            40
+          ]
+        }
+      },
+      "inputs": {
+        "onnx_model": {
+          "from_stage": "onnx-export",
+          "artifact": "onnx_model"
+        }
+      }
+    }
+  ]
+}
