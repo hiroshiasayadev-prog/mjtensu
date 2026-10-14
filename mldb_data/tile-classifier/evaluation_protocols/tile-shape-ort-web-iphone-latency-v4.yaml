@@ -1,0 +1,74 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-ort-web-iphone-latency-v4",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Tile shape iPhone latency from accepted ONNX artifact v4",
+  "description": "Benchmark a SHA-256-verified ONNX artifact from the same-Study producer EvaluationResult in Safari ORT Web 1.27.0. Never loads PyTorch weights, exports ONNX, or materializes a corpus on the iPhone ClearML worker. Requires a separate accepted ONNX export/parity EvaluationResult; measures 1-thread wasm-simd session.run latency.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "4e3fc9e78baac1870d92ba66cda134e2a5de7ad2e5bcb563c3a0f1073013905b"
+  },
+  "parameters": {
+    "batch_size": {
+      "default": 1,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64,
+      "description": "ORT Web inference batch size."
+    },
+    "warmup_runs": {
+      "default": 25,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000,
+      "description": "Untimed Safari ORT Web InferenceSession.run calls."
+    },
+    "runs_per_block": {
+      "default": 100,
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 1000,
+      "description": "Sequential awaited ORT Web InferenceSession.run calls timed together in each measurement block."
+    },
+    "measure_blocks": {
+      "default": 40,
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 1000,
+      "description": "Number of independently timed blocks used to compute p50/p95/mean per-run block-average latency."
+    }
+  },
+  "metrics": {
+    "latency_p50_ms": {
+      "type": "number",
+      "required": true,
+      "description": "Median per-run block-average Safari ORT Web InferenceSession.run latency in milliseconds.",
+      "preference": "lower"
+    },
+    "latency_p95_ms": {
+      "type": "number",
+      "required": true,
+      "description": "Nearest-rank p95 of per-run block-average Safari ORT Web InferenceSession.run latency in milliseconds.",
+      "preference": "lower"
+    },
+    "latency_mean_ms": {
+      "type": "number",
+      "required": true,
+      "description": "Arithmetic mean of per-run block-average Safari ORT Web InferenceSession.run latency in milliseconds.",
+      "preference": "lower"
+    }
+  },
+  "artifacts": {
+    "latency_report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/tile-ort-web-iphone-onnx-input/v1",
+      "required": true,
+      "description": "Per-block Safari timings, actual ONNX SHA-256, source EvaluationResult, runtime and device evidence."
+    }
+  },
+  "artifact_inputs": {
+    "onnx_model": "onnx"
+  },
+  "artifact_only": true
+}

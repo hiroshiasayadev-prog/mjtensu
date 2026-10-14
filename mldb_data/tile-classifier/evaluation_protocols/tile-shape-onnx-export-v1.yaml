@@ -1,0 +1,32 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-onnx-export-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Tile classifier ONNX export and CPU parity v1",
+  "description": "Export accepted model to ONNX opset 16 with tensor-only cyclic backbone handling and PyTorch-to-CPU-ORT numerical parity; no latency measurement or iPhone needed.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "9b3953f14d68cdcd3839c9f58678d6413cdb38e4cb21e8b42dcadb9fb104c3ba"
+  },
+  "parameters": {},
+  "metrics": {
+    "onnx_parity_max_abs_error": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    }
+  },
+  "artifacts": {
+    "onnx_model": {
+      "format": "onnx",
+      "schema": "mjtensu.recognition/tile-shape-onnx-model/v1",
+      "required": true
+    },
+    "export_report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/tile-onnx-export/v1",
+      "required": true
+    }
+  }
+}

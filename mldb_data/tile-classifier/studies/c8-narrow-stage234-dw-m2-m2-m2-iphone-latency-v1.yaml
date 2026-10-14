@@ -1,0 +1,25 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/c8-narrow-stage234-dw-m2-m2-m2-iphone-latency-v1",
+  "status": "sealed",
+  "name": "C8 narrow stage234 DW m2 m2 m2 iPhone latency",
+  "description": "Re-evaluate only the completed C8 narrow stage2/3/4 depthwise multiplier 2/2/2 model from run-bdcce50e63fb4665bebbd8d3b78ea243 without retraining, using the established block-averaged iPhone ORT Web latency v3 protocol.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-bdcce50e63fb4665bebbd8d3b78ea243-trial-0003-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "ort-web-iphone-latency",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-ort-web-iphone-latency-v3",
+      "parameters": {
+        "batch_size": {"values": [1]},
+        "warmup_runs": {"values": [25]},
+        "runs_per_block": {"values": [100]},
+        "measure_blocks": {"values": [40]}
+      }
+    }
+  ]
+}
