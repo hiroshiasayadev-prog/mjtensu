@@ -1,0 +1,31 @@
+{
+  "schema": "mjtensu.mldb-v2/corpus/v1",
+  "id": "tile-classifier/red-five-exhaustive-audited-v1",
+  "status": "sealed",
+  "task": "tile-classifier/red-five-binary-classification-v1",
+  "description": "Exhaustive persisted red-five evaluation corpus: all 116,083 relevant RGB source crops, the untouched 24-crop real warm-light holdout, fixed training-normalization statistics, and the six confirmed physical-label audit corrections from PRODUCT-INV-RECOGNITION-006. The three physically non-five 2m rows remain in the historical audited view but are excluded from the specialist-five scope because runtime red-five invocation is base-five gated.",
+  "storage": {
+    "root_uri": "s3://mldb-corpora/tile-classifier/red-five-exhaustive-audited-v1"
+  },
+  "manifest": {
+    "file": "red-five-exhaustive-audited-v1.manifest.jsonl",
+    "sha256": "9e8c618faf7ebdedba0b37eb412aa443f66436044599fae7f9661cc48824b28b",
+    "entries": 4
+  },
+  "representation": {
+    "kind": "sqlite-rgb-red-five-exhaustive-audited",
+    "dataset_file": "dataset.sqlite",
+    "warm_holdout_file": "warm.sqlite",
+    "normalization_file": "normalization.json",
+    "audit_file": "audit.json",
+    "source_sample_count": 116083,
+    "warm_holdout_count": 24,
+    "image_storage": "lossless_source_rgb_png",
+    "preprocess": "rgb_aspect_preserving_letterbox_border_median_lanczos_u8",
+    "specialist_gate": "base classifier has identified a five tile"
+  },
+  "splits": {
+    "all_source_crops": 116083,
+    "warm_holdout": 24
+  }
+}
