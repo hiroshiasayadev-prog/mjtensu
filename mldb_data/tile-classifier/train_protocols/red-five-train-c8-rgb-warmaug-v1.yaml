@@ -1,0 +1,132 @@
+{
+  "schema": "mjtensu.mldb-v2/train-protocol/v1",
+  "id": "tile-classifier/red-five-train-c8-rgb-warmaug-v1",
+  "status": "sealed",
+  "task": "tile-classifier/red-five-binary-classification-v1",
+  "name": "Red-five C8 RGB warm-augmentation training",
+  "description": "Train the RGB C8 narrow 2/2/2 red-five specialist with AdamW and cosine annealing, residual random rotation, and per-sample stochastic warm-light RGB gain/exposure augmentation. Checkpoint selection uses only jp_val mean balanced accuracy over the configured angle sweep; manual_val and the real warm-light holdout are reserved for post-training Evaluation.",
+  "implementation": {
+    "entrypoint": "train",
+    "sources": [
+      {
+        "path": "mldb_data/tile-classifier/lib/c8_narrow_stage234_dw_multiplier_rgb_classifier_v1.py",
+        "sha256": "de1077eb0eda69bef9bc9abcfcbb2b0a48dfc30c20f7787167993405c5ffc4ae"
+      }
+    ],
+    "sha256": "54a366f61427a703dd409a4b81c8db8242db31cdeb91495f10888f6a6c720826"
+  },
+  "parameters": {
+    "epochs": {
+      "default": 50,
+      "type": "integer",
+      "minimum": 1
+    },
+    "batch_size": {
+      "default": 1024,
+      "type": "integer",
+      "minimum": 2
+    },
+    "eval_batch_size": {
+      "default": 4096,
+      "type": "integer",
+      "minimum": 2
+    },
+    "learning_rate": {
+      "default": 0.001,
+      "type": "number",
+      "minimum": 1e-07
+    },
+    "weight_decay": {
+      "default": 0.0001,
+      "type": "number",
+      "minimum": 0
+    },
+    "rotation_augment_deg": {
+      "default": 22.5,
+      "type": "number",
+      "minimum": 0,
+      "maximum": 45
+    },
+    "eval_angles": {
+      "default": [
+        0.0,
+        15.0,
+        30.0,
+        45.0
+      ],
+      "type": "array"
+    },
+    "angle_eval_every": {
+      "default": 5,
+      "type": "integer",
+      "minimum": 1
+    },
+    "warm_augment_prob": {
+      "default": 0.5,
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "warm_strength_min": {
+      "default": 0.1,
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "warm_strength_max": {
+      "default": 1.0,
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "warm_red_gain_max": {
+      "default": 1.5,
+      "type": "number",
+      "minimum": 1
+    },
+    "warm_green_gain_max": {
+      "default": 1.08,
+      "type": "number",
+      "minimum": 0.01
+    },
+    "warm_blue_gain_min": {
+      "default": 0.45,
+      "type": "number",
+      "minimum": 0.01,
+      "maximum": 1
+    },
+    "warm_exposure_min": {
+      "default": 0.65,
+      "type": "number",
+      "minimum": 0.01
+    },
+    "warm_exposure_max": {
+      "default": 1.15,
+      "type": "number",
+      "minimum": 0.01
+    },
+    "amp": {
+      "default": true,
+      "type": "boolean"
+    },
+    "tf32": {
+      "default": true,
+      "type": "boolean"
+    },
+    "cache_device": {
+      "default": "auto",
+      "type": "string",
+      "enum": [
+        "auto",
+        "cpu",
+        "cuda"
+      ]
+    },
+    "cache_vram_fraction": {
+      "default": 0.25,
+      "type": "number",
+      "minimum": 0.01,
+      "maximum": 0.79
+    }
+  }
+}

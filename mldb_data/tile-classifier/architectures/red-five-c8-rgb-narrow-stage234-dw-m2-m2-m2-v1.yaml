@@ -1,0 +1,44 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/red-five-c8-rgb-narrow-stage234-dw-m2-m2-m2-v1",
+  "status": "sealed",
+  "task": "tile-classifier/red-five-binary-classification-v1",
+  "name": "Red-five C8 RGB narrow stage2/3/4 DW multipliers 2/2/2 classifier",
+  "family": "c8-equivariant-cnn",
+  "description": "RGB 64x64 binary red-five classifier derived from the selected C8 narrow fields 4/8/16/32 architecture. RGB channels are three trivial scalar fields under spatial C8 rotation; stage 2/3/4 use field-wise equivariant DW3x3 multiplier 2 followed by equivariant PW1x1; GroupPooling and global pooling feed a 2-logit head.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sources": [
+      {
+        "path": "mldb_data/tile-classifier/lib/c8_narrow_stage234_dw_multiplier_rgb_classifier_v1.py",
+        "sha256": "de1077eb0eda69bef9bc9abcfcbb2b0a48dfc30c20f7787167993405c5ffc4ae"
+      }
+    ],
+    "sha256": "575b94a800caf6173a32e703527d2ecdc85d9a467e7a73d0215c1f3f852c908f"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        3,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "RGB scalar fields x3 -> C8 fields 4/8/16/32; stage multipliers 2/2/2; DW3x3 -> equivariant PW1x1 on stages 2-4; GroupPooling -> AdaptiveAvgPool2d(1) -> hidden 128 -> 2 logits",
+    "traits": [
+      "rgb",
+      "c8-rotation-equivariant",
+      "group-pooled",
+      "stage2-depth-multiplier-2",
+      "stage3-depth-multiplier-2",
+      "stage4-depth-multiplier-2"
+    ]
+  }
+}

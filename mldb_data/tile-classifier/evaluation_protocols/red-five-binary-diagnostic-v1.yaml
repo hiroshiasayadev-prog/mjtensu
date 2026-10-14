@@ -1,0 +1,150 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/red-five-binary-diagnostic-v1",
+  "status": "sealed",
+  "task": "tile-classifier/red-five-binary-classification-v1",
+  "name": "Red-five binary diagnostic",
+  "description": "Evaluate the RGB red-five specialist on held-out jp_val, jp_test, manual_val, deterministic rotation angles, per-suit slices, and the untouched 24-crop real warm-light holdout. Primary diagnostics separate false-red normal fives from missed red fives and preserve misclassified sample provenance.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "edee6060e9984ee3eecade66c8ef103d07ed2edfcce46824dafb40905c3fbb69"
+  },
+  "parameters": {
+    "batch_size": {
+      "default": 1024,
+      "type": "integer",
+      "minimum": 1
+    },
+    "eval_angles": {
+      "default": [
+        0.0,
+        15.0,
+        30.0,
+        45.0
+      ],
+      "type": "array"
+    }
+  },
+  "metrics": {
+    "standard_accuracy_0deg": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Accuracy across jp_val, jp_test, and manual_val at the authored angle closest to zero degrees."
+    },
+    "standard_balanced_accuracy_0deg": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Mean of red-five recall and normal-five specificity across the standard held-out population at zero degrees."
+    },
+    "standard_red_precision_0deg": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Precision of red-five predictions across the standard held-out population at zero degrees."
+    },
+    "standard_red_recall_0deg": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Recall of true red fives across the standard held-out population at zero degrees."
+    },
+    "standard_normal_specificity_0deg": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Fraction of normal fives retained as normal across the standard held-out population at zero degrees."
+    },
+    "standard_red_f1_0deg": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "F1 for the red-five positive class across the standard held-out population at zero degrees."
+    },
+    "standard_fp_count_0deg": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower",
+      "description": "Normal fives incorrectly predicted red across the standard held-out population at zero degrees."
+    },
+    "standard_fn_count_0deg": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower",
+      "description": "Red fives incorrectly predicted normal across the standard held-out population at zero degrees."
+    },
+    "standard_angle_mean_balanced_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Arithmetic mean balanced accuracy across all authored rotation angles on the standard held-out population."
+    },
+    "standard_worst_angle_balanced_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Minimum balanced accuracy across all authored rotation angles on the standard held-out population."
+    },
+    "worst_suit_balanced_accuracy_0deg": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Minimum zero-degree balanced accuracy over manzu, pinzu, and souzu five subsets."
+    },
+    "manual_accuracy_0deg": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Accuracy on the capture-level manual_val holdout at zero degrees."
+    },
+    "warm_accuracy_0deg": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Accuracy on the untouched 24-crop real warm-light holdout at zero degrees."
+    },
+    "warm_error_count_0deg": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower",
+      "description": "Total false-positive plus false-negative count on the untouched real warm-light holdout."
+    }
+  },
+  "artifacts": {
+    "population_summary_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/red-five-population-summary/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "Held-out split, suit, and warm-light TP/TN/FP/FN and derived metrics."
+    },
+    "angle_summary_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/red-five-angle-summary/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "Standard held-out binary metrics at each authored rotation angle."
+    },
+    "confusion_matrix": {
+      "format": "plotly-json",
+      "schema": "mjtensu.recognition/red-five-confusion-plot/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "Two-class confusion counts for the standard held-out population at zero degrees."
+    },
+    "error_details": {
+      "format": "jsonl",
+      "schema": "mjtensu.recognition/red-five-error-details/v1",
+      "required": true,
+      "description": "Per-error provenance, label, prediction, red probability, capture condition, and source path."
+    },
+    "diagnostic_report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/red-five-binary-diagnostic-report/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "Complete normalization, population, angle, metric, and evaluation-scope summary."
+    }
+  }
+}

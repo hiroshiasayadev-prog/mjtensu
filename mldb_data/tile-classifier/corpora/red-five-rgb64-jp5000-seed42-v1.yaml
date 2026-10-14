@@ -1,0 +1,38 @@
+{
+  "schema": "mjtensu.mldb-v2/corpus/v1",
+  "id": "tile-classifier/red-five-rgb64-jp5000-seed42-v1",
+  "status": "sealed",
+  "task": "tile-classifier/red-five-binary-classification-v1",
+  "description": "Deterministic RGB64 red-five classifier corpus built from the six 5m/red5m, 5p/red5p, 5s/red5s labels. The compact dataset retains balanced JP training, capture-level manual training/holdout, JP validation/test, train_repeat weights, and a separate untouched 24-crop real warm-light holdout. Warm holdout samples are excluded from training and checkpoint selection.",
+  "storage": {
+    "root_uri": "s3://mldb-corpora/tile-classifier/red-five-rgb64-jp5000-seed42-v1"
+  },
+  "manifest": {
+    "file": "red-five-rgb64-jp5000-seed42-v1.manifest.jsonl",
+    "sha256": "898284ae399f0a2d609ed143021405ca4a9d50623b52c2a940c1e45c13f1410e",
+    "entries": 2
+  },
+  "representation": {
+    "kind": "sqlite-rgb-red-five-classification",
+    "dataset_file": "dataset.sqlite",
+    "warm_holdout_file": "warm_holdout.sqlite",
+    "image_column": "image_rgb_u8",
+    "label_column": "is_red",
+    "dtype": "uint8",
+    "shape": [
+      64,
+      64,
+      3
+    ],
+    "preprocess": "rgb_aspect_preserving_letterbox_border_median_lanczos_u8",
+    "train_repeat_column": "train_repeat",
+    "label_semantics": "0=normal five; 1=red five; input already gated to 5m/5p/5s family"
+  },
+  "splits": {
+    "train": 30199,
+    "jp_val": 6334,
+    "jp_test": 3257,
+    "manual_val": 42,
+    "warm_holdout": 24
+  }
+}

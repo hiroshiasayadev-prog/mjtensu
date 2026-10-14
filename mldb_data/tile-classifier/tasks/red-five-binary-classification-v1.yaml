@@ -1,0 +1,33 @@
+{
+  "schema": "mjtensu.mldb-v2/task/v1",
+  "id": "tile-classifier/red-five-binary-classification-v1",
+  "name": "Mahjong red-five binary classification",
+  "problem_type": "binary-classification",
+  "description": "Classify an RGB crop already identified as a five tile as normal five versus red five.",
+  "input": {
+    "semantic_unit": "single-five-tile-rgb-image"
+  },
+  "target": {
+    "type": "categorical",
+    "labels": [
+      "normal-five",
+      "red-five"
+    ]
+  },
+  "semantics": {
+    "upstream_gate": "the base tile classifier has already identified the crop as 5m, 5p, or 5s",
+    "known_annotation_policy": "confirmed non-five source-label defects are excluded from audited five-scope metrics; confirmed red-five source-label defects are corrected by corpus audit metadata"
+  },
+  "scope": {
+    "includes": [
+      "5m and red5m",
+      "5p and red5p",
+      "5s and red5s"
+    ],
+    "excludes": [
+      "non-five tiles",
+      "generic invalid crops"
+    ]
+  },
+  "status": "sealed"
+}
