@@ -1,0 +1,133 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/red-five-binary-diagnostic-v3",
+  "status": "sealed",
+  "task": "tile-classifier/red-five-binary-classification-v1",
+  "name": "Red-five RGB+red-feature binary diagnostic v3",
+  "description": "Evaluate RGB+pixel-wise-red-feature specialist models over the same exhaustive persisted crop corpus, manual subset, and real warm-light holdout as v2. The model owns feature generation plus four-channel normalization, so evaluation feeds raw RGB while preserving the audited specialist-scope semantics and all prior full-eval metrics.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "7f163ab25d9556a8feeb9624cb400494e20b5cfc0003b79ce8d6f41c155b1915"
+  },
+  "parameters": {
+    "batch_size": {
+      "default": 1024,
+      "type": "integer",
+      "minimum": 1,
+      "description": "Inference and SQLite batch size."
+    }
+  },
+  "metrics": {
+    "specialist_five_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Accuracy over audited physical five tiles in red-five specialist scope."
+    },
+    "specialist_five_balanced_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Mean of red-five recall and normal-five specificity in specialist scope."
+    },
+    "specialist_five_red_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Red-five recall in specialist scope."
+    },
+    "specialist_five_normal_specificity": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Normal-five specificity in specialist scope."
+    },
+    "specialist_five_false_red_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Normal fives predicted red in specialist scope."
+    },
+    "specialist_five_false_normal_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Red fives predicted normal in specialist scope."
+    },
+    "specialist_five_error_count": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower",
+      "description": "Absolute specialist-scope physical error count."
+    },
+    "historical_audited_physical_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Physical-audit accuracy using the prior investigation's inclusion semantics."
+    },
+    "historical_audited_physical_error_count": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower",
+      "description": "Physical-audit error count comparable to the prior investigation."
+    },
+    "manual_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Accuracy over all manual-source crops."
+    },
+    "warm_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Accuracy over the untouched real warm-light holdout."
+    },
+    "source_label_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral",
+      "description": "Raw database-label accuracy retained only as reproducible diagnostic evidence."
+    }
+  },
+  "artifacts": {
+    "diagnostic_report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/red-five-binary-diagnostic-report/v3",
+      "required": true,
+      "description": "Complete summary with audit semantics."
+    },
+    "group_summary": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/red-five-group-summary/v2",
+      "required": true,
+      "description": "Subgroup binary metrics."
+    },
+    "specialist_errors": {
+      "format": "jsonl",
+      "schema": "mjtensu.recognition/red-five-specialist-error/v2",
+      "required": true,
+      "description": "Per-error specialist-scope provenance."
+    },
+    "historical_audited_errors": {
+      "format": "jsonl",
+      "schema": "mjtensu.recognition/red-five-historical-audited-error/v2",
+      "required": true,
+      "description": "Per-error historical physical-audit provenance."
+    },
+    "specialist_confusion": {
+      "format": "plotly-json",
+      "schema": "mjtensu.recognition/red-five-specialist-confusion/v2",
+      "required": true,
+      "study_view": "select",
+      "description": "Two-class specialist-scope confusion plot."
+    },
+    "warm_holdout_details": {
+      "format": "jsonl",
+      "schema": "mjtensu.recognition/red-five-warm-holdout-detail/v2",
+      "required": true,
+      "description": "Per-crop warm-light holdout predictions."
+    }
+  }
+}

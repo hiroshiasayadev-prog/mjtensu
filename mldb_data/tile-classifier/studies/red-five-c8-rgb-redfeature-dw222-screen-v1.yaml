@@ -1,0 +1,143 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/red-five-c8-rgb-redfeature-dw222-screen-v1",
+  "status": "sealed",
+  "name": "Red-five C8 RGB auxiliary red-feature DW2/2/2 screen",
+  "description": "Test whether a cheap pixel-wise red auxiliary feature can recover the red-five accuracy lost by DW/PW factorization without restoring dense full convolutions. Compare RGB+Cr, RGB+normalized-red, RGB+ExR, and RGB+normalized-red-green difference at fixed C8 fields 6/12/24/48, DW multipliers 2/2/2, seed 42, accepted warm augmentation, and the exhaustive audited full evaluation.",
+  "model": {
+    "train": {
+      "corpus": "tile-classifier/red-five-rgb64-jp5000-seed42-v1",
+      "protocol": "tile-classifier/red-five-train-c8-rgb-redfeature-warmaug-v1",
+      "architectures": [
+        "tile-classifier/red-five-c8-rgb-cr-dw222-fields6-12-24-48-v1",
+        "tile-classifier/red-five-c8-rgb-normalized-red-dw222-fields6-12-24-48-v1",
+        "tile-classifier/red-five-c8-rgb-exr-dw222-fields6-12-24-48-v1",
+        "tile-classifier/red-five-c8-rgb-nrg-dw222-fields6-12-24-48-v1"
+      ],
+      "parameters": {
+        "epochs": {
+          "values": [
+            50
+          ]
+        },
+        "batch_size": {
+          "values": [
+            1024
+          ]
+        },
+        "eval_batch_size": {
+          "values": [
+            4096
+          ]
+        },
+        "learning_rate": {
+          "values": [
+            0.001
+          ]
+        },
+        "weight_decay": {
+          "values": [
+            0.0001
+          ]
+        },
+        "rotation_augment_deg": {
+          "values": [
+            22.5
+          ]
+        },
+        "eval_angles": {
+          "values": [
+            [
+              0.0,
+              15.0,
+              30.0,
+              45.0
+            ]
+          ]
+        },
+        "angle_eval_every": {
+          "values": [
+            5
+          ]
+        },
+        "warm_augment_prob": {
+          "values": [
+            0.5
+          ]
+        },
+        "warm_strength_min": {
+          "values": [
+            0.1
+          ]
+        },
+        "warm_strength_max": {
+          "values": [
+            1.0
+          ]
+        },
+        "warm_red_gain_max": {
+          "values": [
+            1.5
+          ]
+        },
+        "warm_green_gain_max": {
+          "values": [
+            1.08
+          ]
+        },
+        "warm_blue_gain_min": {
+          "values": [
+            0.45
+          ]
+        },
+        "warm_exposure_min": {
+          "values": [
+            0.65
+          ]
+        },
+        "warm_exposure_max": {
+          "values": [
+            1.15
+          ]
+        },
+        "amp": {
+          "values": [
+            true
+          ]
+        },
+        "tf32": {
+          "values": [
+            true
+          ]
+        },
+        "cache_device": {
+          "values": [
+            "auto"
+          ]
+        },
+        "cache_vram_fraction": {
+          "values": [
+            0.25
+          ]
+        }
+      },
+      "seeds": [
+        42
+      ]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "red-five-exhaustive-diagnostic",
+      "corpus": "tile-classifier/red-five-exhaustive-audited-v1",
+      "protocol": "tile-classifier/red-five-binary-diagnostic-v3",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1024
+          ]
+        }
+      }
+    }
+  ]
+}

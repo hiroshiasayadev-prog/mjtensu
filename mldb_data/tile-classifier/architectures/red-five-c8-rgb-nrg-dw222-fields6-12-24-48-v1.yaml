@@ -1,0 +1,47 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/red-five-c8-rgb-nrg-dw222-fields6-12-24-48-v1",
+  "status": "sealed",
+  "task": "tile-classifier/red-five-binary-classification-v1",
+  "name": "Red-five C8 RGB+NRG DW2/2/2 fields 6/12/24/48",
+  "family": "c8-equivariant-cnn",
+  "description": "RGB red-five C8 classifier with a pixel-wise NRG auxiliary map generated inside the model before four-channel normalization. Stage 1 is full equivariant 5x5 over RGB+NRG; stages 2-4 use field-wise DW3x3 multiplier 2 followed by equivariant PW1x1. Fields remain 6/12/24/48.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sources": [
+      {
+        "path": "mldb_data/tile-classifier/lib/c8_rgb_redfeature_stage234_dw222_v1.py",
+        "sha256": "3e5a30cf7d9c9016447c3ba40e54962fd1599bb89fab84cfe7f1565c5eb2e666"
+      }
+    ],
+    "sha256": "93f113e51a0353fcb738527ba3a270e6c40227233d8c1bbbd25d82e7dcb8bbfa"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        3,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "Raw RGB -> pixel-wise NRG map -> normalized 4 scalar fields -> C8 fields 6/12/24/48; stage multipliers 2/2/2; GroupPooling -> global average -> hidden >=128 -> 2 logits",
+    "traits": [
+      "rgb",
+      "auxiliary-red-feature",
+      "nrg",
+      "c8-rotation-equivariant",
+      "group-pooled",
+      "stage2-depth-multiplier-2",
+      "stage3-depth-multiplier-2",
+      "stage4-depth-multiplier-2",
+      "red-feature-screen"
+    ]
+  }
+}
