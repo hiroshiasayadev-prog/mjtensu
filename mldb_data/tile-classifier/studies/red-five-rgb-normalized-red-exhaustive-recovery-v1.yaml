@@ -1,0 +1,26 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/red-five-rgb-normalized-red-exhaustive-recovery-v1",
+  "status": "sealed",
+  "name": "Red-five RGB normalized-red exhaustive recovery",
+  "description": "Re-evaluate the accepted normalized-red auxiliary-channel RED5 model from run-08ac11bc2db84ed1bf06665dabfa43b5 after the full-eval batch-4096 diagnostic was confirmed to exceed 12GB GPU memory. Keep the same exhaustive audited v3 protocol and model, changing only evaluation batch size to 1024.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-08ac11bc2db84ed1bf06665dabfa43b5-trial-0002-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "red-five-exhaustive-diagnostic",
+      "corpus": "tile-classifier/red-five-exhaustive-audited-v1",
+      "protocol": "tile-classifier/red-five-binary-diagnostic-v3",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1024
+          ]
+        }
+      }
+    }
+  ]
+}
