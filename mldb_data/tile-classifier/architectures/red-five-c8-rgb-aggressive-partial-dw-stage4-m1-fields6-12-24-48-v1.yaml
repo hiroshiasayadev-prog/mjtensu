@@ -1,0 +1,44 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/red-five-c8-rgb-aggressive-partial-dw-stage4-m1-fields6-12-24-48-v1",
+  "status": "sealed",
+  "task": "tile-classifier/red-five-binary-classification-v1",
+  "name": "Red-five C8 RGB aggressive stage4 DW/PW x1 fields 6/12/24/48",
+  "family": "c8-equivariant-cnn",
+  "description": "RED5 aggressive-stride C8 classifier preserving dense full mixing before the selected late stages, then replacing stage4 DW/PW x1 with field-wise depthwise 3x3 followed by equivariant pointwise 1x1. Spatial stride schedule remains 1/2/2/2 plus the stage1 max-pool; batch-size evaluation is separate.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sources": [
+      {
+        "path": "mldb_data/tile-classifier/lib/c8_rgb_aggressive_partial_dw_classifier_v1.py",
+        "sha256": "48344ad3896c8a656572167282447d9e4217bc38441e25b7325847aafdfd6bf6"
+      }
+    ],
+    "sha256": "2a7a78ddc91613f8f9201ae3b77002cd7c91dfe80ce423ff9da592526311b4eb"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        3,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "RGB -> C8 fields 6/12/24/48, aggressive stride, DW stages (4,), DW intermediate multiplier 1, GroupPooling -> GAP -> binary head",
+    "traits": [
+      "rgb",
+      "c8-rotation-equivariant",
+      "aggressive-stride-downsampling",
+      "partial-depthwise-pointwise",
+      "dw-multiplier-1",
+      "group-pooled"
+    ]
+  }
+}

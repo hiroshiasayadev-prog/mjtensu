@@ -1,0 +1,220 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/red-five-c8-rgb-aggressive-partial-dw-screen-v1",
+  "status": "sealed",
+  "name": "Red-five aggressive partial-DW screen",
+  "description": "At the accepted aggressive-stride RED5 operating point, batch 256 and seed 42, test whether late-stage depthwise/pointwise factorization can reduce model size while retaining the channel-mixing benefits of dense early stages. Compare stage4-only versus stages3+4 factorization, each with DW intermediate multiplier 1 and 2. Run exhaustive audited accuracy, ONNX export/parity and size, CPU latency, and iPhone ORT Web latency.",
+  "model": {
+    "train": {
+      "corpus": "tile-classifier/red-five-rgb64-jp5000-seed42-v1",
+      "protocol": "tile-classifier/red-five-train-c8-rgb-warmaug-partial-dw-v1",
+      "architectures": [
+        "tile-classifier/red-five-c8-rgb-aggressive-partial-dw-stage4-m1-fields6-12-24-48-v1",
+        "tile-classifier/red-five-c8-rgb-aggressive-partial-dw-stage4-m2-fields6-12-24-48-v1",
+        "tile-classifier/red-five-c8-rgb-aggressive-partial-dw-stage34-m1-fields6-12-24-48-v1",
+        "tile-classifier/red-five-c8-rgb-aggressive-partial-dw-stage34-m2-fields6-12-24-48-v1"
+      ],
+      "parameters": {
+        "epochs": {
+          "values": [
+            50
+          ]
+        },
+        "batch_size": {
+          "values": [
+            256
+          ]
+        },
+        "eval_batch_size": {
+          "values": [
+            1024
+          ]
+        },
+        "learning_rate": {
+          "values": [
+            0.001
+          ]
+        },
+        "weight_decay": {
+          "values": [
+            0.0001
+          ]
+        },
+        "rotation_augment_deg": {
+          "values": [
+            22.5
+          ]
+        },
+        "eval_angles": {
+          "values": [
+            [
+              0.0,
+              15.0,
+              30.0,
+              45.0
+            ]
+          ]
+        },
+        "angle_eval_every": {
+          "values": [
+            5
+          ]
+        },
+        "warm_augment_prob": {
+          "values": [
+            0.5
+          ]
+        },
+        "warm_strength_min": {
+          "values": [
+            0.1
+          ]
+        },
+        "warm_strength_max": {
+          "values": [
+            1.0
+          ]
+        },
+        "warm_red_gain_max": {
+          "values": [
+            1.5
+          ]
+        },
+        "warm_green_gain_max": {
+          "values": [
+            1.08
+          ]
+        },
+        "warm_blue_gain_min": {
+          "values": [
+            0.45
+          ]
+        },
+        "warm_exposure_min": {
+          "values": [
+            0.65
+          ]
+        },
+        "warm_exposure_max": {
+          "values": [
+            1.15
+          ]
+        },
+        "amp": {
+          "values": [
+            true
+          ]
+        },
+        "tf32": {
+          "values": [
+            true
+          ]
+        },
+        "cache_device": {
+          "values": [
+            "auto"
+          ]
+        },
+        "cache_vram_fraction": {
+          "values": [
+            0.25
+          ]
+        }
+      },
+      "seeds": [
+        42
+      ]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "red-five-exhaustive-diagnostic",
+      "corpus": "tile-classifier/red-five-exhaustive-audited-v1",
+      "protocol": "tile-classifier/red-five-binary-diagnostic-v2",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1024
+          ]
+        }
+      }
+    },
+    {
+      "stage": "onnx-export",
+      "corpus": "tile-classifier/red-five-rgb64-jp5000-seed42-v1",
+      "protocol": "tile-classifier/red-five-onnx-export-v1",
+      "parameters": {}
+    },
+    {
+      "stage": "onnx-cpu-latency",
+      "corpus": "tile-classifier/red-five-rgb64-jp5000-seed42-v1",
+      "protocol": "tile-classifier/red-five-onnx-cpu-latency-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "measure_runs": {
+          "values": [
+            200
+          ]
+        },
+        "intra_op_threads": {
+          "values": [
+            1
+          ]
+        },
+        "inter_op_threads": {
+          "values": [
+            1
+          ]
+        }
+      },
+      "inputs": {
+        "onnx_model": {
+          "from_stage": "onnx-export",
+          "artifact": "onnx_model"
+        }
+      }
+    },
+    {
+      "stage": "ort-web-iphone-latency",
+      "corpus": "tile-classifier/red-five-rgb64-jp5000-seed42-v1",
+      "protocol": "tile-classifier/red-five-ort-web-iphone-latency-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "runs_per_block": {
+          "values": [
+            100
+          ]
+        },
+        "measure_blocks": {
+          "values": [
+            40
+          ]
+        }
+      },
+      "inputs": {
+        "onnx_model": {
+          "from_stage": "onnx-export",
+          "artifact": "onnx_model"
+        }
+      }
+    }
+  ]
+}
