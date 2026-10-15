@@ -1,0 +1,43 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/red-five-c8-rgb-full-fields6-12-24-48-v1",
+  "status": "sealed",
+  "task": "tile-classifier/red-five-binary-classification-v1",
+  "name": "Red-five C8 RGB full fields 6/12/24/48",
+  "family": "c8-equivariant-cnn",
+  "description": "RGB red-five C8 full-convolution classifier with fields 6/12/24/48. All four equivariant stages use dense R2Conv spatial/field mixing, matching the historical red-five topology under the current MLDB/runtime.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sources": [
+      {
+        "path": "mldb_data/tile-classifier/lib/c8_rgb_full_width_classifier_v1.py",
+        "sha256": "f6bed773f8abe2992f99e6165abe7d6e8aa4b8539c09576e1db7d58bb74fb889"
+      }
+    ],
+    "sha256": "01657edff2300f800a99131c7990fda2fc695b32110f495ace9963b4a3e92e02"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        3,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "RGB scalar fields x3 -> dense C8 R2Conv fields 6/12/24/48; GroupPooling -> global average -> binary head",
+    "traits": [
+      "rgb",
+      "c8-rotation-equivariant",
+      "full-equivariant-convolution",
+      "group-pooled",
+      "width-control"
+    ]
+  }
+}
