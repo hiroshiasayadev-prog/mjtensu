@@ -21,7 +21,7 @@ test('production Recognition model set loads and executes bounded real-artifact 
   console.log(`R06_DIAGNOSTICS=${JSON.stringify(diagnostics)}`);
 
   expect(diagnostics.status, diagnostics.error).toBe('ready');
-  expect(diagnostics.modelSetVersion).toBe('recognition-v10-2026-10-12');
+  expect(diagnostics.modelSetVersion).toBe('recognition-v11-2026-10-16');
   expect(diagnostics.providers).toEqual([
     {
       role: 'detector',
@@ -37,7 +37,7 @@ test('production Recognition model set loads and executes bounded real-artifact 
     },
     {
       role: 'red-five-classifier',
-      runtimeSpec: 'c8-red-five-v1',
+      runtimeSpec: 'c8-red-five-v2',
       selectedProvider: 'wasm-simd',
       failedProviders: [],
     },
@@ -48,7 +48,7 @@ test('production Recognition model set loads and executes bounded real-artifact 
   expect(diagnostics.baseFixture?.logits.every(Number.isFinite)).toBe(true);
   expect(diagnostics.redFiveFixture).toEqual({
     label: 'red',
-    logits: [-8.893241, 9.968656],
+    logits: [-9.296273, 10.235466],
   });
 
   expect(diagnostics.blankFrameSnapshot).toMatchObject({

@@ -26,6 +26,7 @@ export const RECOGNITION_MODEL_RUNTIME_SPECS = [
   'gray64-tile-35-v1',
   'gray64-tile-35-v2',
   'c8-red-five-v1',
+  'c8-red-five-v2',
 ] as const;
 
 export type RecognitionModelRuntimeSpec =

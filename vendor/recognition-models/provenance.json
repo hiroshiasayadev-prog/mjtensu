@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "modelSetVersion": "recognition-v10-2026-10-12",
+  "modelSetVersion": "recognition-v11-2026-10-16",
   "models": {
     "detector": {
       "artifact": "nanodet-plus-m-320-blender-v6-jp0.onnx",
@@ -82,14 +82,14 @@
       }
     },
     "red-five-classifier": {
-      "artifact": "red-five-c8-rgb-warmaug.onnx",
-      "sourceRun": ".local/recognition/red_five_runs/c8_rgb_cr_ycr_warmaug_seed42/c8_rgb_warmaug_rot22p5_seed42",
-      "checkpoint": "best.pt",
-      "checkpointEpoch": 15,
-      "checkpointSha256": "2b92b8374d0ec2dfdbf8446766fffd7d941ab01a7bc20628daa5831b9de7283c",
-      "sha256": "c2b780f682d84bf186db90290050f8b05016c3e8058de559eea679a28eeb80c6",
-      "bytes": 6256955,
-      "runtimeSpec": "c8-red-five-v1",
+      "artifact": "red-five-c8-rgb-aggressive-stage34-dw-m1-v1.onnx",
+      "sourceRun": "tile-classifier/run-b18af9873dd84e788890646e4f81f3cc-trial-0003-train",
+      "sourceModel": "tile-classifier/run-b18af9873dd84e788890646e4f81f3cc-trial-0003-model",
+      "onnxSourceEvaluation": "tile-classifier/run-b18af9873dd84e788890646e4f81f3cc-trial-0003-eval-0002",
+      "weightsSha256": "0dc3969c2ce891196aa8412ed92af454d0e2a8aff1a19350dd059e5b075dc28e",
+      "sha256": "520abc54154e9618af1fbd3af7695945692d4dab5f170fa0fc5c6245469c498f",
+      "bytes": 662382,
+      "runtimeSpec": "c8-red-five-v2",
       "inputShape": [
         "batch",
         3,
@@ -102,15 +102,25 @@
       ],
       "normalization": {
         "mean": [
-          0.6602509360622993,
-          0.6917274426386547,
-          0.6489080530422624
+          0.6602509001722361,
+          0.6917274053569865,
+          0.6489080164545982
         ],
         "std": [
-          0.30491469480493394,
-          0.24924454491506576,
-          0.2710702582444575
+          0.3049146799913776,
+          0.2492445334723813,
+          0.2710702451286852
         ]
+      },
+      "selectionEvidence": {
+        "investigation": "PRODUCT-INV-RECOGNITION-047",
+        "architecture": "tile-classifier/red-five-c8-rgb-aggressive-partial-dw-stage34-m1-fields6-12-24-48-v1",
+        "trainingBatchSize": 256,
+        "specialistFiveErrorCount": 1,
+        "manualAccuracy": 1.0,
+        "warmAccuracy": 1.0,
+        "iphoneLatencyP50Ms": 1.735,
+        "onnxBytes": 662382
       }
     }
   }

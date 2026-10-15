@@ -9,7 +9,7 @@ import numpy as np
 
 
 BASE_RUNTIME_SPEC = "c8-tile-35-v1"
-RED_FIVE_RUNTIME_SPEC = "c8-red-five-v1"
+RED_FIVE_RUNTIME_SPEC = "c8-red-five-v2"
 
 
 def parse_args() -> argparse.Namespace:
@@ -148,9 +148,10 @@ def compute_red_five_rgb_normalization(
     if not database.is_file():
         raise FileNotFoundError(database)
 
-    channel_sum = np.zeros((3,), dtype=np.float64)
-    channel_square_sum = np.zeros((3,), dtype=np.float64)
-    total_weighted_pixels = 0.0
+    sample_sums: list[np.ndarray] = []
+    sample_square_sums: list[np.ndarray] = []
+    sample_weights: list[np.ndarray] = []
+    pixel_count: int | None = None
     connection = sqlite3.connect(f"{database.as_uri()}?mode=ro", uri=True, timeout=60)
     try:
         metadata = {
@@ -189,24 +190,29 @@ def compute_red_five_rgb_normalization(
                 )
                 repeats[index] = repeat
 
-            # Mirror train_red_five_classifier.compute_input_statistics for RGB.
-            represented = images.astype(np.float32) * (1.0 / 255.0)
+            # Mirror the accepted MLDB RED5 Train Protocol exactly. It converts
+            # uint8 inputs to float64 before weighted statistics, then training
+            # later materializes the constants into float32 tensors.
+            represented = images.astype(np.float64) * (1.0 / 255.0)
             weights = repeats.astype(np.float64)
-            pixel_count = represented.shape[1] * represented.shape[2]
-            per_sample_sum = represented.sum(axis=(1, 2), dtype=np.float64)
-            per_sample_square_sum = np.square(represented, dtype=np.float64).sum(
-                axis=(1, 2), dtype=np.float64
+            if pixel_count is None:
+                pixel_count = represented.shape[1] * represented.shape[2]
+            sample_sums.append(represented.sum(axis=(1, 2), dtype=np.float64))
+            sample_square_sums.append(
+                np.square(represented, dtype=np.float64).sum(axis=(1, 2), dtype=np.float64)
             )
-            channel_sum += (per_sample_sum * weights[:, None]).sum(axis=0)
-            channel_square_sum += (
-                per_sample_square_sum * weights[:, None]
-            ).sum(axis=0)
-            total_weighted_pixels += float(weights.sum() * pixel_count)
+            sample_weights.append(weights)
     finally:
         connection.close()
 
-    if total_weighted_pixels <= 0:
+    if not sample_sums or pixel_count is None:
         raise ValueError(f"No weighted training pixels found in {database}")
+    per_sample_sum = np.concatenate(sample_sums, axis=0)
+    per_sample_square_sum = np.concatenate(sample_square_sums, axis=0)
+    weights = np.concatenate(sample_weights, axis=0)
+    total_weighted_pixels = float(weights.sum() * pixel_count)
+    channel_sum = (per_sample_sum * weights[:, None]).sum(axis=0)
+    channel_square_sum = (per_sample_square_sum * weights[:, None]).sum(axis=0)
     mean = channel_sum / total_weighted_pixels
     variance = np.maximum(
         channel_square_sum / total_weighted_pixels - mean * mean,

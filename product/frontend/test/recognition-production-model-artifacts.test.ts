@@ -29,10 +29,12 @@ const expectedModels = {
       'tile-classifier/run-bdcce50e63fb4665bebbd8d3b78ea243-trial-0003-train',
   },
   'red-five-classifier': {
-    artifact: 'red-five-c8-rgb-warmaug.onnx',
-    sha256: 'c2b780f682d84bf186db90290050f8b05016c3e8058de559eea679a28eeb80c6',
-    bytes: 6256955,
-    runtimeSpec: 'c8-red-five-v1',
+    artifact: 'red-five-c8-rgb-aggressive-stage34-dw-m1-v1.onnx',
+    sha256: '520abc54154e9618af1fbd3af7695945692d4dab5f170fa0fc5c6245469c498f',
+    bytes: 662382,
+    runtimeSpec: 'c8-red-five-v2',
+    sourceRun:
+      'tile-classifier/run-b18af9873dd84e788890646e4f81f3cc-trial-0003-train',
   },
 } as const;
 
@@ -42,7 +44,7 @@ describe('production Recognition model artifacts', () => {
       PRODUCTION_RECOGNITION_MODEL_SET,
     );
     expect(PRODUCTION_RECOGNITION_MODEL_SET.modelSetVersion).toBe(
-      'recognition-v10-2026-10-12',
+      'recognition-v11-2026-10-16',
     );
 
     for (const [role, expected] of Object.entries(expectedModels)) {

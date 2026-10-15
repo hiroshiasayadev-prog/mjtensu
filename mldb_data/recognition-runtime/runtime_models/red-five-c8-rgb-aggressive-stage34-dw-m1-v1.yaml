@@ -1,0 +1,39 @@
+{
+  "schema": "mjtensu.mldb-v2/runtime-model/v1",
+  "id": "recognition-runtime/red-five-c8-rgb-aggressive-stage34-dw-m1-v1",
+  "name": "Red-five C8 aggressive stage3+4 DW/PW x1",
+  "description": "Deployable RED5 specialist selected by PRODUCT-INV-RECOGNITION-047: C8 fields 6/12/24/48, aggressive learned stride, dense early mixing, stage3+4 field-wise DW3x3 plus equivariant PW1x1, trained at batch 256.",
+  "role": "red-five-classifier",
+  "format": "onnx",
+  "runtime_spec": "c8-red-five-v2",
+  "artifact": {
+    "uri": "s3://mldb-runtime-models/recognition-runtime/red-five-c8-rgb-aggressive-stage34-dw-m1-v1.onnx",
+    "bytes": 662382,
+    "sha256": "520abc54154e9618af1fbd3af7695945692d4dab5f170fa0fc5c6245469c498f"
+  },
+  "provenance": {
+    "model": "tile-classifier/run-b18af9873dd84e788890646e4f81f3cc-trial-0003-model",
+    "training_result": "tile-classifier/run-b18af9873dd84e788890646e4f81f3cc-trial-0003-train",
+    "onnx_evaluation": "tile-classifier/run-b18af9873dd84e788890646e4f81f3cc-trial-0003-eval-0002",
+    "architecture": "tile-classifier/red-five-c8-rgb-aggressive-partial-dw-stage34-m1-fields6-12-24-48-v1",
+    "normalization": {
+      "mean": [
+        0.6602509001722361,
+        0.6917274053569865,
+        0.6489080164545982
+      ],
+      "std": [
+        0.3049146799913776,
+        0.2492445334723813,
+        0.2710702451286852
+      ]
+    },
+    "selection_evidence": {
+      "investigation": "PRODUCT-INV-RECOGNITION-047",
+      "specialist_five_error_count": 1,
+      "manual_accuracy": 1.0,
+      "warm_accuracy": 1.0,
+      "iphone_latency_p50_ms": 1.735
+    }
+  }
+}

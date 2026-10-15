@@ -48,6 +48,14 @@ const RUNTIME_SPEC_DESCRIPTORS = {
       std: [0.30491469480493394, 0.24924454491506576, 0.27107025824445752],
     },
   },
+  'c8-red-five-v2': {
+    runtimeSpec: 'c8-red-five-v2',
+    role: 'red-five-classifier',
+    classifierNormalization: {
+      mean: [0.6602509001722361, 0.6917274053569865, 0.6489080164545982],
+      std: [0.3049146799913776, 0.2492445334723813, 0.2710702451286852],
+    },
+  },
 } as const satisfies Record<
   RecognitionModelRuntimeSpec,
   RecognitionRuntimeSpecDescriptor

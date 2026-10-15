@@ -73,8 +73,12 @@ async function runVerification(): Promise<void> {
 
     diagnostics.phase = 'inspection-runtime-initialize';
     await inspectionRuntime.initialize();
-    const baseNormalization = getRecognitionClassifierNormalization('gray64-tile-35-v1');
-    const redFiveNormalization = getRecognitionClassifierNormalization('c8-red-five-v1');
+    const baseNormalization = getRecognitionClassifierNormalization(
+      PRODUCTION_RECOGNITION_MODEL_SET.models['tile-classifier'].runtimeSpec,
+    );
+    const redFiveNormalization = getRecognitionClassifierNormalization(
+      PRODUCTION_RECOGNITION_MODEL_SET.models['red-five-classifier'].runtimeSpec,
+    );
     if (baseNormalization === null || redFiveNormalization === null) {
       throw new Error('Classifier runtime normalization is unavailable.');
     }

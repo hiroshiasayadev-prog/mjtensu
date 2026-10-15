@@ -48,6 +48,10 @@ describe('recognition model manifest validation', () => {
       mean: [0.66025093606229934, 0.69172744263865471, 0.6489080530422624],
       std: [0.30491469480493394, 0.24924454491506576, 0.27107025824445752],
     });
+    expect(getRecognitionClassifierNormalization('c8-red-five-v2')).toEqual({
+      mean: [0.6602509001722361, 0.6917274053569865, 0.6489080164545982],
+      std: [0.3049146799913776, 0.2492445334723813, 0.2710702451286852],
+    });
   });
 
   it('normalizes unsupported schema, role/spec, provider, and integrity declarations', () => {
