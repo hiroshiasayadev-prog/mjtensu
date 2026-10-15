@@ -1,0 +1,45 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/red-five-c8-rgb-dw222-fields8-16-32-64-v1",
+  "status": "sealed",
+  "task": "tile-classifier/red-five-binary-classification-v1",
+  "name": "Red-five C8 RGB DW2/2/2 fields 8/16/32/64",
+  "family": "c8-equivariant-cnn",
+  "description": "RGB red-five C8 classifier with fields 8/16/32/64. Stage 1 is full equivariant 5x5; stages 2-4 use field-wise DW3x3 multiplier 2 followed by equivariant PW1x1. This width screen isolates backbone width while preserving the selected DW2/2/2 factorization.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sources": [
+      {
+        "path": "mldb_data/tile-classifier/lib/c8_rgb_stage234_dw222_width_classifier_v1.py",
+        "sha256": "27cdec6bb79c488febc57ab42c77577d5793c0346a59e4e846451eb863f6ef4d"
+      }
+    ],
+    "sha256": "63c2ee71c996f36aa387cc1188651bf6b20209020214fae1b9f56ed15a185cdb"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        3,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "RGB scalar fields x3 -> C8 fields 8/16/32/64; stage multipliers 2/2/2; GroupPooling -> global average -> hidden >=128 -> 2 logits",
+    "traits": [
+      "rgb",
+      "c8-rotation-equivariant",
+      "group-pooled",
+      "stage2-depth-multiplier-2",
+      "stage3-depth-multiplier-2",
+      "stage4-depth-multiplier-2",
+      "width-screen"
+    ]
+  }
+}
