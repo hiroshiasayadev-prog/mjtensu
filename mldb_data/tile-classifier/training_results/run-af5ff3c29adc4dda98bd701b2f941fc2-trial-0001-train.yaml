@@ -1,0 +1,61 @@
+{
+  "schema": "mjtensu.mldb-v2/training-result/v1",
+  "id": "tile-classifier/run-af5ff3c29adc4dda98bd701b2f941fc2-trial-0001-train",
+  "study_result": "tile-classifier/run-af5ff3c29adc4dda98bd701b2f941fc2",
+  "plan": "tile-classifier/red-five-c8-rgb-full-width-control-v1-plan-69147854363b7a97",
+  "trial": "trial-0001",
+  "task": "tile-classifier/red-five-binary-classification-v1",
+  "architecture": "tile-classifier/red-five-c8-rgb-full-fields6-12-24-48-v1",
+  "corpus": "tile-classifier/red-five-rgb64-jp5000-seed42-v1",
+  "train_protocol": "tile-classifier/red-five-train-c8-rgb-warmaug-full-width-v1",
+  "parameters": {
+    "epochs": 50,
+    "batch_size": 1024,
+    "eval_batch_size": 4096,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "rotation_augment_deg": 22.5,
+    "eval_angles": [
+      0.0,
+      15.0,
+      30.0,
+      45.0
+    ],
+    "angle_eval_every": 5,
+    "warm_augment_prob": 0.5,
+    "warm_strength_min": 0.1,
+    "warm_strength_max": 1.0,
+    "warm_red_gain_max": 1.5,
+    "warm_green_gain_max": 1.08,
+    "warm_blue_gain_min": 0.45,
+    "warm_exposure_min": 0.65,
+    "warm_exposure_max": 1.15,
+    "amp": true,
+    "tf32": true,
+    "cache_device": "auto",
+    "cache_vram_fraction": 0.25
+  },
+  "seed": 42,
+  "source_commit": "a57a8b9b987d87963a2941e2ab6e0c2d2ef2c092",
+  "attempts": [
+    {
+      "backend": "clearml",
+      "execution_id": "0211b14c4bba4722897779ddf1f945b3",
+      "status": "completed",
+      "started_at": null,
+      "ended_at": "2026-10-15T05:26:00.376657Z",
+      "diagnostic": null
+    }
+  ],
+  "status": "completed",
+  "diagnostic": null,
+  "result": {
+    "weights": {
+      "uri": "s3://mldb-w004-smoke/mldb-v2/d0479c5429df8f790eb039c15d474c827612a6d1c010f4e4fc08355d839cbfc4/weights.pt",
+      "bytes": 4163544,
+      "sha256": "8c290e989fc40263c60500023afbb9971c7c1e5cda3f0f6a9baddffebad6334f",
+      "format": "pytorch-state-dict/v1"
+    },
+    "model": "tile-classifier/run-af5ff3c29adc4dda98bd701b2f941fc2-trial-0001-model"
+  }
+}

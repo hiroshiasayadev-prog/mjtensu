@@ -1,0 +1,61 @@
+{
+  "schema": "mjtensu.mldb-v2/training-result/v1",
+  "id": "tile-classifier/run-9c32e61c4b694c63b1c3b0a87e76b8b3-trial-0001-train",
+  "study_result": "tile-classifier/run-9c32e61c4b694c63b1c3b0a87e76b8b3",
+  "plan": "tile-classifier/red-five-c8-rgb-dw222-width-screen-v1-plan-049e42b0ec139e03",
+  "trial": "trial-0001",
+  "task": "tile-classifier/red-five-binary-classification-v1",
+  "architecture": "tile-classifier/red-five-c8-rgb-dw222-fields6-12-24-48-v1",
+  "corpus": "tile-classifier/red-five-rgb64-jp5000-seed42-v1",
+  "train_protocol": "tile-classifier/red-five-train-c8-rgb-warmaug-width-v1",
+  "parameters": {
+    "epochs": 50,
+    "batch_size": 1024,
+    "eval_batch_size": 4096,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "rotation_augment_deg": 22.5,
+    "eval_angles": [
+      0.0,
+      15.0,
+      30.0,
+      45.0
+    ],
+    "angle_eval_every": 5,
+    "warm_augment_prob": 0.5,
+    "warm_strength_min": 0.1,
+    "warm_strength_max": 1.0,
+    "warm_red_gain_max": 1.5,
+    "warm_green_gain_max": 1.08,
+    "warm_blue_gain_min": 0.45,
+    "warm_exposure_min": 0.65,
+    "warm_exposure_max": 1.15,
+    "amp": true,
+    "tf32": true,
+    "cache_device": "auto",
+    "cache_vram_fraction": 0.25
+  },
+  "seed": 42,
+  "source_commit": "0d66bf1eca170a8f3f4cda742b68711592c986e1",
+  "attempts": [
+    {
+      "backend": "clearml",
+      "execution_id": "a21eac32c548416e83797d814085c15d",
+      "status": "completed",
+      "started_at": null,
+      "ended_at": "2026-10-15T04:07:44.428821Z",
+      "diagnostic": null
+    }
+  ],
+  "status": "completed",
+  "diagnostic": null,
+  "result": {
+    "weights": {
+      "uri": "s3://mldb-w004-smoke/mldb-v2/5ad6a66839a412a6404e517451b6b245ca8ae68ff2e767890f3821c88cfecc1d/weights.pt",
+      "bytes": 1492423,
+      "sha256": "a970680d2904e22bde0bcae53fe825fc82e61d08926d97771ab0395c598f3c0c",
+      "format": "pytorch-state-dict/v1"
+    },
+    "model": "tile-classifier/run-9c32e61c4b694c63b1c3b0a87e76b8b3-trial-0001-model"
+  }
+}
