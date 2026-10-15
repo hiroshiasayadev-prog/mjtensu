@@ -1,0 +1,136 @@
+{
+  "schema": "mjtensu.mldb-v2/train-protocol/v1",
+  "id": "tile-classifier/red-five-train-c8-rgb-warmaug-full-stride-v1",
+  "status": "sealed",
+  "task": "tile-classifier/red-five-binary-classification-v1",
+  "name": "Red-five C8 RGB full-stride warm-augmentation training",
+  "description": "Train dense C8 RED5 classifiers that preserve full equivariant channel/field mixing while moving stage2/3 or stage2/3/4 spatial reduction into learned stride-2 R2Conv. Keep the accepted Full6 corpus, warm-light augmentation, seed, optimizer, rotation, and checkpoint selection conditions unchanged.",
+  "implementation": {
+    "entrypoint": "train",
+    "sources": [
+      {
+        "path": "mldb_data/tile-classifier/lib/c8_rgb_full_stride_classifier_v1.py",
+        "sha256": "5add39d99e3a081a5b61925159046202141e153dc26df2ede7aa1689a4acdc09"
+      },
+      {
+        "path": "mldb_data/tile-classifier/lib/c8_rgb_full_width_classifier_v1.py",
+        "sha256": "f6bed773f8abe2992f99e6165abe7d6e8aa4b8539c09576e1db7d58bb74fb889"
+      }
+    ],
+    "sha256": "562437134dc10f6cffb3bcf01999b7a821f236867a3bea434eb3d17834f6beda"
+  },
+  "parameters": {
+    "epochs": {
+      "default": 50,
+      "type": "integer",
+      "minimum": 1
+    },
+    "batch_size": {
+      "default": 128,
+      "type": "integer",
+      "minimum": 2
+    },
+    "eval_batch_size": {
+      "default": 1024,
+      "type": "integer",
+      "minimum": 2
+    },
+    "learning_rate": {
+      "default": 0.001,
+      "type": "number",
+      "minimum": 1e-07
+    },
+    "weight_decay": {
+      "default": 0.0001,
+      "type": "number",
+      "minimum": 0
+    },
+    "rotation_augment_deg": {
+      "default": 22.5,
+      "type": "number",
+      "minimum": 0,
+      "maximum": 45
+    },
+    "eval_angles": {
+      "default": [
+        0.0,
+        15.0,
+        30.0,
+        45.0
+      ],
+      "type": "array"
+    },
+    "angle_eval_every": {
+      "default": 5,
+      "type": "integer",
+      "minimum": 1
+    },
+    "warm_augment_prob": {
+      "default": 0.5,
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "warm_strength_min": {
+      "default": 0.1,
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "warm_strength_max": {
+      "default": 1.0,
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "warm_red_gain_max": {
+      "default": 1.5,
+      "type": "number",
+      "minimum": 1
+    },
+    "warm_green_gain_max": {
+      "default": 1.08,
+      "type": "number",
+      "minimum": 0.01
+    },
+    "warm_blue_gain_min": {
+      "default": 0.45,
+      "type": "number",
+      "minimum": 0.01,
+      "maximum": 1
+    },
+    "warm_exposure_min": {
+      "default": 0.65,
+      "type": "number",
+      "minimum": 0.01
+    },
+    "warm_exposure_max": {
+      "default": 1.15,
+      "type": "number",
+      "minimum": 0.01
+    },
+    "amp": {
+      "default": true,
+      "type": "boolean"
+    },
+    "tf32": {
+      "default": true,
+      "type": "boolean"
+    },
+    "cache_device": {
+      "default": "auto",
+      "type": "string",
+      "enum": [
+        "auto",
+        "cpu",
+        "cuda"
+      ]
+    },
+    "cache_vram_fraction": {
+      "default": 0.25,
+      "type": "number",
+      "minimum": 0.01,
+      "maximum": 0.79
+    }
+  }
+}

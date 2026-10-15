@@ -1,0 +1,44 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/red-five-c8-rgb-full-stride-safe-fields6-12-24-48-v1",
+  "status": "sealed",
+  "task": "tile-classifier/red-five-binary-classification-v1",
+  "name": "Red-five C8 RGB full stride-safe fields 6/12/24/48",
+  "family": "c8-equivariant-cnn",
+  "description": "RGB red-five C8 classifier preserving dense full R2Conv field/channel mixing at all four stages while replacing later max-pool downsampling with learned stride-2 full equivariant convolutions. stage2/3 learned stride-2, stage4 stride-1; final 8x8.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sources": [
+      {
+        "path": "mldb_data/tile-classifier/lib/c8_rgb_full_stride_classifier_v1.py",
+        "sha256": "5add39d99e3a081a5b61925159046202141e153dc26df2ede7aa1689a4acdc09"
+      }
+    ],
+    "sha256": "0eb1bf563b9bbd78a7e6422e6466269abfeac0f6ea0ad2485571cb26e920d668"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        3,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "RGB scalar fields x3 -> dense C8 fields 6/12/24/48; stage strides (1, 2, 2, 1); stage1 max-pool; stage2/3 learned stride-2, stage4 stride-1; final 8x8; GroupPooling -> GAP -> binary head",
+    "traits": [
+      "rgb",
+      "c8-rotation-equivariant",
+      "full-equivariant-convolution",
+      "learned-stride-downsampling",
+      "group-pooled",
+      "red-five-spatial-downsample-screen"
+    ]
+  }
+}
