@@ -1,0 +1,68 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/red-five-onnx-cpu-latency-v1",
+  "status": "sealed",
+  "task": "tile-classifier/red-five-binary-classification-v1",
+  "name": "Red-five ONNX CPU latency v1",
+  "description": "Measure the accepted same-Study RGB red-five ONNX artifact on single-thread CPUExecutionProvider using [N,3,64,64] input and 2-logit output.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "3b3b9cb7ea6438bd1afd8fbeec141d5fab81c3e15197bc9555ec4729d351b41a"
+  },
+  "parameters": {
+    "batch_size": {
+      "default": 1,
+      "type": "integer",
+      "minimum": 1
+    },
+    "warmup_runs": {
+      "default": 25,
+      "type": "integer",
+      "minimum": 1
+    },
+    "measure_runs": {
+      "default": 200,
+      "type": "integer",
+      "minimum": 10
+    },
+    "intra_op_threads": {
+      "default": 1,
+      "type": "integer",
+      "minimum": 1
+    },
+    "inter_op_threads": {
+      "default": 1,
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "metrics": {
+    "latency_p50_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "latency_p95_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "latency_mean_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    }
+  },
+  "artifacts": {
+    "latency_report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/red-five-onnx-cpu-latency/v1",
+      "required": true,
+      "study_view": "select"
+    }
+  },
+  "artifact_inputs": {
+    "onnx_model": "onnx"
+  },
+  "artifact_only": true
+}

@@ -1,0 +1,37 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/red-five-onnx-export-v2",
+  "status": "sealed",
+  "task": "tile-classifier/red-five-binary-classification-v1",
+  "name": "Red-five RGB red-feature classifier ONNX export and CPU parity v2",
+  "description": "Export the accepted RGB+auxiliary-red-feature red-five binary classifier as a single dynamic-batch ONNX graph that includes raw RGB to red-map generation, four-channel normalization, tensor-only cyclic backbone, group pooling and binary head; verify CPU ORT parity before publishing the immutable ONNX artifact for CPU/iPhone latency.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "6daa990054503438e39f936c651f6214541faaf68b0eef6a50c2dc8a36d3b41b"
+  },
+  "parameters": {},
+  "metrics": {
+    "onnx_parity_max_abs_error": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Maximum absolute logit difference between source PyTorch and CPU ONNX Runtime on the deterministic RGB parity batch."
+    }
+  },
+  "artifacts": {
+    "onnx_model": {
+      "format": "onnx",
+      "schema": "mjtensu.recognition/red-five-onnx-model/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "Dynamic-batch RGB 64x64 red-five ONNX model."
+    },
+    "export_report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/red-five-onnx-export/v2",
+      "required": true,
+      "study_view": "select",
+      "description": "ONNX size/hash, export mode, and PyTorch/ORT parity evidence."
+    }
+  }
+}
