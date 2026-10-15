@@ -1,0 +1,92 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/red-five-c8-rgb-full-width-latency-v1",
+  "status": "sealed",
+  "name": "Red-five C8 RGB full width latency",
+  "description": "Latency-only follow-up for the completed RED5 dense full-convolution width control. Reuse the accepted 6/12/24/48 and 8/16/32/64 models without retraining, export each to parity-checked ONNX, and measure CPU and iPhone Safari ORT Web latency under the same protocols used by the later RED5 screens.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-af5ff3c29adc4dda98bd701b2f941fc2-trial-0001-model",
+      "tile-classifier/run-af5ff3c29adc4dda98bd701b2f941fc2-trial-0002-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "onnx-export",
+      "corpus": "tile-classifier/red-five-rgb64-jp5000-seed42-v1",
+      "protocol": "tile-classifier/red-five-onnx-export-v1",
+      "parameters": {}
+    },
+    {
+      "stage": "onnx-cpu-latency",
+      "corpus": "tile-classifier/red-five-rgb64-jp5000-seed42-v1",
+      "protocol": "tile-classifier/red-five-onnx-cpu-latency-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "measure_runs": {
+          "values": [
+            200
+          ]
+        },
+        "intra_op_threads": {
+          "values": [
+            1
+          ]
+        },
+        "inter_op_threads": {
+          "values": [
+            1
+          ]
+        }
+      },
+      "inputs": {
+        "onnx_model": {
+          "from_stage": "onnx-export",
+          "artifact": "onnx_model"
+        }
+      }
+    },
+    {
+      "stage": "ort-web-iphone-latency",
+      "corpus": "tile-classifier/red-five-rgb64-jp5000-seed42-v1",
+      "protocol": "tile-classifier/red-five-ort-web-iphone-latency-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "runs_per_block": {
+          "values": [
+            100
+          ]
+        },
+        "measure_blocks": {
+          "values": [
+            40
+          ]
+        }
+      },
+      "inputs": {
+        "onnx_model": {
+          "from_stage": "onnx-export",
+          "artifact": "onnx_model"
+        }
+      }
+    }
+  ]
+}
