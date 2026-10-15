@@ -1,0 +1,53 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/red-five-stage34-m2-iphone-recovery-v1",
+  "status": "sealed",
+  "name": "Red-five stage34 m2 iPhone recovery",
+  "description": "Re-export the accepted stage3+4 DW/PW x2 model from run-b18af9873dd84e788890646e4f81f3cc and recover only the iPhone ORT Web latency after the original browser job exhausted persistent Safari WASM memory. No training or accuracy evaluation is repeated.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-b18af9873dd84e788890646e4f81f3cc-trial-0004-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "onnx-export",
+      "corpus": "tile-classifier/red-five-rgb64-jp5000-seed42-v1",
+      "protocol": "tile-classifier/red-five-onnx-export-v1",
+      "parameters": {}
+    },
+    {
+      "stage": "ort-web-iphone-latency",
+      "corpus": "tile-classifier/red-five-rgb64-jp5000-seed42-v1",
+      "protocol": "tile-classifier/red-five-ort-web-iphone-latency-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "runs_per_block": {
+          "values": [
+            100
+          ]
+        },
+        "measure_blocks": {
+          "values": [
+            40
+          ]
+        }
+      },
+      "inputs": {
+        "onnx_model": {
+          "from_stage": "onnx-export",
+          "artifact": "onnx_model"
+        }
+      }
+    }
+  ]
+}
