@@ -1,0 +1,26 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/c8-narrow-stage234-dw-m2-m2-m2-full-class-diagnostic-v1",
+  "status": "sealed",
+  "name": "C8 narrow stage234 DW m2 m2 m2 full-class diagnostic",
+  "description": "Re-evaluate the current C8 narrow stage2/3/4 depthwise multiplier 2/2/2 base classifier without retraining using the sealed full-class geometry/recrop/shift diagnostic. The purpose is to measure worst-class and class-by-condition recall, including the focused 5m/6m/7m confusion durability evidence that is not recoverable from the retained final multiplier summary.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-bdcce50e63fb4665bebbd8d3b78ea243-trial-0003-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "full-class-diagnostic",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-full-class-diagnostic-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            256
+          ]
+        }
+      }
+    }
+  ]
+}
