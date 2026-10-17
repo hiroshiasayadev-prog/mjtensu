@@ -1,0 +1,99 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-blender-balanced-class-recall-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Tile shape Blender balanced class recall",
+  "description": "Evaluate exactly 100 deterministic Blender v6 synthetic_val visible-front crops for each of the 34 valid base tile classes. Report balanced known-tile identity accuracy, macro recall, worst-class recall, count of classes below the authored recall gate, and valid-tile predictions to invalid. This is a synthetic classification-feasibility gate and does not replace real-domain robustness evaluation.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "73ad75e34323968014b1a776f229c88b6b121663448625cb12c6c9d5dc02f11a"
+  },
+  "parameters": {
+    "batch_size": {
+      "default": 512,
+      "type": "integer",
+      "minimum": 1,
+      "description": "GPU inference batch size over the fixed 34x100 balanced synthetic population."
+    },
+    "recall_gate": {
+      "default": 0.8,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Per-class recall boundary used only to count classification-feasibility gate failures."
+    }
+  },
+  "metrics": {
+    "accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Top-1 accuracy across the balanced 3,400 known-tile synthetic crops."
+    },
+    "macro_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Unweighted mean recall over the 34 valid base tile classes; with 100/class this also equals balanced accuracy over the authored population."
+    },
+    "worst_class_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Minimum recall over the 34 valid base tile classes, each with exactly 100 samples."
+    },
+    "class_recall_below_gate_count": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower",
+      "description": "Number of valid base tile classes whose recall is below recall_gate."
+    },
+    "invalid_prediction_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Fraction of valid synthetic tile crops predicted as the invalid class."
+    }
+  },
+  "artifacts": {
+    "class_recall_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/blender-balanced-class-recall/v1",
+      "required": true,
+      "description": "Per-class count, recall, gate status, and dominant wrong destination."
+    },
+    "confusion_matrix": {
+      "format": "plotly-json",
+      "schema": "mjtensu.recognition/blender-balanced-confusion/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "34-by-35 confusion-count heatmap including invalid as a prediction destination."
+    },
+    "high_confidence_error_contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.recognition/blender-balanced-high-confidence-errors/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "Up to two highest-confidence misclassified crops per true class."
+    },
+    "error_inventory": {
+      "format": "jsonl.gz",
+      "schema": "mjtensu.recognition/blender-balanced-errors/v1",
+      "required": true,
+      "description": "Every misclassified synthetic crop with stable source annotation and image provenance."
+    },
+    "per_sample_predictions": {
+      "format": "jsonl.gz",
+      "schema": "mjtensu.recognition/blender-balanced-predictions/v1",
+      "required": true,
+      "description": "Prediction record for every balanced synthetic crop."
+    },
+    "report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/blender-balanced-class-recall-report/v1",
+      "required": true,
+      "description": "Population, normalization, selection, gate, metric and interpretation contract."
+    }
+  }
+}

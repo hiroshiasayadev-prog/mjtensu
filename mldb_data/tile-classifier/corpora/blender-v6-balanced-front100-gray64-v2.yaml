@@ -1,0 +1,47 @@
+{
+  "schema": "mjtensu.mldb-v2/corpus/v1",
+  "id": "tile-classifier/blender-v6-balanced-front100-gray64-v2",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "description": "Balanced Blender v6 classifier evaluation population: exactly 100 visible-front crops for each of the 34 valid base tile classes, deterministically selected from synthetic_val with red fives folded to their base five class. Invalid is prediction-only. Crops use the production grayscale 64x64 aspect-preserving Lanczos plus border-median letterbox preprocessing; normalization is pinned to the base classifiers' common training corpus. Version 2 makes the builder byte-reproducible by emitting metadata gzip with fixed mtime=0.",
+  "storage": {
+    "root_uri": "s3://mldb-corpora/tile-classifier/blender-v6-balanced-front100-gray64-v2"
+  },
+  "manifest": {
+    "file": "blender-v6-balanced-front100-gray64-v2.manifest.jsonl",
+    "sha256": "f472fde3e9e4a951e25eda1808ca0cfde5d076b442635956efb6323dcaabfd71",
+    "entries": 3
+  },
+  "representation": {
+    "kind": "sharded-npz-image-classification",
+    "index_file": "index.json",
+    "image_glob": "shard-*.npz",
+    "metadata_glob": "shard-*.jsonl.gz",
+    "image_key": "images",
+    "label_key": "labels",
+    "dtype": "uint8",
+    "shape": [
+      1,
+      64,
+      64
+    ],
+    "preprocess": "grayscale_aspect_preserving_letterbox_border_median_lanczos_u8",
+    "label_semantics": "34 valid base tile classes, 100 each; red5m/red5p/red5s fold to 5m/5p/5s; invalid is prediction-only",
+    "source_package_sha256": "1ed651f07125e9d31367d9c9161ed86609546b56009a86cc02cb234197ab90b3"
+  },
+  "splits": {
+    "eval": 3400
+  },
+  "builder": {
+    "entrypoint": "build",
+    "parameters": {
+      "source_member": "annotations/synthetic_val.coco.json",
+      "per_class": 100,
+      "seed": 42,
+      "normalization_mean": 0.6815832403977486,
+      "normalization_std": 0.27255536819738574,
+      "normalization_source_corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1"
+    },
+    "sha256": "a2c6bec4e79da127ecf2d9491c425933eff1e309640f9b2cd51d8d19ce06ed11"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/base-classifier-balanced-full-refresh-cohort03-v1",
+  "status": "sealed",
+  "name": "Base classifier balanced/full refresh cohort 03",
+  "description": "Re-evaluate one non-overlapping architecture cohort of completed 35-class base classifiers without retraining. Each model receives the same Blender v6 balanced 34x100 known-tile class-recall gate and the same sealed real manual full-class geometry/recrop/shift diagnostic, so chart metrics are refreshed under common evaluation definitions. Cohorting prevents duplicate architecture display labels from falling back to internal model identities.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-ac1a2514af214cb69977972c0278ab39-trial-0001-model",
+      "tile-classifier/run-96cd149330af4e019d1353a2919e55f1-trial-0001-model",
+      "tile-classifier/run-de1563ab21f7445fbcfa1fbea9e31d83-trial-0005-model",
+      "tile-classifier/run-de1563ab21f7445fbcfa1fbea9e31d83-trial-0004-model",
+      "tile-classifier/run-1316c835f3334066ab720751cc269742-trial-0002-model",
+      "tile-classifier/run-1f32498f05c547308a8e7b1dbe746c94-trial-0001-model",
+      "tile-classifier/run-61942c2852a94301a983c87e27472017-trial-0001-model",
+      "tile-classifier/run-bc6fe4f59d1946daa7dbd95f8ac85d1c-trial-0006-model",
+      "tile-classifier/run-bc6fe4f59d1946daa7dbd95f8ac85d1c-trial-0005-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "blender-balanced-class-recall",
+      "corpus": "tile-classifier/blender-v6-balanced-front100-gray64-v2",
+      "protocol": "tile-classifier/tile-shape-blender-balanced-class-recall-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            512
+          ]
+        },
+        "recall_gate": {
+          "values": [
+            0.8
+          ]
+        }
+      }
+    },
+    {
+      "stage": "full-class-diagnostic",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-full-class-diagnostic-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            256
+          ]
+        }
+      }
+    }
+  ]
+}
