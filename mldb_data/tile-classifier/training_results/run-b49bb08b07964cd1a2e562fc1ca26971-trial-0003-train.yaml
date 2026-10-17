@@ -1,0 +1,47 @@
+{
+  "schema": "mjtensu.mldb-v2/training-result/v1",
+  "id": "tile-classifier/run-b49bb08b07964cd1a2e562fc1ca26971-trial-0003-train",
+  "study_result": "tile-classifier/run-b49bb08b07964cd1a2e562fc1ca26971",
+  "plan": "tile-classifier/plain-w500-third-downsample-failure-recovery-v1-plan-acc15ab0757679ce",
+  "trial": "trial-0003",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "architecture": "tile-classifier/tile-plain-gray35-w500-late256-late-dw3-pw1-down3-dwpw-v1",
+  "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+  "train_protocol": "tile-classifier/tile-shape-train-gpu-v5",
+  "parameters": {
+    "epochs": 150,
+    "batch_size": 128,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "rotation_augment_deg": 180.0,
+    "augmentation_recipe": "random360-only-v1",
+    "checkpoint_eval_every": 5,
+    "amp": true,
+    "tf32": true,
+    "cache_device": "cuda",
+    "cache_vram_fraction": 0.5
+  },
+  "seed": 42,
+  "source_commit": "5ee2e1587ecae4b477accfeeb2f6b2fa800978a4",
+  "attempts": [
+    {
+      "backend": "clearml",
+      "execution_id": "e8ef2d365fce4f02bd9c2cc81812d494",
+      "status": "completed",
+      "started_at": null,
+      "ended_at": "2026-10-03T20:47:24.022571Z",
+      "diagnostic": null
+    }
+  ],
+  "status": "completed",
+  "diagnostic": null,
+  "result": {
+    "weights": {
+      "uri": "s3://mldb-w004-smoke/mldb-v2/7e71976eb7668529b19f8a74699cd36db6021605fea60de69b5f1931656e123a/weights.pt",
+      "bytes": 760442,
+      "sha256": "212de90b34c65d52655ccd47637229b2b598b25cbb0a82476d9c17531698d6a0",
+      "format": "pytorch-state-dict/v1"
+    },
+    "model": "tile-classifier/run-b49bb08b07964cd1a2e562fc1ca26971-trial-0003-model"
+  }
+}
