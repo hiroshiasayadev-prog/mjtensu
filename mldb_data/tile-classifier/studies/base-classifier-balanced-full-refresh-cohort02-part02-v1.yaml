@@ -1,0 +1,50 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/base-classifier-balanced-full-refresh-cohort02-part02-v1",
+  "status": "sealed",
+  "name": "Base classifier balanced/full refresh cohort 02 part 02",
+  "description": "Re-evaluate one non-overlapping architecture cohort of completed 35-class base classifiers without retraining. Each model receives the same Blender v6 balanced 34x100 known-tile class-recall gate and the same sealed real manual full-class geometry/recrop/shift diagnostic, so chart metrics are refreshed under common evaluation definitions. Cohorting prevents duplicate architecture display labels from falling back to internal model identities. Operationally split from the sealed parent cohort to keep formal planning memory bounded; evaluation semantics and model identities are unchanged.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-b49bb08b07964cd1a2e562fc1ca26971-trial-0002-model",
+      "tile-classifier/run-b49bb08b07964cd1a2e562fc1ca26971-trial-0003-model",
+      "tile-classifier/run-05410d8f6a104ee09b35d1386fbcdd08-trial-0003-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0029-model",
+      "tile-classifier/run-93c70cce7fae4c05b4d211326c147130-trial-0002-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0030-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0035-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0032-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "blender-balanced-class-recall",
+      "corpus": "tile-classifier/blender-v6-balanced-front100-gray64-v2",
+      "protocol": "tile-classifier/tile-shape-blender-balanced-class-recall-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            512
+          ]
+        },
+        "recall_gate": {
+          "values": [
+            0.8
+          ]
+        }
+      }
+    },
+    {
+      "stage": "full-class-diagnostic",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-full-class-diagnostic-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            256
+          ]
+        }
+      }
+    }
+  ]
+}
