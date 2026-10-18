@@ -1,0 +1,43 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/missing-plain-v6-unified-replay-repair-w625-v1",
+  "status": "sealed",
+  "name": "Missing Plain v6 unified replay repair w625",
+  "description": "Repair evaluation-only Study for the exact unified-v6 w625 replay Model already trained in the interrupted part03 Pipeline. Re-runs both balanced Blender known-class recall and real full-class diagnostic without retraining.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-fe230e7d4343460888fdff76ac7691f6-trial-0007-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "blender-balanced-class-recall",
+      "corpus": "tile-classifier/blender-v6-balanced-front100-gray64-v2",
+      "protocol": "tile-classifier/tile-shape-blender-balanced-class-recall-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            512
+          ]
+        },
+        "recall_gate": {
+          "values": [
+            0.8
+          ]
+        }
+      }
+    },
+    {
+      "stage": "full-class-diagnostic",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-full-class-diagnostic-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            256
+          ]
+        }
+      }
+    }
+  ]
+}

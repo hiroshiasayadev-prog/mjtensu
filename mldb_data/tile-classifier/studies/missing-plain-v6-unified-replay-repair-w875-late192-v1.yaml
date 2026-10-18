@@ -1,0 +1,63 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/missing-plain-v6-unified-replay-repair-w875-late192-v1",
+  "status": "sealed",
+  "name": "Missing Plain v6 unified replay repair w875 late192",
+  "description": "Repair Study for the one unified-v6 replay architecture left untrained when part04 stopped. Trains w875-late192 under the same 150-epoch batch128 random360 seed42 v6 recipe, then runs the balanced Blender recall gate and real full-class diagnostic.",
+  "model": {
+    "train": {
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-train-gpu-v6",
+      "cases": [
+        {
+          "architecture": "tile-classifier/tile-plain-gray35-w875-late192-v1",
+          "parameters": {
+            "epochs": 150,
+            "batch_size": 128,
+            "learning_rate": 0.001,
+            "weight_decay": 0.0001,
+            "rotation_augment_deg": 180.0,
+            "augmentation_recipe": "random360-only-v1",
+            "checkpoint_eval_every": 5,
+            "amp": true,
+            "tf32": true,
+            "cache_device": "cuda",
+            "cache_vram_fraction": 0.5
+          },
+          "seed": 42
+        }
+      ]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "blender-balanced-class-recall",
+      "corpus": "tile-classifier/blender-v6-balanced-front100-gray64-v2",
+      "protocol": "tile-classifier/tile-shape-blender-balanced-class-recall-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            512
+          ]
+        },
+        "recall_gate": {
+          "values": [
+            0.8
+          ]
+        }
+      }
+    },
+    {
+      "stage": "full-class-diagnostic",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-full-class-diagnostic-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            256
+          ]
+        }
+      }
+    }
+  ]
+}
