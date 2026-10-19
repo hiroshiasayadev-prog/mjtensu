@@ -1,0 +1,49 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/classifier-jp-gate-full-refresh-batch06-v1",
+  "status": "sealed",
+  "name": "Classifier JP gate + full refresh batch 06",
+  "description": "Evaluation-only comparison batch across historical exact Models with retained canonical weights and seed-corrected v6 unified replay replacements for architectures whose historical weights were unavailable. Every Model receives the same balanced 34x200 jp_val known-class recall gate and the same real manual full-class diagnostic. Batch partitioning is operational only and prevents duplicate architecture display labels within one Study.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-1316c835f3334066ab720751cc269742-trial-0002-model",
+      "tile-classifier/run-b49bb08b07964cd1a2e562fc1ca26971-trial-0003-model",
+      "tile-classifier/run-05410d8f6a104ee09b35d1386fbcdd08-trial-0003-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0029-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0033-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0030-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0035-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "jp-val-balanced-class-recall",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-jp-val-balanced-class-recall-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            512
+          ]
+        },
+        "recall_gate": {
+          "values": [
+            0.8
+          ]
+        }
+      }
+    },
+    {
+      "stage": "full-class-diagnostic",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-full-class-diagnostic-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            256
+          ]
+        }
+      }
+    }
+  ]
+}

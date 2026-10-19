@@ -1,0 +1,87 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-jp-val-balanced-class-recall-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Tile shape JP validation balanced known-class recall",
+  "description": "Classification-feasibility gate on the existing held-out jp_val split: exactly 200 samples for each of the 34 known tile identities, with no invalid GT rows. The model retains all 35 outputs, so predicting invalid for a known tile counts as an error. Intended to provide a support-balanced worst-class recall gate; real manual perturbation diagnostics and Blender synthetic stress remain separate evidence.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "d788dcdc747643da1d79c0dd1b740d121b936bd652657b4f104edf74a92020d4"
+  },
+  "parameters": {
+    "batch_size": {
+      "default": 512,
+      "type": "integer",
+      "minimum": 1,
+      "description": "Inference batch size only."
+    },
+    "recall_gate": {
+      "default": 0.8,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Per-class recall boundary used only for reporting the below-gate class count."
+    }
+  },
+  "metrics": {
+    "accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Accuracy on the balanced 34-known-class jp_val population."
+    },
+    "macro_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Unweighted mean recall across the 34 known tile classes."
+    },
+    "worst_class_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Minimum recall across the 34 known tile classes, each with support 200."
+    },
+    "class_recall_below_gate_count": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower",
+      "description": "Number of known tile classes below recall_gate."
+    },
+    "invalid_prediction_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Fraction of known-tile GT samples predicted as invalid."
+    }
+  },
+  "artifacts": {
+    "class_recall_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/jp-val-balanced-class-recall/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "Per-class support, recall, gate status and dominant confusion."
+    },
+    "confusion_matrix": {
+      "format": "plotly-json",
+      "schema": "mjtensu.recognition/jp-val-balanced-confusion/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "34 true known-tile rows by all 35 model outputs."
+    },
+    "per_sample_predictions": {
+      "format": "jsonl",
+      "schema": "mjtensu.recognition/jp-val-balanced-predictions/v1",
+      "required": true,
+      "description": "Per-sample prediction evidence."
+    },
+    "report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/jp-val-balanced-class-recall-report/v1",
+      "required": true,
+      "description": "Structured gate population and metric summary."
+    }
+  }
+}
