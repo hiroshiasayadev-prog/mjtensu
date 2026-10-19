@@ -1,0 +1,72 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-onnx-cpu-latency-v4",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "ONNX CPU latency from accepted artifact (tile-classifier)",
+  "description": "Benchmark ORT CPUExecutionProvider on the exact accepted same-Study ONNX export. No PyTorch weights, model export, or corpus materialization on the CPU latency worker.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "b95b60e2fefa70b7e5bdf7c6d60eed4f10b9393746831761d3260c7a802fc9e4"
+  },
+  "artifact_inputs": {
+    "onnx_model": "onnx"
+  },
+  "artifact_only": true,
+  "parameters": {
+    "batch_size": {
+      "default": 1,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64
+    },
+    "warmup_runs": {
+      "default": 25,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "measure_runs": {
+      "default": 200,
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 10000
+    },
+    "intra_op_threads": {
+      "default": 1,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 128
+    },
+    "inter_op_threads": {
+      "default": 1,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 128
+    }
+  },
+  "metrics": {
+    "latency_p50_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "latency_p95_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    },
+    "latency_mean_ms": {
+      "type": "number",
+      "required": true,
+      "preference": "lower"
+    }
+  },
+  "artifacts": {
+    "latency_report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/tile-onnx-cpu-artifact-latency/v1",
+      "required": true
+    }
+  }
+}

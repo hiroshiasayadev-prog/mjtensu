@@ -1,0 +1,44 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/tile-c8-gray35-narrow-dwm222-dwfg221-pwg111-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "C8 narrow DWm 2/2/2; DW fields/group 2/2/1; PW groups 1/1/1",
+  "family": "c8-equivariant-cnn",
+  "description": "C8 narrow fields 4/8/16/32 with stage2/3/4 DW multipliers fixed at 2/2/2. DW3x3 uses 2/2/1 input fields per group on stages 2/3/4, followed by equivariant PW1x1 with group counts 1/1/1. Stage 1, pooling, GroupPooling, global average pooling, and the 35-logit head are unchanged.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sources": [
+      {
+        "path": "mldb_data/tile-classifier/lib/c8_narrow_stage234_grouped_dwpw_classifier_v1.py",
+        "sha256": "9218895567c8a59ca7645f6682d739b48078fc66f2a10190a909c30fd2073070"
+      }
+    ],
+    "sha256": "04ded7e353d3682fd3373983be97b8f9cf73619e8105ee5ce438cf272efb9010"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        1,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "C8 fields 4/8/16/32; DWm 2/2/2; DW fields/group 2/2/1; PW groups 1/1/1; GroupPooling -> GAP -> hidden 128 -> 35 logits",
+    "traits": [
+      "grayscale",
+      "c8-rotation-equivariant",
+      "group-pooled",
+      "stage234-dw-multiplier-2",
+      "dw-fields-per-group-2-2-1",
+      "pw-groups-1-1-1"
+    ]
+  }
+}
