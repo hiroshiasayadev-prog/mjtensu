@@ -1,0 +1,43 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/tile-c8-gray35-narrow-ge3x3-fpg221-pwg114-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "C8 narrow grouped-equivariant 3x3 fields/group 2/2/1; PW groups 1/1/4",
+  "family": "c8-equivariant-cnn",
+  "description": "C8 narrow fields 4/8/16/32 with stage2/3/4 grouped-equivariant 3x3 output-field multipliers fixed at 2/2/2 and input fields/group fixed at 2/2/1. Equivariant PW1x1 group counts are 1/1/4 on stages 2/3/4. Stage 1, pooling, GroupPooling, global average pooling, and the 35-logit head are unchanged.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sources": [
+      {
+        "path": "mldb_data/tile-classifier/lib/c8_narrow_stage234_grouped_dwpw_classifier_v1.py",
+        "sha256": "9218895567c8a59ca7645f6682d739b48078fc66f2a10190a909c30fd2073070"
+      }
+    ],
+    "sha256": "6f061be0b45cf4026d64af0138c6e82a894847ddc7a34729a89611c830eefecf"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        1,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "C8 fields 4/8/16/32; grouped-equivariant 3x3 output multipliers 2/2/2; fields/group 2/2/1; PW groups 1/1/4; GroupPooling -> GAP -> hidden 128 -> 35 logits",
+    "traits": [
+      "grayscale",
+      "c8-rotation-equivariant",
+      "group-pooled",
+      "grouped-equivariant-3x3-fields-per-group-2-2-1",
+      "pw-groups-1-1-4"
+    ]
+  }
+}
