@@ -1,0 +1,111 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/c8-shufflenet-fair-mixheavy-b128-v1",
+  "status": "sealed",
+  "name": "C8 vs ShuffleNet fair mix-heavy batch128 comparison",
+  "description": "Controlled architecture comparison of Full C8, dense C8 narrow, current C8 narrow DW2/2/2, ShuffleNetV2 0.5x S1 pool, and ShuffleNetV2 0.5x S1 no-pool. All five candidates use the same corpus, v6 training protocol, seed 42, 150 epochs, batch 128, AdamW hyperparameters, and INV-013 mix-heavy augmentation. Quality is measured with the same balanced JP known-class recall gate and full real-condition diagnostic.",
+  "model": {
+    "train": {
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-train-gpu-v6",
+      "architectures": [
+        "tile-classifier/tile-c8-gray35-v1",
+        "tile-classifier/tile-c8-gray35-narrow-v1",
+        "tile-classifier/tile-c8-gray35-narrow-stage234-dw-m2-m2-m2-v1",
+        "tile-classifier/tile-shufflenet-s05-s1-pool-v1",
+        "tile-classifier/tile-shufflenet-s05-s1-nopool-v1"
+      ],
+      "parameters": {
+        "epochs": {
+          "values": [
+            150
+          ]
+        },
+        "batch_size": {
+          "values": [
+            128
+          ]
+        },
+        "learning_rate": {
+          "values": [
+            0.001
+          ]
+        },
+        "weight_decay": {
+          "values": [
+            0.0001
+          ]
+        },
+        "rotation_augment_deg": {
+          "values": [
+            180.0
+          ]
+        },
+        "augmentation_recipe": {
+          "values": [
+            "inv013-mix-heavy-v1"
+          ]
+        },
+        "checkpoint_eval_every": {
+          "values": [
+            5
+          ]
+        },
+        "amp": {
+          "values": [
+            true
+          ]
+        },
+        "tf32": {
+          "values": [
+            true
+          ]
+        },
+        "cache_device": {
+          "values": [
+            "cuda"
+          ]
+        },
+        "cache_vram_fraction": {
+          "values": [
+            0.5
+          ]
+        }
+      },
+      "seeds": [
+        42
+      ]
+    }
+  },
+  "evaluations": [
+    {
+      "stage": "jp-val-balanced-class-recall",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-jp-val-balanced-class-recall-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            512
+          ]
+        },
+        "recall_gate": {
+          "values": [
+            0.8
+          ]
+        }
+      }
+    },
+    {
+      "stage": "full-class-diagnostic",
+      "corpus": "tile-classifier/gray35-jp500-seed42-v3-jp189-v1",
+      "protocol": "tile-classifier/tile-shape-full-class-diagnostic-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            256
+          ]
+        }
+      }
+    }
+  ]
+}
