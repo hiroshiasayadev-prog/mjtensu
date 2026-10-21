@@ -1,0 +1,162 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-full-class-diagnostic-v2",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Tile shape balanced manual+JP full-class robustness diagnostic",
+  "description": "Evaluate the balanced manual_jp_val holdout from manual-jp-val-balanced100-v1 across the same 15 deterministic geometry/recrop/shift conditions established by v1. The 34 valid tile classes each have support 100 and invalid has support 32. Retain the v1 aggregate robustness metrics for direct quality-map use, while adding a one-row-per-class robustness summary table with front recall, mean-condition recall, worst-condition recall, the responsible condition, and dominant wrong prediction. The per-class summary is selectable by Model/trial in the Study view.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "b2e6297315487de05a7e31e9b42209c05c96c3d1731cc77bb98d27d8c088d0c0"
+  },
+  "parameters": {
+    "batch_size": {
+      "default": 256,
+      "type": "integer",
+      "minimum": 1,
+      "description": "Inference batch size; does not change the authored evaluation population or perturbation conditions."
+    }
+  },
+  "metrics": {
+    "front_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Overall classification accuracy across the complete 35-class manual_val population under the unperturbed front-facing condition."
+    },
+    "front_macro_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Unweighted mean of the 35 per-class recalls under the front-facing condition."
+    },
+    "front_worst_class_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Minimum per-class recall among all 35 classes under the front-facing condition."
+    },
+    "mean_condition_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Arithmetic mean of overall 35-class accuracy across every authored geometry, recrop, and shift condition."
+    },
+    "worst_condition_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Minimum overall 35-class accuracy across every authored geometry, recrop, and shift condition."
+    },
+    "mean_condition_macro_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Arithmetic mean across conditions of the unweighted 35-class macro recall."
+    },
+    "worst_condition_macro_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Minimum unweighted 35-class macro recall across all authored perturbation conditions."
+    },
+    "worst_class_condition_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Minimum recall over every class-by-condition cell, exposing the single weakest observed class/perturbation combination."
+    },
+    "front_true_margin_mean": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral",
+      "description": "Mean front-facing true-class raw-logit margin. Logit scale is model dependent, so this is a within-model diagnostic rather than a calibrated cross-architecture score."
+    },
+    "mean_condition_true_margin": {
+      "type": "number",
+      "required": true,
+      "preference": "neutral",
+      "description": "Arithmetic mean across conditions of mean true-class raw-logit margin. Use primarily for within-model perturbation sensitivity because logit scale is model dependent."
+    },
+    "true_6m_to_5m_or_7m_confusion_max": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Maximum across conditions of the fraction of true 6m samples predicted specifically as 5m or 7m; this is a directional secondary manzu slice."
+    }
+  },
+  "artifacts": {
+    "condition_summary_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/tile-full-class-condition-summary/v1",
+      "required": true,
+      "description": "One row per deterministic perturbation with overall accuracy/error rate, macro and worst-class recall, true probability, true margin, and the focused true-6m-to-5m-or-7m rate."
+    },
+    "per_class_condition_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/tile-full-class-per-class-condition/v1",
+      "required": true,
+      "description": "All 35 classes for every condition with sample count, recall/error rate, true probability/margin, and dominant wrong prediction."
+    },
+    "per_class_robustness_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/tile-balanced-full-class-per-class-robustness/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "One row per classifier output class. Shows balanced support, front-facing recall, mean recall across all 15 conditions, worst-condition recall and condition name, plus the dominant wrong prediction in that worst condition. Selectable per Model/trial."
+    },
+    "front_confusion_matrix": {
+      "format": "plotly-json",
+      "schema": "mjtensu.recognition/tile-full-class-confusion-plot/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "Full 35x35 front-facing confusion-count heatmap with true and predicted class labels and row-share hover evidence."
+    },
+    "robustness_accuracy_recall_plot": {
+      "format": "plotly-json",
+      "schema": "mjtensu.recognition/tile-full-class-robustness-accuracy-recall-plot/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "Condition curve containing only rate-scale quantities: overall accuracy, 35-class macro recall, and worst-class recall."
+    },
+    "robustness_true_margin_plot": {
+      "format": "plotly-json",
+      "schema": "mjtensu.recognition/tile-full-class-robustness-true-margin-plot/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "Separate condition curve for mean true-class raw-logit margin so model-dependent margin scale is not mixed with accuracy/recall rates."
+    },
+    "class_condition_recall_heatmap": {
+      "format": "plotly-json",
+      "schema": "mjtensu.recognition/tile-full-class-condition-recall-heatmap/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "35-class by perturbation-condition recall heatmap for locating weak classes and weak perturbations directly."
+    },
+    "class_error_contact_sheet": {
+      "format": "png",
+      "schema": "mjtensu.recognition/tile-full-class-error-inspection-contact-sheet/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "Deterministic 35-panel inspection sheet. Each class shows its lowest-margin front-facing crop and its lowest-margin sample/condition event across the complete robustness sweep."
+    },
+    "manzu_focus_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/tile-full-class-manzu-focus/v1",
+      "required": true,
+      "description": "Secondary 5m/6m/7m slice with per-condition recalls and the directional fraction of true 6m samples predicted as 5m or 7m."
+    },
+    "per_sample_details": {
+      "format": "jsonl",
+      "schema": "mjtensu.recognition/tile-full-class-samples/v1",
+      "required": true,
+      "description": "Per-sample prediction, correctness, true probability, true margin, and top-3 output for every deterministic perturbation condition."
+    },
+    "diagnostic_report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/tile-balanced-full-class-diagnostic-report/v2",
+      "required": true,
+      "description": "Structured balanced-corpus full-class robustness report including aggregate metrics, condition summaries, per-class/per-condition evidence and the one-row-per-class robustness summary."
+    }
+  }
+}
