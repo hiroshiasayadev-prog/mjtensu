@@ -1,0 +1,42 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/tile-c8-gray35-narrow-stage4-dw3-pw1-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "C8 narrow stage4 field-wise DW3x3 + equivariant PW1x1 classifier",
+  "family": "c8-equivariant-cnn",
+  "description": "C8 narrow fields 4/8/16/32. Stages 1, 2, and 3 match tile-c8-gray35-narrow-v1. Stage 4 replaces the 16->32-field equivariant 3x3 with field-wise grouped 16->16-field equivariant DW3x3 followed by equivariant PW1x1 16->32, with equivariant BatchNorm/ReLU after each convolution. GroupPooling, global average pooling, and the 35-logit head are unchanged.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sources": [
+      {
+        "path": "mldb_data/tile-classifier/lib/c8_narrow_selective_dw3_pw1_classifier_v1.py",
+        "sha256": "2261a2501a1a9544abef91968f9198701c8a5cd12eb3f0321c4c5ab67f3a69c9"
+      }
+    ],
+    "sha256": "e7504263555371fe860c3fc7342972b532b05760f3a7affa39c379e4d4f26b32"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        1,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "C8 fields 4/8/16/32; stage4 only is field-wise DW3x3 + equivariant PW1x1; other stages unchanged; GroupPooling -> AdaptiveAvgPool2d(1) -> hidden 128 -> 35 logits",
+    "traits": [
+      "grayscale",
+      "c8-rotation-equivariant",
+      "group-pooled",
+      "stage4-field-wise-depthwise-separable"
+    ]
+  }
+}

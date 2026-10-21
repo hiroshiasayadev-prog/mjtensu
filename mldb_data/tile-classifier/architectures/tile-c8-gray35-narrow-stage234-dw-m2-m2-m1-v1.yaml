@@ -1,0 +1,44 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/tile-c8-gray35-narrow-stage234-dw-m2-m2-m1-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "C8 narrow stage2/3/4 DW multipliers 2/2/1 classifier",
+  "family": "c8-equivariant-cnn",
+  "description": "C8 narrow fields 4/8/16/32. Stage 2 uses field-wise equivariant DW3x3 multiplier 2; stage 3 multiplier 2; stage 4 multiplier 1; each is followed by equivariant PW1x1 to the baseline stage output field count. Stage 1 remains full equivariant 5x5. GroupPooling, global average pooling, and the 35-logit head are unchanged.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sources": [
+      {
+        "path": "mldb_data/tile-classifier/lib/c8_narrow_stage234_dw_multiplier_classifier_v1.py",
+        "sha256": "3bf875f02939000dd2fd92537f22f157d5e60e58d150152f3a09abdf6f6bc594"
+      }
+    ],
+    "sha256": "4f37f3cc6b1653d461d614b91e61a18631a8972fd75d1cc173456c4e73629bad"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        1,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "C8 fields 4/8/16/32; stage multipliers 2/2/1; DW3x3 -> equivariant PW1x1 on stages 2-4; GroupPooling -> AdaptiveAvgPool2d(1) -> hidden 128 -> 35 logits",
+    "traits": [
+      "grayscale",
+      "c8-rotation-equivariant",
+      "group-pooled",
+      "stage2-depth-multiplier-2",
+      "stage3-depth-multiplier-2",
+      "stage4-depth-multiplier-1"
+    ]
+  }
+}
