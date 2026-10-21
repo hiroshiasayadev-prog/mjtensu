@@ -1,0 +1,117 @@
+{
+  "schema": "mjtensu.mldb-v2/evaluation-protocol/v1",
+  "id": "tile-classifier/tile-shape-manual-jp-balanced-class-diagnostic-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "Tile shape manual plus JP balanced class diagnostic",
+  "description": "Evaluate the balanced manual_jp_val holdout at front-facing orientation. The 34 valid tile classes each have exactly 100 samples; invalid remains a separate 32-sample manually reviewed holdout. Primary metrics characterize valid-tile discrimination quality without mixing invalid support into valid-class macro statistics: macro recall, worst-class recall, mean recall of the weakest five classes, below-gate class count, valid-to-invalid rejection rate, macro precision and macro F1. Invalid recall and precision are reported separately.",
+  "implementation": {
+    "entrypoint": "evaluate",
+    "sha256": "403a2bca74c844a60a4829404c4fb08db188e74619825f0f197d488d1b4c9c07"
+  },
+  "parameters": {
+    "batch_size": {
+      "default": 512,
+      "type": "integer",
+      "minimum": 1,
+      "description": "Inference batch size only."
+    },
+    "recall_gate": {
+      "default": 0.8,
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Per-valid-class recall threshold used for the below-gate class count."
+    }
+  },
+  "metrics": {
+    "valid_accuracy": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Accuracy across the 3400 valid-tile GT samples."
+    },
+    "valid_macro_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Unweighted mean recall across the 34 valid tile classes."
+    },
+    "valid_worst_class_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Minimum recall across the 34 valid tile classes, each with support 100."
+    },
+    "valid_bottom5_class_recall_mean": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Arithmetic mean recall of the five weakest valid tile classes."
+    },
+    "valid_class_recall_below_gate_count": {
+      "type": "integer",
+      "required": true,
+      "preference": "lower",
+      "description": "Number of valid tile classes whose recall is below recall_gate."
+    },
+    "valid_to_invalid_rate": {
+      "type": "number",
+      "required": true,
+      "preference": "lower",
+      "description": "Fraction of valid-tile GT samples predicted as invalid."
+    },
+    "valid_macro_precision": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Unweighted mean precision across the 34 valid tile outputs; predictions from invalid GT also contribute false positives."
+    },
+    "valid_macro_f1": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Unweighted mean F1 across the 34 valid tile classes."
+    },
+    "invalid_recall": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Recall on the separate 32-sample manually reviewed invalid holdout."
+    },
+    "invalid_precision": {
+      "type": "number",
+      "required": true,
+      "preference": "higher",
+      "description": "Precision of the invalid output across the complete manual_jp_val population."
+    }
+  },
+  "artifacts": {
+    "class_metrics_table": {
+      "format": "csv",
+      "schema": "mjtensu.recognition/manual-jp-balanced-class-metrics/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "Per-class support, prediction count, recall, precision, F1, gate status and dominant confusion for all 35 outputs."
+    },
+    "confusion_matrix": {
+      "format": "plotly-json",
+      "schema": "mjtensu.recognition/manual-jp-balanced-confusion/v1",
+      "required": true,
+      "study_view": "select",
+      "description": "Full 35x35 confusion-count heatmap for the balanced valid-tile holdout plus separate invalid rows."
+    },
+    "per_sample_predictions": {
+      "format": "jsonl",
+      "schema": "mjtensu.recognition/manual-jp-balanced-predictions/v1",
+      "required": true,
+      "description": "Per-sample prediction, confidence, correctness and source provenance."
+    },
+    "report": {
+      "format": "json",
+      "schema": "mjtensu.recognition/manual-jp-balanced-class-diagnostic-report/v1",
+      "required": true,
+      "description": "Structured population, metric, bottom-five and per-class diagnostic report."
+    }
+  }
+}

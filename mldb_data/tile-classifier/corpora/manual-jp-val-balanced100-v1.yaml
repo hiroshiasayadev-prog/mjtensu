@@ -1,0 +1,35 @@
+{
+  "schema": "mjtensu.mldb-v2/corpus/v1",
+  "id": "tile-classifier/manual-jp-val-balanced100-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "description": "Classifier diagnostic corpus derived from gray35-jp500-seed42-v3-jp189-v1. The original train and jp_val splits are preserved. manual_val keeps every existing manual/detector-manual holdout sample and is deterministically supplemented from previously unused coco_mahjong_jp_v2 valid crops until each of the 34 valid tile classes has exactly 100 samples. Supplemental JP crops exclude every crop already present in canonical jp_val or train and apply the existing quality-audit correction policy. The invalid holdout remains the original 32 manually reviewed samples because JP valid has no invalid ground truth.",
+  "storage": {
+    "root_uri": "s3://mldb-corpora/tile-classifier/manual-jp-val-balanced100-v1"
+  },
+  "manifest": {
+    "file": "manual-jp-val-balanced100-v1.manifest.jsonl",
+    "sha256": "c15d08fefcd22105398749c0e8addb63a82754cad4e79a2432911b7204e4dea5",
+    "entries": 1
+  },
+  "representation": {
+    "kind": "sqlite-image-classification",
+    "file": "dataset.sqlite",
+    "table": "sample",
+    "image_column": "image_gray_u8",
+    "label_column": "class_index",
+    "dtype": "uint8",
+    "shape": [
+      1,
+      64,
+      64
+    ],
+    "holdout_semantics": "manual_val has exactly 100 samples for each of 34 valid tile classes; invalid remains 32 original manual holdout samples; supplemental JP rows come only from source_partition=valid and exclude all canonical jp_val/train crop_ids",
+    "sampling_seed": 42
+  },
+  "splits": {
+    "jp_val": 6800,
+    "manual_val": 3432,
+    "train": 19593
+  }
+}

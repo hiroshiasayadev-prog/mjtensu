@@ -1,0 +1,61 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/manual-jp-balanced-all-models-batch03-v1",
+  "status": "sealed",
+  "name": "Manual + JP balanced all base classifiers batch 03",
+  "description": "Evaluation-only batch over canonical completed base-tile classifier Models. Each Model is evaluated on manual-jp-val-balanced100-v1 using balanced valid-class metrics: macro recall, worst-class recall, weakest-five mean recall, below-0.8 class count, valid-to-invalid rate, macro precision/F1, and separate invalid recall/precision. Batching is operational only and keeps architecture display names unique within one Study.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-ac1a2514af214cb69977972c0278ab39-trial-0001-model",
+      "tile-classifier/run-fe230e7d4343460888fdff76ac7691f6-trial-0001-model",
+      "tile-classifier/run-fe230e7d4343460888fdff76ac7691f6-trial-0002-model",
+      "tile-classifier/run-fe230e7d4343460888fdff76ac7691f6-trial-0003-model",
+      "tile-classifier/run-1f32498f05c547308a8e7b1dbe746c94-trial-0001-model",
+      "tile-classifier/run-feb3c9068cb549ff9ec950ae5495a56c-trial-0002-model",
+      "tile-classifier/run-feb3c9068cb549ff9ec950ae5495a56c-trial-0001-model",
+      "tile-classifier/run-feb3c9068cb549ff9ec950ae5495a56c-trial-0003-model",
+      "tile-classifier/run-feb3c9068cb549ff9ec950ae5495a56c-trial-0005-model",
+      "tile-classifier/run-feb3c9068cb549ff9ec950ae5495a56c-trial-0006-model",
+      "tile-classifier/run-fbcb36a1c8e04adfacfe2725c6963c49-trial-0006-model",
+      "tile-classifier/run-fbcb36a1c8e04adfacfe2725c6963c49-trial-0007-model",
+      "tile-classifier/run-61942c2852a94301a983c87e27472017-trial-0001-model",
+      "tile-classifier/run-feb3c9068cb549ff9ec950ae5495a56c-trial-0004-model",
+      "tile-classifier/run-bc6fe4f59d1946daa7dbd95f8ac85d1c-trial-0006-model",
+      "tile-classifier/run-fe230e7d4343460888fdff76ac7691f6-trial-0005-model",
+      "tile-classifier/run-bc6fe4f59d1946daa7dbd95f8ac85d1c-trial-0005-model",
+      "tile-classifier/run-fe230e7d4343460888fdff76ac7691f6-trial-0007-model",
+      "tile-classifier/run-9532b4eb16304ec79b91acc2e89e8838-trial-0001-model",
+      "tile-classifier/run-9532b4eb16304ec79b91acc2e89e8838-trial-0002-model",
+      "tile-classifier/run-c9fad632c9774c479db348576153577b-trial-0001-model",
+      "tile-classifier/run-9532b4eb16304ec79b91acc2e89e8838-trial-0004-model",
+      "tile-classifier/run-9532b4eb16304ec79b91acc2e89e8838-trial-0005-model",
+      "tile-classifier/run-9532b4eb16304ec79b91acc2e89e8838-trial-0006-model",
+      "tile-classifier/run-1316c835f3334066ab720751cc269742-trial-0002-model",
+      "tile-classifier/run-96cd149330af4e019d1353a2919e55f1-trial-0001-model",
+      "tile-classifier/run-fbcb36a1c8e04adfacfe2725c6963c49-trial-0001-model",
+      "tile-classifier/run-de1563ab21f7445fbcfa1fbea9e31d83-trial-0004-model",
+      "tile-classifier/run-de1563ab21f7445fbcfa1fbea9e31d83-trial-0005-model",
+      "tile-classifier/run-91cb550fbde345da90c068dcb96e4561-trial-0002-model",
+      "tile-classifier/run-91cb550fbde345da90c068dcb96e4561-trial-0001-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "manual-jp-balanced-class-diagnostic",
+      "corpus": "tile-classifier/manual-jp-val-balanced100-v1",
+      "protocol": "tile-classifier/tile-shape-manual-jp-balanced-class-diagnostic-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            512
+          ]
+        },
+        "recall_gate": {
+          "values": [
+            0.8
+          ]
+        }
+      }
+    }
+  ]
+}

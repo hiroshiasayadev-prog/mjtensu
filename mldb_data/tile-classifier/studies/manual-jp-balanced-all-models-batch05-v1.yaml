@@ -1,0 +1,34 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/manual-jp-balanced-all-models-batch05-v1",
+  "status": "sealed",
+  "name": "Manual + JP balanced all base classifiers batch 05",
+  "description": "Evaluation-only batch over canonical completed base-tile classifier Models. Each Model is evaluated on manual-jp-val-balanced100-v1 using balanced valid-class metrics: macro recall, worst-class recall, weakest-five mean recall, below-0.8 class count, valid-to-invalid rate, macro precision/F1, and separate invalid recall/precision. Batching is operational only and keeps architecture display names unique within one Study.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0039-model",
+      "tile-classifier/run-93c70cce7fae4c05b4d211326c147130-trial-0001-model",
+      "tile-classifier/run-37fce81c9201434a9258d181143fb941-trial-0001-model",
+      "tile-classifier/run-ebb90392c6ad4c19865e6a2315074c55-trial-0001-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "manual-jp-balanced-class-diagnostic",
+      "corpus": "tile-classifier/manual-jp-val-balanced100-v1",
+      "protocol": "tile-classifier/tile-shape-manual-jp-balanced-class-diagnostic-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            512
+          ]
+        },
+        "recall_gate": {
+          "values": [
+            0.8
+          ]
+        }
+      }
+    }
+  ]
+}
