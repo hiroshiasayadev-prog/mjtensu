@@ -1,0 +1,26 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/v6-replay-manual-jp-balanced-full-class-robustness-cohort03-v1",
+  "status": "sealed",
+  "name": "V6 replay balanced full-class robustness cohort 03",
+  "description": "Evaluation-only cohort from the 42 canonical Models produced by v6-replay-all-v5-affected-conditions-v1. Cohorts are partitioned only so that user-facing Architecture display names are unique within each Existing-Model Study; this prevents internal model/trial identifiers from leaking into ClearML labels. Every selected Model has a currently present canonical S3 weights object. Evaluate manual-jp-val-balanced100-v1 with tile-shape-full-class-diagnostic-v2 using the same 15 deterministic geometry/recrop/shift conditions as the historical diagnostic.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0037-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "balanced-full-class-robustness",
+      "corpus": "tile-classifier/manual-jp-val-balanced100-v1",
+      "protocol": "tile-classifier/tile-shape-full-class-diagnostic-v2",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            512
+          ]
+        }
+      }
+    }
+  ]
+}

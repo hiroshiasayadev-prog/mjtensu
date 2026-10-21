@@ -1,0 +1,63 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/v6-replay-manual-jp-balanced-full-class-robustness-cohort01-v1",
+  "status": "sealed",
+  "name": "V6 replay balanced full-class robustness cohort 01",
+  "description": "Evaluation-only cohort from the 42 canonical Models produced by v6-replay-all-v5-affected-conditions-v1. Cohorts are partitioned only so that user-facing Architecture display names are unique within each Existing-Model Study; this prevents internal model/trial identifiers from leaking into ClearML labels. Every selected Model has a currently present canonical S3 weights object. Evaluate manual-jp-val-balanced100-v1 with tile-shape-full-class-diagnostic-v2 using the same 15 deterministic geometry/recrop/shift conditions as the historical diagnostic.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0001-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0002-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0003-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0004-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0005-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0006-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0007-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0008-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0009-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0010-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0011-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0012-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0013-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0014-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0015-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0016-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0017-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0018-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0019-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0020-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0021-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0022-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0023-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0024-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0025-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0026-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0027-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0028-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0029-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0030-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0031-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0032-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0033-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0034-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0035-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0038-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0040-model",
+      "tile-classifier/run-869049bb06b64f8b8db36b6a7d824309-trial-0041-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "balanced-full-class-robustness",
+      "corpus": "tile-classifier/manual-jp-val-balanced100-v1",
+      "protocol": "tile-classifier/tile-shape-full-class-diagnostic-v2",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            512
+          ]
+        }
+      }
+    }
+  ]
+}
