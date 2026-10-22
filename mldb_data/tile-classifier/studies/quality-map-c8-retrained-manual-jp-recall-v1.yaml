@@ -1,0 +1,35 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/quality-map-c8-retrained-manual-jp-recall-v1",
+  "status": "sealed",
+  "name": "Quality map retrained C8 manual JP recall",
+  "description": "Evaluation-only balanced manual+JP class diagnostic for the five same-condition retrained C8 narrow Models used to recover historical quality-map points. This closes the previously omitted worst-class-recall gate measurement; no training or model substitution is performed.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-5aa551a9e90c44a183201bb2771f84b7-trial-0001-model",
+      "tile-classifier/run-5aa551a9e90c44a183201bb2771f84b7-trial-0002-model",
+      "tile-classifier/run-5aa551a9e90c44a183201bb2771f84b7-trial-0003-model",
+      "tile-classifier/run-5aa551a9e90c44a183201bb2771f84b7-trial-0004-model",
+      "tile-classifier/run-5aa551a9e90c44a183201bb2771f84b7-trial-0005-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "manual-jp-balanced-class-diagnostic",
+      "corpus": "tile-classifier/manual-jp-val-balanced100-v1",
+      "protocol": "tile-classifier/tile-shape-manual-jp-balanced-class-diagnostic-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            512
+          ]
+        },
+        "recall_gate": {
+          "values": [
+            0.8
+          ]
+        }
+      }
+    }
+  ]
+}
