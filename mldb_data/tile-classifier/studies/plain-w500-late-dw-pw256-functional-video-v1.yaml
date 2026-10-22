@@ -1,0 +1,36 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "tile-classifier/plain-w500-late-dw-pw256-functional-video-v1",
+  "status": "sealed",
+  "name": "Plain 0.5x late-DW/PW256 functional video",
+  "description": "Replay the sealed five-video recognition corpus with the historical Plain 0.5x late-DW/PW256 model that exhibits 5m/6m/7m confusion, keeping detector and red-five models fixed, and emit the existing overlay video for visual inspection.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-c325ff0a0d0147c180b38f55d79a3409-trial-0001-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "recognition-functional-video",
+      "corpus": "tile-classifier/recognition-e2e-night-iphone13-v1",
+      "protocol": "tile-classifier/tile-shape-recognition-functional-video-v7",
+      "parameters": {
+        "detector_model": {
+          "values": [
+            "recognition-runtime/nanodet-plus-m-320-real-capture-ft10-l10-v1"
+          ]
+        },
+        "red_five_model": {
+          "values": [
+            "recognition-runtime/red-five-c8-rgb-warmaug-v1"
+          ]
+        },
+        "detector_score_threshold": {
+          "values": [
+            0.35
+          ]
+        }
+      }
+    }
+  ]
+}
