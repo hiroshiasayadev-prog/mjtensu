@@ -11,6 +11,7 @@ from mldb_v2.src.runtime_registry import (
     ManagedRuntimeMaterializer,
     RuntimeRegistryError,
     RuntimeRegistrySnapshot,
+    _runtime_packages,
     _snapshot_sha256,
     maybe_reexec_managed_worker_runtime,
 )
@@ -59,6 +60,23 @@ def _snapshot(version: int, packages: dict[str, str]) -> RuntimeRegistrySnapshot
         pyproject_toml=pyproject,
         uv_lock=uv_lock,
     )
+
+
+def test_runtime_packages_accept_exact_pin_with_extras() -> None:
+    base = _snapshot(9, {"psycopg": "3.3.6"})
+    pyproject = base.pyproject_toml.replace(
+        b'"psycopg==3.3.6"', b'"psycopg[binary,pool]==3.3.6"'
+    )
+    snapshot = RuntimeRegistrySnapshot(
+        version=base.version,
+        snapshot_sha256=_snapshot_sha256(pyproject, base.uv_lock),
+        pyproject_toml=pyproject,
+        uv_lock=base.uv_lock,
+    )
+
+    packages = _runtime_packages(snapshot)
+
+    assert packages["psycopg"].version == "3.3.6"
 
 
 class _Registry:

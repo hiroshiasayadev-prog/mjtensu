@@ -23,7 +23,9 @@ from typing import Callable, Mapping, Sequence
 
 DEFAULT_RUNTIME_REGISTRY_URL = "https://mjtensu-dev.home.arpa/mldb-runtime-registry/"
 _NAME_RE = re.compile(r"[-_.]+")
-_EXACT_REQUIREMENT_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==([^;\s]+)$")
+_EXACT_REQUIREMENT_RE = re.compile(
+    r"^([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[A-Za-z0-9._-]+(?:,[A-Za-z0-9._-]+)*\])?==([^;\s]+)$"
+)
 _DIRECT_URL_REQUIREMENT_RE = re.compile(
     r"^([A-Za-z0-9][A-Za-z0-9._-]*)\s*@\s*(https?://\S+)$"
 )
