@@ -6,7 +6,9 @@ from mldb_v2.src.common.ids import (
     EvaluationProtocolId,
     ModelId,
     StudyId,
+    StudyResultId,
     TrainProtocolId,
+    TrialId,
 )
 from mldb_v2.src.common.parameters import PublicParameterValue
 
@@ -62,6 +64,12 @@ class EvaluationStage(TypedDict):
     inputs: NotRequired[Mapping[str, Mapping[str, str]]]
 
 
+class StudyComparator(TypedDict):
+    label: str
+    study_result: StudyResultId
+    trial: TrialId
+
+
 class Study(TypedDict):
     schema: Literal["mjtensu.mldb-v2/study/v1"]
     id: StudyId
@@ -70,3 +78,4 @@ class Study(TypedDict):
     description: str
     model: StudyModelSource
     evaluations: list[EvaluationStage]
+    comparators: NotRequired[list[StudyComparator]]

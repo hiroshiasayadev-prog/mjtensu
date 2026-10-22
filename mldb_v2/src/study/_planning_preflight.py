@@ -24,6 +24,7 @@ from mldb_v2.src.evaluation.evaluation_protocol import (
     _load_evaluation_protocol_definition,
 )
 from mldb_v2.src.repository.resolution import CanonicalRepositoryResolver
+from mldb_v2.src.results.study_result import StudyResult, _validate_study_result
 from mldb_v2.src.study._study_validation import _load_study_definition
 from mldb_v2.src.study.study import (
     EvaluationParameterGrid,
@@ -99,11 +100,18 @@ _ModelPlanningInput: TypeAlias = _TrainingPlanningInput | _ExistingModelPlanning
 
 
 @dataclass(frozen=True)
+class _ComparatorPlanningInput:
+    label: str
+    study_result: StudyResult
+    trial: Mapping[str, object]
+
+@dataclass(frozen=True)
 class _StudyPlanningInput:
     study: Study
     task: Task
     model: _ModelPlanningInput
     evaluations: tuple[_EvaluationPlanningInput, ...]
+    comparators: tuple[_ComparatorPlanningInput, ...] = ()
 
 
 class _StudyPlanningPreflight:
@@ -148,6 +156,7 @@ class _StudyPlanningPreflight:
             else:
                 planning_model, task = self._prepare_existing(model["existing"])
             evaluations = self._prepare_evaluations(study["evaluations"])
+            comparators = self._prepare_comparators(study.get("comparators", []))
         except (OSError, UnicodeError, ValueError, TypeError, KeyError) as error:
             raise _PlanningPreflightError("planning_input_resolution_failed") from error
 
@@ -156,6 +165,7 @@ class _StudyPlanningPreflight:
             task=task,
             model=planning_model,
             evaluations=evaluations,
+            comparators=comparators,
         )
 
     def _prepare_training(self, source) -> tuple[_TrainingPlanningInput, Task]:
@@ -229,6 +239,33 @@ class _StudyPlanningPreflight:
             )
         task = _load_task(self._resolver, TaskId(entries[0].task_id))
         return _ExistingModelPlanningInput(models=tuple(entries)), task
+
+    def _prepare_comparators(self, comparators) -> tuple[_ComparatorPlanningInput, ...]:
+        prepared: list[_ComparatorPlanningInput] = []
+        for comparator in comparators:
+            raw_result = self._resolver.resolve(
+                kind=EntityKind.STUDY_RESULT, entity_id=str(comparator["study_result"])
+            )
+            result = _validate_study_result(raw_result)
+            if result["status"] not in {
+                "completed",
+                "completed_with_failures",
+                "failed",
+                "cancelled",
+            }:
+                raise ValueError("Study comparator must reference a terminal StudyResult")
+            trial_id = str(comparator["trial"])
+            matches = [trial for trial in result["trials"] if str(trial["trial"]) == trial_id]
+            if len(matches) != 1:
+                raise ValueError("Study comparator trial does not exist in referenced StudyResult")
+            prepared.append(
+                _ComparatorPlanningInput(
+                    label=str(comparator["label"]),
+                    study_result=result,
+                    trial=matches[0],
+                )
+            )
+        return tuple(prepared)
 
     def _prepare_evaluations(
         self, stages: list[EvaluationStage]

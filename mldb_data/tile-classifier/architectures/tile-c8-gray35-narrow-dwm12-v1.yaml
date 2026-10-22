@@ -1,0 +1,43 @@
+{
+  "schema": "mjtensu.mldb-v2/architecture/v1",
+  "id": "tile-classifier/tile-c8-gray35-narrow-dwm12-v1",
+  "status": "sealed",
+  "task": "tile-classifier/tile-shape-classification-35-v1",
+  "name": "C8 narrow DW multiplier stage3=1 stage4=2 classifier",
+  "family": "c8-equivariant-cnn",
+  "description": "C8 narrow fields 4/8/16/32. Stages 3 and 4 use field-wise equivariant DW3x3 with depth multipliers 1 and 2 respectively, followed by equivariant PW1x1 to the baseline output field count. Stages 1 and 2, GroupPooling, global average pooling, and the 35-logit head are unchanged.",
+  "implementation": {
+    "framework": "pytorch",
+    "entrypoint": "build",
+    "sources": [
+      {
+        "path": "mldb_data/tile-classifier/lib/c8_narrow_dw_multiplier_classifier_v1.py",
+        "sha256": "816a7584f7c709e2bf21bd28383293ca4d13f0aaabdc1e5e43c48e2e40544101"
+      }
+    ],
+    "sha256": "a7550318ebf42e45ad5e6a101608493f3b5fa658fe6c208329fcc22dd89aad1b"
+  },
+  "interface": {
+    "input": {
+      "kind": "image",
+      "shape": [
+        1,
+        64,
+        64
+      ]
+    },
+    "output": {
+      "kind": "classification-logits"
+    }
+  },
+  "structure": {
+    "summary": "C8 fields 4/8/16/32; stage3 DW multiplier 1; stage4 DW multiplier 2; equivariant PW1x1 after each DW block; GroupPooling -> AdaptiveAvgPool2d(1) -> hidden 128 -> 35 logits",
+    "traits": [
+      "grayscale",
+      "c8-rotation-equivariant",
+      "group-pooled",
+      "stage3-depth-multiplier-1",
+      "stage4-depth-multiplier-2"
+    ]
+  }
+}

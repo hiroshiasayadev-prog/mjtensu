@@ -79,16 +79,16 @@ Do not stop at step 9 when the user asked to run the experiment.
 
 Examples:
 
-    .\mldb.cmd validate train-protocol <namespace>/<id> --json
-    .\mldb.cmd verify train-protocol <namespace>/<id> --json
-    .\mldb.cmd seal train-protocol <namespace>/<id>
+    ./mldb.sh validate train-protocol <namespace>/<id> --json
+    ./mldb.sh verify train-protocol <namespace>/<id> --json
+    ./mldb.sh seal train-protocol <namespace>/<id>
 
 For a Study:
 
-    .\mldb.cmd validate study <namespace>/<study-id> --json
-    .\mldb.cmd verify study <namespace>/<study-id> --json
-    .\mldb.cmd seal study <namespace>/<study-id>
-    .\mldb.cmd plan <namespace>/<study-id>
+    ./mldb.sh validate study <namespace>/<study-id> --json
+    ./mldb.sh verify study <namespace>/<study-id> --json
+    ./mldb.sh seal study <namespace>/<study-id>
+    ./mldb.sh plan <namespace>/<study-id>
 
 Bulk verification is allowed, but mutation is intentionally explicit. Multi-target sealing requires both `--namespace` and `--all`.
 
@@ -140,6 +140,15 @@ Action: review `TELEMETRY.md`; for a sealed Protocol this is a semantic version 
 ## 8. Study design discipline
 
 A Study should express experiment intent, not reproduce implementation code. Keep comparison factors explicit, use deterministic seeds intentionally, and avoid multiplying definitions when a matrix is sufficient.
+
+When a useful baseline already exists as a canonical terminal Study Result, prefer `comparators` over retraining it only to draw the same comparison again. A comparator names a historical Study Result + trial and reuses its existing Evaluation Results read-only. Stage names are the comparison join key. MLDB does not require protocol/corpus/parameter equality; differences are surfaced as comparison notes so a deliberately non-identical historical baseline can still be useful.
+
+Example:
+
+    comparators:
+      - label: C8 narrow baseline
+        study_result: tile-classifier/run-ac1a2514af214cb69977972c0278ab39
+        trial: trial-0002
 
 Before execution, record what conclusion each Evaluation metric can support. Do not run a large sweep with no planned decision rule.
 

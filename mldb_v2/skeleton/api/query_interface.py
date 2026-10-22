@@ -36,14 +36,22 @@ class StudyProgress(TypedDict):
     total: ProgressCounter
 
 
+class StudyConditionView(TypedDict):
+    trial: TrialId
+    label: str
+    parameters: dict[str, object]
+
+
 class StudyResultView(TypedDict):
     study_result: StudyResult
     progress: StudyProgress
+    conditions: list[StudyConditionView]
 
 
 class StudyObservation(TypedDict):
     study_result: StudyResult
     progress: StudyProgress
+    conditions: list[StudyConditionView]
     backend_observations: list[BackendObservation]
 
 

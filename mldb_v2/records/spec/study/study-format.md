@@ -16,7 +16,8 @@ Evaluation stages; deterministic materialization belongs to the Study Plan.
 Schema is `mjtensu.mldb-v2/study/v1`.
 
 Required top-level fields are `schema`, full versioned `id`, `status`, non-empty `name`,
-`description`, `model`, and non-empty `evaluations`. `status` is `draft` or `sealed`.
+`description`, `model`, and non-empty `evaluations`. Optional top-level field `comparators`
+adds read-only historical comparison references. `status` is `draft` or `sealed`.
 
 `model` contains exactly one of `train` or `existing`; both or neither are invalid.
 
@@ -57,6 +58,25 @@ Evaluation axes create coordinates beneath each model trial and never create ret
 
 Every Study has at least one Evaluation stage; training-only and existing-Model no-op Studies are
 invalid in schema v1.
+
+## Historical comparators
+
+`comparators`, when present, is a non-empty authored-order list. Each item contains exactly:
+
+| field | contract |
+|---|---|
+| `label` | Unique non-empty display label. |
+| `study_result` | Canonical terminal Study Result reference. |
+| `trial` | Trial ID inside that Study Result. |
+
+Comparators are observational only: they create no Training/Evaluation stage, do not affect Study
+closure, and reuse the referenced canonical Evaluation Results without recomputation. Planning
+requires the referenced Study Result to be terminal and the named trial to exist. Comparison is
+intentionally permissive: corpus, Evaluation Protocol, and parameter equality are **not** required.
+When a current Evaluation stage and comparator stage share the same Study-local `stage` name, the
+comparison projection includes the historical row and annotates protocol/corpus/parameter differences
+instead of rejecting the reference. Authors remain responsible for interpreting non-equivalent
+conditions appropriately.
 
 ## Compatibility
 

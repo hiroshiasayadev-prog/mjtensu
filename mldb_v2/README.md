@@ -21,9 +21,11 @@ Formal contracts remain under `records/spec/`. These docs explain how to use tho
 
 ## Supported user entrypoint
 
-From the repository root, use `mldb.cmd` on Windows. It selects `.venv\Scripts\python.exe` when present and invokes `python -m mldb_v2.src.cli`.
+From the repository root on Linux, use `./mldb.sh`. It sets `MLDB_REPO_ROOT`, loads repository-local `.env` defaults without overriding the inherited process environment, and runs MLDB with Python 3.11+.
 
-Common commands include `mldb.cmd doctor`, `validate`, `verify`, `seal`, `plan`, `run`, `resume`, `retry-stage`, `rerun`, `status`, `watch`, and `logs`.
+It prefers a local `.venv/bin/python` or another compatible local Python. If the host intentionally has only an older system Python, it falls back to the provisioned `mldb-clearml-runner:torch2.5.1-cu124-v1` container while preserving the repository path and Git worktree metadata.
+
+Common commands include `./mldb.sh doctor`, `validate`, `verify`, `seal`, `plan`, `run`, `resume`, `retry-stage`, `rerun`, `status`, `watch`, and `logs`.
 
 Do not execute internal implementation files directly as the normal experiment workflow.
 

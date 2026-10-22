@@ -1,0 +1,73 @@
+{
+  "schema": "mjtensu.mldb-v2/study/v1",
+  "id": "mldb-smoke/c8-narrow-late2-fieldwise-dw-pw-feasibility-v1",
+  "status": "sealed",
+  "name": "C8 narrow stage3+4 field-wise DW3x3 + equivariant PW1x1 feasibility smoke v1",
+  "description": "NO-TRAINING infrastructure/export/device feasibility Study for condition c8-narrow-fields-4-8-16-32-stage3-stage4-fieldwise-dw3-pw1. The existing trained C8 narrow Model is only the schema-required Study/task anchor; its learned weights are neither loaded nor evaluated, and the Evaluation Protocols construct a deterministic untrained prototype internally. Stages 1-2 remain unchanged; stage 3 uses grouped 8->8 regular-field equivariant 3x3 followed by 8->16 equivariant 1x1 mixing, and stage 4 uses grouped 16->16 regular-field equivariant 3x3 followed by 16->32 equivariant 1x1 mixing. No training and no accuracy conclusion are part of this Study.",
+  "model": {
+    "existing": [
+      "tile-classifier/run-ac1a2514af214cb69977972c0278ab39-trial-0002-model"
+    ]
+  },
+  "evaluations": [
+    {
+      "stage": "onnx-cpu-latency",
+      "corpus": "mldb-smoke/tile-shape-runtime-no-data-v1",
+      "protocol": "mldb-smoke/c8-narrow-late2-fieldwise-dw-pw-onnx-cpu-smoke-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "measure_runs": {
+          "values": [
+            200
+          ]
+        },
+        "intra_op_threads": {
+          "values": [
+            1
+          ]
+        },
+        "inter_op_threads": {
+          "values": [
+            1
+          ]
+        }
+      }
+    },
+    {
+      "stage": "ort-web-iphone-latency",
+      "corpus": "mldb-smoke/tile-shape-runtime-no-data-v1",
+      "protocol": "mldb-smoke/c8-narrow-late2-fieldwise-dw-pw-iphone-smoke-v1",
+      "parameters": {
+        "batch_size": {
+          "values": [
+            1
+          ]
+        },
+        "warmup_runs": {
+          "values": [
+            25
+          ]
+        },
+        "runs_per_block": {
+          "values": [
+            100
+          ]
+        },
+        "measure_blocks": {
+          "values": [
+            40
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -2426,6 +2426,10 @@ class ClearMLSDKAdapter:
                 metric_preferences if isinstance(metric_preferences, Mapping) else {}
             )
             metrics = [name for name in metric_names if type(name) is str]
+            has_reference = any(
+                isinstance(row, Mapping) and row.get("reference") is True
+                for row in rows
+            )
             normalized_rows: list[Mapping[str, object]] = []
             for row in rows:
                 if type(row) is not dict:
@@ -2436,18 +2440,24 @@ class ClearMLSDKAdapter:
                     continue
                 normalized_rows.append(row)
 
+
             evaluation_parameter_names = _comparison_varying_parameter_names(
                 normalized_rows,
                 field="parameters",
             )
             sweep_parameter = _comparison_varying_numeric_parameter(normalized_rows)
             series_labels = _comparison_series_labels(normalized_rows)
-            table: list[list[object]] = [[
+            header: list[object] = [
                 "Condition / model",
                 *evaluation_parameter_names,
-                "Status",
-                *metrics,
-            ]]
+            ]
+            if has_reference:
+                header.append("Role")
+            header.append("Status")
+            if has_reference:
+                header.append("Comparison note")
+            header.extend(metrics)
+            table: list[list[object]] = [header]
             for row, series_label in zip(normalized_rows, series_labels, strict=True):
                 disposition = row["disposition"]
                 values = cast(Mapping[str, object], row["metrics"])
@@ -2460,7 +2470,14 @@ class ClearMLSDKAdapter:
                         else ""
                     )
                     rendered.append(value)
+                if has_reference:
+                    rendered.append(
+                        "reference" if row.get("reference") is True else "current"
+                    )
                 rendered.append(disposition)
+                if has_reference:
+                    note = row.get("comparison_note", "")
+                    rendered.append(note if type(note) is str else "")
                 for metric in metrics:
                     value = values.get(metric, "")
                     if type(value) in {int, float}:

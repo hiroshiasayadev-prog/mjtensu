@@ -1,4 +1,4 @@
-from typing import Literal, Mapping, TypeAlias, TypedDict
+from typing import Literal, Mapping, NotRequired, TypeAlias, TypedDict
 
 from mldb_v2.skeleton.common.ids import (
     ArchitectureId,
@@ -6,7 +6,9 @@ from mldb_v2.skeleton.common.ids import (
     EvaluationProtocolId,
     ModelId,
     StudyId,
+    StudyResultId,
     TrainProtocolId,
+    TrialId,
 )
 from mldb_v2.skeleton.common.parameters import PublicParameterValue
 
@@ -59,6 +61,13 @@ class EvaluationStage(TypedDict):
     corpus: CorpusId
     protocol: EvaluationProtocolId
     parameters: EvaluationParameterGrid
+    inputs: NotRequired[Mapping[str, Mapping[str, str]]]
+
+
+class StudyComparator(TypedDict):
+    label: str
+    study_result: StudyResultId
+    trial: TrialId
 
 
 class Study(TypedDict):
@@ -69,3 +78,4 @@ class Study(TypedDict):
     description: str
     model: StudyModelSource
     evaluations: list[EvaluationStage]
+    comparators: NotRequired[list[StudyComparator]]
