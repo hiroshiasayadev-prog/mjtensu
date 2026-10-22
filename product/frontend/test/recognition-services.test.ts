@@ -377,7 +377,7 @@ describe('recognition runtime lifecycle composition', () => {
 });
 
 describe('realtime recognition scheduling and stabilization', () => {
-  it('requests immediately at a 100 ms cadence and never captures a queued frame while inference is active', async () => {
+  it('requests immediately, then waits 50 ms after a completed evaluation before requesting again', async () => {
     const scheduler = new ManualScheduler();
     const first = deferred<FrameRecognitionSnapshot>();
     const pipeline = new FakePipeline(first.promise, Promise.resolve(eligibleSnapshot('1m')));
@@ -386,7 +386,6 @@ describe('realtime recognition scheduling and stabilization', () => {
     const recognizer = createRealtimeRecognizer(pipeline, { scheduler });
 
     const run = recognizer.start(source, listener);
-    expect(scheduler.intervalMs).toBe(RECOGNITION_REQUEST_CADENCE_MS);
     expect(source.captureCount).toBe(1);
     expect(pipeline.evaluateCount).toBe(1);
 
@@ -398,6 +397,8 @@ describe('realtime recognition scheduling and stabilization', () => {
     first.resolve(eligibleSnapshot('1m'));
     await flushPromises();
     expect(listener.updates.map(({ kind }) => kind)).toEqual(['stabilizing']);
+    expect(scheduler.delayMs).toBe(RECOGNITION_REQUEST_CADENCE_MS);
+    expect(source.captureCount).toBe(1);
 
     scheduler.tick();
     await flushPromises();
@@ -570,7 +571,7 @@ describe('realtime recognition scheduling and stabilization', () => {
     await flushPromises();
 
     expect(listener.errors).toEqual([error]);
-    expect(scheduler.cancelCount).toBe(1);
+    expect(scheduler.cancelCount).toBe(0);
     scheduler.tick();
     await flushPromises();
     expect(source.captureCount).toBe(1);
@@ -813,24 +814,27 @@ function initializedModel(
 }
 
 class ManualScheduler implements RecognitionCadenceScheduler {
-  intervalMs: number | null = null;
+  delayMs: number | null = null;
   cancelCount = 0;
   private callback: (() => void) | null = null;
   private handle = {};
 
-  scheduleRepeating(callback: () => void, intervalMs: number): unknown {
+  scheduleOnce(callback: () => void, delayMs: number): unknown {
     this.callback = callback;
-    this.intervalMs = intervalMs;
+    this.delayMs = delayMs;
     return this.handle;
   }
 
   cancel(handle: unknown): void {
     expect(handle).toBe(this.handle);
+    this.callback = null;
     this.cancelCount += 1;
   }
 
   tick(): void {
-    this.callback?.();
+    const callback = this.callback;
+    this.callback = null;
+    callback?.();
   }
 }
 

@@ -23,10 +23,10 @@ import type {
   FrameRecognitionSnapshot,
 } from './semantics/types';
 
-export const RECOGNITION_REQUEST_CADENCE_MS = 100;
+export const RECOGNITION_REQUEST_CADENCE_MS = 50;
 
 export interface RecognitionCadenceScheduler {
-  scheduleRepeating(callback: () => void, intervalMs: number): unknown;
+  scheduleOnce(callback: () => void, delayMs: number): unknown;
   cancel(handle: unknown): void;
 }
 
@@ -37,7 +37,7 @@ export interface RealtimeRecognizerOptions {
 interface ActiveRun {
   readonly source: RecognitionFrameSource;
   readonly listener: RealtimeRecognitionListener;
-  schedulerHandle: unknown;
+  schedulerHandle: unknown | null;
   boundary: number;
   stopped: boolean;
   confirmedDelivered: boolean;
@@ -86,16 +86,11 @@ class RealtimeRecognizerImpl implements RealtimeRecognizer {
       confirmedDelivered: false,
     };
     this.nextBoundary += 1;
-    run.schedulerHandle = this.scheduler.scheduleRepeating(
-      () => {
-        void this.requestEvaluation(run);
-      },
-      RECOGNITION_REQUEST_CADENCE_MS,
-    );
     this.activeRun = run;
 
-    // Recognition begins immediately; the 100 ms cadence governs subsequent
-    // requests rather than adding a fixed startup delay.
+    // Recognition begins immediately. Every later request is scheduled only
+    // after the previous evaluation has completed, leaving a deliberate UI
+    // event-loop window between inference passes.
     void this.requestEvaluation(run);
 
     return {
@@ -116,6 +111,7 @@ class RealtimeRecognizerImpl implements RealtimeRecognizer {
       run.boundary = this.nextBoundary;
       this.nextBoundary += 1;
       run.confirmedDelivered = false;
+      this.scheduleNext(run);
     }
   }
 
@@ -148,6 +144,7 @@ class RealtimeRecognizerImpl implements RealtimeRecognizer {
       return;
     }
     if (frame === null) {
+      this.scheduleNext(run);
       return;
     }
 
@@ -159,6 +156,7 @@ class RealtimeRecognizerImpl implements RealtimeRecognizer {
     } catch (error) {
       this.evaluationInFlight = false;
       if (!this.canAccept(run, boundary)) {
+        this.scheduleNextActiveRun();
         return;
       }
       this.failRun(
@@ -172,6 +170,7 @@ class RealtimeRecognizerImpl implements RealtimeRecognizer {
     this.evaluationInFlight = false;
 
     if (!this.canAccept(run, boundary)) {
+      this.scheduleNextActiveRun();
       return;
     }
 
@@ -179,9 +178,11 @@ class RealtimeRecognizerImpl implements RealtimeRecognizer {
     switch (stabilization.kind) {
       case 'scanning':
         run.listener.onUpdate({ kind: 'scanning', snapshot });
+        this.scheduleNext(run);
         return;
       case 'stabilizing':
         run.listener.onUpdate({ kind: 'stabilizing', snapshot });
+        this.scheduleNext(run);
         return;
       case 'confirmed':
         if (run.confirmedDelivered) {
@@ -193,6 +194,30 @@ class RealtimeRecognizerImpl implements RealtimeRecognizer {
           result: this.materializeStructure(stabilization.draft),
         });
         return;
+    }
+  }
+
+  private scheduleNext(run: ActiveRun): void {
+    if (
+      this.disposed ||
+      run.stopped ||
+      this.activeRun !== run ||
+      run.confirmedDelivered ||
+      run.schedulerHandle !== null
+    ) {
+      return;
+    }
+
+    run.schedulerHandle = this.scheduler.scheduleOnce(() => {
+      run.schedulerHandle = null;
+      void this.requestEvaluation(run);
+    }, RECOGNITION_REQUEST_CADENCE_MS);
+  }
+
+  private scheduleNextActiveRun(): void {
+    const run = this.activeRun;
+    if (run !== null) {
+      this.scheduleNext(run);
     }
   }
 
@@ -226,7 +251,10 @@ class RealtimeRecognizerImpl implements RealtimeRecognizer {
     run.stopped = true;
     run.boundary = this.nextBoundary;
     this.nextBoundary += 1;
-    this.scheduler.cancel(run.schedulerHandle);
+    if (run.schedulerHandle !== null) {
+      this.scheduler.cancel(run.schedulerHandle);
+      run.schedulerHandle = null;
+    }
     if (this.activeRun === run) {
       this.activeRun = null;
     }
@@ -295,11 +323,11 @@ class RealtimeRecognizerImpl implements RealtimeRecognizer {
 }
 
 const browserCadenceScheduler: RecognitionCadenceScheduler = {
-  scheduleRepeating(callback, intervalMs) {
-    return globalThis.setInterval(callback, intervalMs);
+  scheduleOnce(callback, delayMs) {
+    return globalThis.setTimeout(callback, delayMs);
   },
   cancel(handle) {
-    globalThis.clearInterval(handle as ReturnType<typeof setInterval>);
+    globalThis.clearTimeout(handle as ReturnType<typeof setTimeout>);
   },
 };
 
