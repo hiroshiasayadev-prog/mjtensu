@@ -15,6 +15,8 @@ from mldb_v2.src.common.ids import (
     _validate_typed_reference,
 )
 
+from .config import configured_execution_store
+from .execution_store import EXECUTION_RECORD_KINDS, ExecutionRecordStore
 from .resolution import (
     CanonicalDocument,
     CanonicalRepositoryResolver,
@@ -97,9 +99,21 @@ def _parse_created_at(value: object) -> datetime:
 class CanonicalRepositoryListing:
     """Broad deterministic inventory beneath one canonical ``mldb_data`` root."""
 
-    def __init__(self, mldb_data_root: str | Path) -> None:
+    def __init__(
+        self,
+        mldb_data_root: str | Path,
+        *,
+        execution_store: ExecutionRecordStore | None = None,
+    ) -> None:
         self._root = Path(mldb_data_root)
-        self._resolver = CanonicalRepositoryResolver(self._root)
+        self._execution_store = (
+            execution_store
+            if execution_store is not None
+            else configured_execution_store()
+        )
+        self._resolver = CanonicalRepositoryResolver(
+            self._root, execution_store=self._execution_store
+        )
 
     def list_entities(
         self,
@@ -123,6 +137,16 @@ class CanonicalRepositoryListing:
                 continue
             kinds = _CANONICAL_KIND_ORDER if kind is None else (kind,)
             for current_kind in kinds:
+                if (
+                    self._execution_store is not None
+                    and current_kind in EXECUTION_RECORD_KINDS
+                ):
+                    documents = self._execution_store.list_records(
+                        kind=current_kind,
+                        namespace=namespace_id,
+                    )
+                    items.extend(documents)
+                    continue
                 documents, domain_issues = self._list_kind(namespace_id, current_kind)
                 items.extend(documents)
                 issues.extend(domain_issues)

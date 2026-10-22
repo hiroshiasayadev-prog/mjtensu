@@ -212,10 +212,10 @@ def test_existing_model_order_lineage_pins_and_no_runtime_loading(tmp_path: Path
         {"kind": "existing_model", "model": ids["model"]},
     ]
     keys = {(pin["kind"], pin["id"]) for pin in plan["pins"]}
-    assert ("model", model2) in keys
-    assert ("model", ids["model"]) in keys
-    assert ("training_result", result2) in keys
-    assert ("training_result", ids["result"]) in keys
+    assert ("model", model2) not in keys
+    assert ("model", ids["model"]) not in keys
+    assert ("training_result", result2) not in keys
+    assert ("training_result", ids["result"]) not in keys
     assert ("architecture", ids["architecture"]) in keys
     assert all(len(trial["evaluations"]) == 1 for trial in plan["trials"])
 

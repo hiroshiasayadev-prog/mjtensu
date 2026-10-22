@@ -1,13 +1,60 @@
 from __future__ import annotations
 
+import os
 import subprocess
 from io import StringIO
 from pathlib import Path
 
-from mldb_v2.src.cli.main import main
+from mldb_v2.src.cli.main import (
+    _load_repository_environment_defaults,
+    _production_application,
+    main,
+)
 
 
 REPO = Path(__file__).resolve().parents[2]
+
+
+def test_repository_env_defaults_load_without_overriding_process_env(
+    tmp_path: Path, monkeypatch
+) -> None:
+    (tmp_path / ".env").write_text(
+        "# defaults\nMLDB_POSTGRES_DSN=postgresql://from-file\n"
+        "MLDB_S3_ENDPOINT_URL=http://from-file\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("MLDB_POSTGRES_DSN", raising=False)
+    monkeypatch.setenv("MLDB_S3_ENDPOINT_URL", "http://explicit")
+    try:
+        _load_repository_environment_defaults(str(tmp_path))
+        assert os.environ["MLDB_POSTGRES_DSN"] == "postgresql://from-file"
+        assert os.environ["MLDB_S3_ENDPOINT_URL"] == "http://explicit"
+    finally:
+        os.environ.pop("MLDB_POSTGRES_DSN", None)
+
+
+def test_production_application_allows_missing_postgres_dsn_for_local_read_only_use(
+    tmp_path: Path, monkeypatch
+) -> None:
+    (tmp_path / "mldb_data").mkdir()
+    monkeypatch.setenv("MLDB_REPO_ROOT", str(tmp_path))
+    monkeypatch.delenv("MLDB_POSTGRES_DSN", raising=False)
+    application, _default_backend = _production_application()
+    assert application is not None
+
+
+def test_production_application_requires_postgres_for_formal_mutation(
+    tmp_path: Path, monkeypatch
+) -> None:
+    (tmp_path / "mldb_data").mkdir()
+    monkeypatch.setenv("MLDB_REPO_ROOT", str(tmp_path))
+    monkeypatch.delenv("MLDB_POSTGRES_DSN", raising=False)
+    try:
+        _production_application(require_postgres=True)
+    except ValueError as error:
+        assert "MLDB_POSTGRES_DSN is not configured" in str(error)
+    else:
+        raise AssertionError("formal mutation must fail closed without PostgreSQL")
 
 
 class PublicApplicationFailure(RuntimeError):

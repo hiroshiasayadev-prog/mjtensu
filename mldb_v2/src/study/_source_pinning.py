@@ -313,8 +313,19 @@ class _StudySourcePinCollector:
             graph[key] = record
 
         for entry in model_input.models:
-            add("model", entry.model)
-            add("training_result", entry.training_result)
+            # Model and TrainingResult are immutable formal execution records owned by
+            # the execution-record store. Re-resolve them to reject a stale planning
+            # snapshot, but do not bind them to the selected Git commit.
+            self._require_execution_record_binding(
+                kind=EntityKind.MODEL,
+                entity_id=_typed_id(entry.model),
+                record=entry.model,
+            )
+            self._require_execution_record_binding(
+                kind=EntityKind.TRAINING_RESULT,
+                entity_id=_typed_id(entry.training_result),
+                record=entry.training_result,
+            )
             try:
                 architecture = self._resolver.resolve(
                     kind=EntityKind.ARCHITECTURE, entity_id=entry.architecture_id
@@ -322,6 +333,20 @@ class _StudySourcePinCollector:
             except (OSError, UnicodeError, ValueError, TypeError, FileNotFoundError) as error:
                 raise _SourcePinningError("pin_graph_invalid") from error
             add("architecture", architecture)
+
+    def _require_execution_record_binding(
+        self,
+        *,
+        kind: EntityKind,
+        entity_id: str,
+        record: _PinRecord,
+    ) -> None:
+        try:
+            current = self._resolver.resolve(kind=kind, entity_id=entity_id)
+        except (FileNotFoundError, OSError, TypeError, ValueError) as error:
+            raise _SourcePinningError("planning_input_stale") from error
+        if not _same_record(record, current):
+            raise _SourcePinningError("planning_input_stale")
 
     def _pin_one(
         self,

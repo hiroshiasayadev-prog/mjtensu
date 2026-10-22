@@ -195,6 +195,28 @@ def _study_result(*, all_pending: bool = False) -> dict[str, object]:
 
 def _install_study_result(root: Path, *, all_pending: bool = False) -> Path:
     _namespace(root, "demo")
+    _write_json(
+        root / "demo" / "study_plans" / "study-v1-plan-0123456789abcdef.yaml",
+        {
+            "schema": "mjtensu.mldb-v2/study-plan/v1",
+            "id": PLAN_ID,
+            "trials": [
+                {
+                    "trial": "trial-0001",
+                    "source": {
+                        "kind": "training",
+                        "architecture": "demo/arch-v1",
+                        "parameters": {"batch_size": 24},
+                        "seed": 42,
+                    },
+                },
+                {
+                    "trial": "trial-0002",
+                    "source": {"kind": "existing_model", "model": "demo/model-v1"},
+                },
+            ],
+        },
+    )
     result = _study_result(all_pending=all_pending)
     path = root / "demo" / "study_results" / f"run-{EXECUTION_KEY}.yaml"
     _write_json(path, result)
@@ -398,6 +420,15 @@ def test_get_study_result_progress_uses_only_canonical_slots(tmp_path: Path) -> 
         },
     }
     assert view["study_result"]["trials"][1]["training"] is None
+    assert view["conditions"] == [
+        {
+            "trial": "trial-0001",
+            "label": "arch-v1",
+            "parameters": {"batch_size": 24, "seed": 42},
+        },
+        {"trial": "trial-0002", "label": "model-v1", "parameters": {}},
+    ]
+    assert all("trial-" not in item["label"] for item in view["conditions"])
 
 
 def test_observe_queries_exact_pending_stage_keys_in_canonical_order_without_mutation(tmp_path: Path) -> None:
@@ -420,6 +451,8 @@ def test_observe_queries_exact_pending_stage_keys_in_canonical_order_without_mut
     assert path.read_bytes() == before
     assert observed["progress"]["training"]["pending"] == 1
     assert observed["progress"]["evaluations"]["pending"] == 3
+    assert observed["conditions"][0]["label"] == "arch-v1"
+    assert observed["conditions"][1]["label"] == "model-v1"
     assert backend.admit_calls == backend.collect_calls == backend.cancel_calls == backend.advance_calls == 0
 
 

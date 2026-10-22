@@ -26,6 +26,8 @@ from mldb_v2.src.common.ids import (
     _validate_typed_reference,
 )
 from mldb_v2.src.repository._process_lock import _process_file_lock
+from mldb_v2.src.repository.config import configured_execution_store
+from mldb_v2.src.repository.execution_store import ExecutionRecordStore
 from mldb_v2.src.repository._yaml import _YamlError, _load_yaml
 from mldb_v2.src.repository.resolution import _read_namespace_document
 
@@ -616,12 +618,18 @@ class CanonicalRepositoryWriter:
         repository_root: str | os.PathLike[str],
         *,
         record_validator: CanonicalRecordValidator,
+        execution_store: ExecutionRecordStore | None = None,
     ) -> None:
         if record_validator is None:
             raise TypeError("record_validator is required")
         self._repository_root = Path(repository_root)
         self._data_root = self._repository_root / "mldb_data"
         self._record_validator = record_validator
+        self._execution_store = (
+            execution_store
+            if execution_store is not None
+            else configured_execution_store()
+        )
         self._write_lock_root = (
             self._repository_root / ".local" / "mldb_v2" / "canonical_write_locks"
         )
@@ -643,6 +651,12 @@ class CanonicalRepositoryWriter:
             entity_id=entity_id,
             document=document,
         )
+        if self._execution_store is not None:
+            return self._execution_store.create_immutable(
+                kind=kind,
+                entity_id=entity_id,
+                document=record,
+            )
         return self._create_idempotent(
             kind=kind,
             entity_id=entity_id,
@@ -663,6 +677,26 @@ class CanonicalRepositoryWriter:
             kind=EntityKind.STUDY_RESULT,
             entity_id=entity_id,
         )
+        if self._execution_store is not None:
+            try:
+                existing = self._execution_store.resolve(
+                    kind=EntityKind.STUDY_RESULT,
+                    entity_id=entity_id,
+                )
+            except FileNotFoundError:
+                existing = None
+            if existing is not None:
+                _validate_study_result_record(existing, entity_id=entity_id)
+                if _documents_equal(existing, validated):
+                    return existing
+                raise ValueError("lifecycle conflict: StudyResult identity already exists")
+            _validate_initial_study_result(validated)
+            return self._execution_store.create_immutable(
+                kind=EntityKind.STUDY_RESULT,
+                entity_id=entity_id,
+                document=validated,
+            )
+
         key = str(path.relative_to(self._repository_root))
         with _process_file_lock(lock_root=self._write_lock_root, key=key):
             if path.exists():
@@ -691,6 +725,79 @@ class CanonicalRepositoryWriter:
             kind=EntityKind.STUDY_RESULT,
             entity_id=entity_id,
         )
+        if self._execution_store is not None:
+            with self._execution_store.advisory_lock(str(entity_id)):
+                current = self._execution_store.resolve(
+                    kind=EntityKind.STUDY_RESULT,
+                    entity_id=entity_id,
+                )
+                _validate_study_result_record(current, entity_id=entity_id)
+                replacement = json.loads(json.dumps(current))
+                trials = replacement.get("trials")
+                if type(trials) is not list:
+                    raise ValueError("StudyResult trials are malformed")
+                if len(conditions) != len(trials):
+                    raise ValueError("StudyResult condition migration is incomplete")
+                for trial in trials:
+                    if type(trial) is not dict or type(trial.get("trial")) is not str:
+                        raise ValueError("StudyResult trial is malformed")
+                    trial_id = trial["trial"]
+                    raw_condition = conditions.get(trial_id)
+                    if not isinstance(raw_condition, Mapping):
+                        raise ValueError(
+                            "StudyResult condition migration is missing a trial"
+                        )
+                    condition = _validate_study_condition(dict(raw_condition))
+                    existing = trial.get("condition")
+                    if existing is not None and not _documents_equal(
+                        {"condition": existing}, {"condition": condition}
+                    ):
+                        raise ValueError(
+                            "lifecycle conflict: StudyResult condition snapshot differs"
+                        )
+                    trial["condition"] = condition
+                validated = _validate_study_result_record(
+                    replacement, entity_id=entity_id
+                )
+                if _documents_equal(current, validated):
+                    return current
+                stripped = json.loads(json.dumps(validated))
+                for trial in stripped["trials"]:
+                    trial.pop("condition", None)
+                current_stripped = json.loads(json.dumps(current))
+                for trial in current_stripped["trials"]:
+                    trial.pop("condition", None)
+                if not _documents_equal(current_stripped, stripped):
+                    raise ValueError(
+                        "StudyResult condition migration changed non-condition data"
+                    )
+
+                def validate_transition(
+                    latest: Mapping[str, object],
+                    candidate: Mapping[str, object],
+                ) -> None:
+                    if not _documents_equal(latest, current):
+                        raise ValueError(
+                            "lifecycle conflict: StudyResult changed during condition migration"
+                        )
+                    candidate_stripped = json.loads(json.dumps(candidate))
+                    for trial in candidate_stripped["trials"]:
+                        trial.pop("condition", None)
+                    latest_stripped = json.loads(json.dumps(latest))
+                    for trial in latest_stripped["trials"]:
+                        trial.pop("condition", None)
+                    if not _documents_equal(latest_stripped, candidate_stripped):
+                        raise ValueError(
+                            "StudyResult condition migration changed non-condition data"
+                        )
+
+                return self._execution_store.replace(
+                    kind=EntityKind.STUDY_RESULT,
+                    entity_id=entity_id,
+                    replacement=validated,
+                    transition_validator=validate_transition,
+                )
+
         key = str(path.relative_to(self._repository_root))
         with _process_file_lock(lock_root=self._write_lock_root, key=key):
             if not path.exists():
@@ -749,6 +856,106 @@ class CanonicalRepositoryWriter:
             kind=EntityKind.STUDY_RESULT,
             entity_id=entity_id,
         )
+        if self._execution_store is not None:
+            with self._execution_store.advisory_lock(str(entity_id)):
+                current = self._execution_store.resolve(
+                    kind=EntityKind.STUDY_RESULT,
+                    entity_id=entity_id,
+                )
+                _validate_study_result_record(current, entity_id=entity_id)
+                digest = hashlib.sha256(_canonical_json_bytes(current)).hexdigest()
+                if expected_sha256 != digest:
+                    raise ValueError(
+                        "recovery rejected: original StudyResult fingerprint differs"
+                    )
+                if current["status"] != "failed" or current["diagnostic"] != {
+                    "code": "study_progression_failed",
+                    "message": "Study progression cannot continue from canonical inputs.",
+                }:
+                    raise ValueError(
+                        "recovery rejected: not the expected progression failure"
+                    )
+                trials = current["trials"]
+                if type(trials) is not list or not trials:
+                    raise ValueError("recovery rejected: missing trials")
+                task_ids = backend_evidence.get("training_task_ids")
+                if type(task_ids) is not dict or set(task_ids) != {
+                    trial["trial"] for trial in trials
+                } or not all(type(v) is str and v for v in task_ids.values()):
+                    raise ValueError(
+                        "recovery rejected: training Task evidence is incomplete"
+                    )
+
+                replacement = json.loads(json.dumps(current))
+                for trial in replacement["trials"]:
+                    stages = (
+                        [trial["training"]] if trial["training"] is not None else []
+                    )
+                    stages.extend(trial["evaluations"])
+                    for slot in stages:
+                        if slot != {
+                            **{
+                                k: v
+                                for k, v in slot.items()
+                                if k in {"coordinate", "stage"}
+                            },
+                            "disposition": "skipped",
+                            "result": None,
+                            "reason": "global_failure",
+                        }:
+                            raise ValueError(
+                                "recovery rejected: canonical stage is not globally skipped"
+                            )
+                        slot.update(
+                            disposition="pending", result=None, reason=None
+                        )
+                replacement["status"] = "submitted"
+                replacement["diagnostic"] = None
+                validated = _validate_study_result_record(
+                    replacement, entity_id=entity_id
+                )
+                audit_dir = (
+                    self._repository_root
+                    / ".local"
+                    / "mldb_v2"
+                    / "recovery_audit"
+                )
+                audit = audit_dir / f"{entity_id.split('/', 1)[1]}-{digest}.json"
+                if audit.exists():
+                    raise ValueError(
+                        "recovery rejected: audit snapshot already exists"
+                    )
+                _atomic_replace_record(
+                    audit,
+                    {
+                        "study_result": str(entity_id),
+                        "prior_sha256": digest,
+                        "prior_record": current,
+                        "backend_evidence": dict(backend_evidence),
+                        "reason": (
+                            "acceptance code rejected valid StudyResult.condition"
+                        ),
+                    },
+                )
+
+                def validate_transition(
+                    latest: Mapping[str, object],
+                    candidate: Mapping[str, object],
+                ) -> None:
+                    if not _documents_equal(latest, current):
+                        raise ValueError(
+                            "recovery rejected: StudyResult changed concurrently"
+                        )
+                    if not _documents_equal(candidate, validated):
+                        raise ValueError("recovery rejected: replacement changed")
+
+                return self._execution_store.replace(
+                    kind=EntityKind.STUDY_RESULT,
+                    entity_id=entity_id,
+                    replacement=validated,
+                    transition_validator=validate_transition,
+                )
+
         key = str(path.relative_to(self._repository_root))
         with _process_file_lock(lock_root=self._write_lock_root, key=key):
             if not path.is_file():
@@ -816,6 +1023,27 @@ class CanonicalRepositoryWriter:
             kind=EntityKind.STUDY_RESULT,
             entity_id=entity_id,
         )
+        if self._execution_store is not None:
+            def validate_transition(
+                current: Mapping[str, object],
+                candidate: Mapping[str, object],
+            ) -> None:
+                validated_current = _validate_study_result_record(
+                    current, entity_id=entity_id
+                )
+                if validated_current["status"] in _TERMINAL_STUDY_STATUSES:
+                    raise ValueError(
+                        "lifecycle conflict: terminal StudyResult is immutable"
+                    )
+                _validate_study_result_transition(validated_current, candidate)
+
+            return self._execution_store.replace(
+                kind=EntityKind.STUDY_RESULT,
+                entity_id=entity_id,
+                replacement=validated_replacement,
+                transition_validator=validate_transition,
+            )
+
         key = str(path.relative_to(self._repository_root))
         with _process_file_lock(lock_root=self._write_lock_root, key=key):
             if not path.exists():
@@ -846,6 +1074,30 @@ class CanonicalRepositoryWriter:
             kind=EntityKind.EVALUATION_RESULT,
             entity_id=entity_id,
         )
+        self._record_validator.validate(
+            kind=EntityKind.EVALUATION_RESULT,
+            entity_id=entity_id,
+            document=replacement_record,
+        )
+        if self._execution_store is not None:
+            def validate_transition(
+                current: Mapping[str, object],
+                candidate: Mapping[str, object],
+            ) -> None:
+                self._record_validator.validate(
+                    kind=EntityKind.EVALUATION_RESULT,
+                    entity_id=entity_id,
+                    document=current,
+                )
+                _validate_evaluation_retry_transition(current, candidate)
+
+            return self._execution_store.replace(
+                kind=EntityKind.EVALUATION_RESULT,
+                entity_id=entity_id,
+                replacement=replacement_record,
+                transition_validator=validate_transition,
+            )
+
         key = str(path.relative_to(self._repository_root))
         with _process_file_lock(lock_root=self._write_lock_root, key=key):
             if not path.exists():
@@ -855,11 +1107,6 @@ class CanonicalRepositoryWriter:
                 kind=EntityKind.EVALUATION_RESULT,
                 entity_id=entity_id,
                 document=current,
-            )
-            self._record_validator.validate(
-                kind=EntityKind.EVALUATION_RESULT,
-                entity_id=entity_id,
-                document=replacement_record,
             )
             _validate_evaluation_retry_transition(current, replacement_record)
             _atomic_replace_record(path, replacement_record)
@@ -886,6 +1133,28 @@ class CanonicalRepositoryWriter:
             kind=EntityKind.STUDY_RESULT,
             entity_id=entity_id,
         )
+        if self._execution_store is not None:
+            def validate_transition(
+                current: Mapping[str, object],
+                candidate: Mapping[str, object],
+            ) -> None:
+                validated_current = _validate_study_result_record(
+                    current, entity_id=entity_id
+                )
+                _validate_study_result_retry_transition(
+                    validated_current,
+                    candidate,
+                    trial_id=trial_id,
+                    coordinate_id=coordinate_id,
+                )
+
+            return self._execution_store.replace(
+                kind=EntityKind.STUDY_RESULT,
+                entity_id=entity_id,
+                replacement=validated_replacement,
+                transition_validator=validate_transition,
+            )
+
         key = str(path.relative_to(self._repository_root))
         with _process_file_lock(lock_root=self._write_lock_root, key=key):
             if not path.exists():

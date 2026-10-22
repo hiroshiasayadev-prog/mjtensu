@@ -21,6 +21,17 @@ from mldb_v2.src.cli.types import CliCommandName, OutputFormat
 
 ApplicationFactory = Callable[[], ApplicationInterface]
 _INTERRUPT_EXIT = 130
+_POSTGRES_REQUIRED_COMMANDS = frozenset(
+    {
+        CliCommandName.PLAN,
+        CliCommandName.RUN,
+        CliCommandName.RESUME,
+        CliCommandName.RERUN,
+        CliCommandName.RETRY_STAGE,
+        CliCommandName.CANCEL,
+        CliCommandName.ADVANCE,
+    }
+)
 
 
 def _output_format(request: CliCommandRequest) -> str:
@@ -35,10 +46,37 @@ def _output_format(request: CliCommandRequest) -> str:
     raise ValueError("CLI presentation format is invalid")
 
 
-def _production_application() -> tuple[ApplicationInterface, str | None]:
+def _load_repository_environment_defaults(repository_root: str) -> None:
+    """Load simple repository-local KEY=VALUE defaults without overriding process env."""
+
+    path = os.path.join(repository_root, ".env")
+    try:
+        with open(path, encoding="utf-8") as handle:
+            lines = handle.readlines()
+    except FileNotFoundError:
+        return
+    for raw in lines:
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        if not key or key.strip() != key:
+            raise ValueError("repository .env contains an invalid variable name")
+        os.environ.setdefault(key, value)
+
+
+def _production_application(
+    *, require_postgres: bool = False
+) -> tuple[ApplicationInterface, str | None]:
     repository_root = os.environ.get("MLDB_REPO_ROOT")
     if not repository_root:
         raise ValueError("MLDB_REPO_ROOT is not configured")
+    _load_repository_environment_defaults(repository_root)
+    if require_postgres and not os.environ.get("MLDB_POSTGRES_DSN", "").strip():
+        raise ValueError(
+            "MLDB_POSTGRES_DSN is not configured; formal execution mutation "
+            "must not fall back to worktree-local execution records"
+        )
     composition = compose_application(repository_root=repository_root)
     return composition.application, composition.default_backend
 
@@ -114,7 +152,9 @@ def main(
     try:
         request = parse_cli_request(args)
         if application_factory is None:
-            application, runtime_default_backend = _production_application()
+            application, runtime_default_backend = _production_application(
+                require_postgres=request["command"] in _POSTGRES_REQUIRED_COMMANDS
+            )
         else:
             application = application_factory()
             runtime_default_backend = default_backend

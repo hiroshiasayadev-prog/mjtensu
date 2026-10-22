@@ -462,8 +462,9 @@ def test_existing_model_synthetic_plan_preserves_order_and_lineage_pins(tmp_path
         {"kind": "existing_model", "model": ids["model"]},
     ]
     keys = {(pin["kind"], pin["id"]) for pin in plan["pins"]}
-    assert ("model", model2) in keys and ("model", ids["model"]) in keys
-    assert ("training_result", result2) in keys and ("training_result", ids["result"]) in keys
+    assert ("model", model2) not in keys and ("model", ids["model"]) not in keys
+    assert ("training_result", result2) not in keys
+    assert ("training_result", ids["result"]) not in keys
     assert ("architecture", ids["architecture"]) in keys
     assert all(len(trial["evaluations"]) == 1 for trial in plan["trials"])
     assert plan == _build_study_plan(

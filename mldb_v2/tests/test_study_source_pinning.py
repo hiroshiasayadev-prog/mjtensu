@@ -439,29 +439,40 @@ def test_unrelated_dirty_files_are_allowed(tmp_path: Path) -> None:
     assert result.source_commit == commit
 
 
-def test_existing_model_pins_model_result_and_lineage_architecture_only(tmp_path: Path) -> None:
+def test_existing_model_pins_only_git_lineage_architecture(tmp_path: Path) -> None:
     repo, study_id, commit, ids = _existing_repo(tmp_path)
     result = _collect(repo, study_id, commit)
     keys = {(pin.kind, pin.id) for pin in result.pins}
-    assert ("model", ids["model"]) in keys
-    assert ("training_result", ids["result"]) in keys
+    assert ("model", ids["model"]) not in keys
+    assert ("training_result", ids["result"]) not in keys
     assert ("architecture", ids["architecture"]) in keys
     assert all(pin.id != ids["historical_corpus"] for pin in result.pins)
     assert all(pin.id != ids["historical_protocol"] for pin in result.pins)
+    assert "model-ns" not in {pin.id for pin in result.pins if pin.kind == "namespace"}
+    assert "result-ns" not in {pin.id for pin in result.pins if pin.kind == "namespace"}
     assert "history-ns" not in {pin.id for pin in result.pins if pin.kind == "namespace"}
 
 
 @pytest.mark.parametrize("kind", ["model", "result"])
-def test_dirty_existing_model_records_rejected(tmp_path: Path, kind: str) -> None:
+def test_changed_existing_execution_record_rejected_as_stale(
+    tmp_path: Path, kind: str
+) -> None:
     repo, study_id, commit, ids = _existing_repo(tmp_path)
     planning = _planning(repo, study_id)
     entity_id = ids["model"] if kind == "model" else ids["result"]
     namespace, local = entity_id.split("/", 1)
     domain = "models" if kind == "model" else "training_results"
     path = repo / "mldb_data" / namespace / domain / f"{local}.yaml"
-    path.write_bytes(path.read_bytes() + b"\n")
-    with pytest.raises(_SourcePinningError, match="required_source_dirty"):
-        _StudySourcePinCollector(repository_root=repo, mldb_data_root=repo / "mldb_data").collect(selected_commit=commit, planning=planning)
+    changed = json.loads(path.read_text(encoding="utf-8"))
+    if kind == "model":
+        changed["training_result"] = "result-ns/replacement-v1"
+    else:
+        changed["status"] = "failed"
+    _write_json(path, changed)
+    with pytest.raises(_SourcePinningError, match="planning_input_stale"):
+        _StudySourcePinCollector(
+            repository_root=repo, mldb_data_root=repo / "mldb_data"
+        ).collect(selected_commit=commit, planning=planning)
 
 
 def test_invalid_abbreviated_and_missing_commits_rejected(tmp_path: Path) -> None:

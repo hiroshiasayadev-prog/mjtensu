@@ -244,7 +244,12 @@ def _validate_existing_source(source: dict[str, object], refs: Mapping[str, set[
         model = _validate_typed_reference(source["model"])
     except ValueError as error:
         raise _StudyPlanError("invalid_trial_source") from error
-    _require_ref(refs, "model", model)
+
+    # Legacy v1 Plans may carry Git source pins for Model/TrainingResult.
+    # New Plans rely on the immutable execution-record identity in source.model
+    # and therefore do not require an execution record to appear in the Git pin set.
+    if refs["model"]:
+        _require_ref(refs, "model", model)
 
 
 def _validate_evaluation(value: object, expected_index: int, refs: Mapping[str, set[str]]) -> None:

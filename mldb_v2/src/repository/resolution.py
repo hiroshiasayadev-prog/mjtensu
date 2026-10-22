@@ -14,6 +14,8 @@ from mldb_v2.src.common.ids import (
 )
 
 from ._yaml import _YamlError, _load_yaml
+from .execution_store import EXECUTION_RECORD_KINDS, ExecutionRecordStore
+from .config import configured_execution_store
 
 CanonicalEntityId: TypeAlias = NamespaceId | TypedEntityId
 CanonicalDocument: TypeAlias = Mapping[str, object]
@@ -131,8 +133,18 @@ def _read_namespace_document(root: Path, namespace: str) -> dict[str, object]:
 class CanonicalRepositoryResolver:
     """Resolve exactly one typed canonical document beneath an ``mldb_data`` root."""
 
-    def __init__(self, mldb_data_root: str | Path) -> None:
+    def __init__(
+        self,
+        mldb_data_root: str | Path,
+        *,
+        execution_store: ExecutionRecordStore | None = None,
+    ) -> None:
         self._root = Path(mldb_data_root)
+        self._execution_store = (
+            execution_store
+            if execution_store is not None
+            else configured_execution_store()
+        )
 
     def resolve(
         self,
@@ -151,6 +163,16 @@ class CanonicalRepositoryResolver:
         typed_id = _validate_typed_reference(entity_id)
         namespace, local_id = typed_id.split("/", 1)
         _read_namespace_document(self._root, namespace)
+
+        if self._execution_store is not None and kind in EXECUTION_RECORD_KINDS:
+            document = self._execution_store.resolve(kind=kind, entity_id=typed_id)
+            _require_schema(document, kind=kind, path=self._root / namespace / _DOMAIN_BY_KIND[kind] / f"{local_id}.yaml", root=self._root)
+            if document.get("id") != typed_id:
+                raise _RepositoryDocumentError(
+                    "repository_document_id_mismatch",
+                    f"{kind.value} {typed_id!r}: document id does not match canonical identity",
+                )
+            return document
 
         path = self._root / namespace / _DOMAIN_BY_KIND[kind] / f"{local_id}.yaml"
         if not path.is_file():
