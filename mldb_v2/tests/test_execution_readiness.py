@@ -63,8 +63,6 @@ def _plan() -> dict[str, object]:
             _pin("train_protocol", "demo/train-v1", executable=True),
             _pin("evaluation_protocol", "demo/eval-v1", executable=True),
             _pin("study", "demo/study-v1"),
-            _pin("model", EXISTING_MODEL_ID),
-            _pin("training_result", EXISTING_TRAINING_RESULT_ID),
         ],
         "trials": [
             {

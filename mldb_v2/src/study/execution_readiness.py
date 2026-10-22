@@ -107,15 +107,6 @@ def _find_result_trial(result: StudyResult, trial_id: str) -> StudyResultTrial:
     return matches[0]
 
 
-def _require_plan_pin(plan: StudyPlan, *, kind: str, entity_id: str) -> None:
-    matches = [
-        pin for pin in plan["pins"]
-        if pin["kind"] == kind and pin["id"] == entity_id
-    ]
-    if len(matches) != 1:
-        raise ValueError(f"StudyPlan requires exactly one {kind} pin for runtime Model lineage")
-
-
 def _validate_runtime_training_lineage(
     *,
     plan: StudyPlan,
@@ -178,12 +169,6 @@ def _validate_existing_model_lineage(
         raise ValueError("existing Model lineage requires an existing-model trial")
     if lineage.model["id"] != source["model"]:
         raise ValueError("existing Model identity does not match StudyPlan source")
-    _require_plan_pin(plan, kind="model", entity_id=str(lineage.model["id"]))
-    _require_plan_pin(
-        plan,
-        kind="training_result",
-        entity_id=str(lineage.training_result["id"]),
-    )
 
 
 def _runtime_model_for_trial(
